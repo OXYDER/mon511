@@ -1,0 +1,44 @@
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Optional } from '@nestjs/common';
+import { ReportsService } from './reports.service';
+import { CreateReportDto } from './dto/create-report.dto';
+import { SuggestResolutionDto } from './dto/suggest-resolution.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-user.decorator';
+
+@Controller('reports')
+export class ReportsController {
+  constructor(private readonly reportsService: ReportsService) {}
+
+  @Get('nearby')
+  findNearby(
+    @Query('lat') lat: string,
+    @Query('lng') lng: string,
+    @Query('radius') radius = '5000',
+  ) {
+    return this.reportsService.findNearby(Number(lat), Number(lng), Number(radius));
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.reportsService.findOne(id);
+  }
+
+  // Signalement anonyme autorisé si site_settings.allow_anonymous_reports = true —
+  // pour le MVP, JwtAuthGuard reste optionnel via @Optional côté guard custom si besoin;
+  // ici on exige la connexion, à assouplir une fois ce réglage câblé côté middleware.
+  @Post()
+  @UseGuards(JwtAuthGuard)
+  create(@CurrentUser() user: CurrentUserPayload, @Body() dto: CreateReportDto) {
+    return this.reportsService.create(user.userId, dto);
+  }
+
+  @Post(':id/suggest-resolution')
+  @UseGuards(JwtAuthGuard)
+  suggestResolution(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: SuggestResolutionDto,
+  ) {
+    return this.reportsService.suggestResolution(id, user.userId, dto.comment);
+  }
+}

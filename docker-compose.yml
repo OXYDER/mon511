@@ -1,0 +1,95 @@
+version: "3.9"
+
+# Tous les ports exposés à l'hôte sont configurables via .env (voir .env.example).
+# Le port interne au conteneur reste fixe (à droite du ":") — seul le port
+# côté hôte (à gauche) change, ce qui évite les conflits avec tes autres
+# services Docker déjà actifs sur le NAS.
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: mon511-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mon511}
+      POSTGRES_USER: ${POSTGRES_USER:-mon511}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir dans .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./api/src/database/migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mon511}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: mon511-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+
+  minio:
+    image: minio/minio:latest
+    container_name: mon511-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-mon511}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?définir dans .env}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_API_HOST_PORT:-9000}:9000"     # API S3-compatible
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001" # console web
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: mon511-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-mon511}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mon511}
+      REDIS_URL: redis://redis:6379
+      STORAGE_ENDPOINT: minio
+      STORAGE_PORT: 9000
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-mon511}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET:?définir dans .env}
+    ports:
+      - "${API_HOST_PORT:-3000}:3000"
+
+  # Client web (React + Vite) — build statique servi séparément en production,
+  # ce service sert au développement local uniquement.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: mon511-web
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:${API_HOST_PORT:-3000}
+    ports:
+      - "${WEB_HOST_PORT:-5173}:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
