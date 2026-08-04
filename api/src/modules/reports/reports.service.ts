@@ -3,10 +3,14 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { CreateReportDto } from './dto/create-report.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReportsService {
-  constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /**
    * Signalements dans un rayon donné — la requête "près de moi" qui
@@ -119,7 +123,7 @@ export class ReportsService {
    * atteint le seuil configuré, le signalement passe à résolu.
    */
   async suggestResolution(reportId: string, userId: string, comment?: string) {
-    return this.db.transaction().execute(async (trx) => {
+    const result = await this.db.transaction().execute(async (trx) => {
       const user = await trx
         .selectFrom('users')
         .select('reputation_score')
@@ -147,8 +151,9 @@ export class ReportsService {
         .executeTakeFirst();
 
       const thresholdValue = Number(threshold?.value ?? 5);
+      const autoResolved = (totalWeight?.total ?? 0) >= thresholdValue;
 
-      if ((totalWeight?.total ?? 0) >= thresholdValue) {
+      if (autoResolved) {
         await trx
           .updateTable('reports')
           .set({ status: 'published_resolved', resolved_at: new Date() as any })
@@ -174,7 +179,48 @@ export class ReportsService {
           .execute();
       }
 
-      return { weight, autoResolved: (totalWeight?.total ?? 0) >= thresholdValue };
+      return { weight, autoResolved };
     });
+
+    // Notification à l'auteur — dans tous les cas une suggestion arrive,
+    // et en plus une notification de résolution si le seuil est atteint.
+    const report = await this.db
+      .selectFrom('reports')
+      .select('user_id')
+      .where('id', '=', reportId)
+      .executeTakeFirst();
+
+    if (report?.user_id) {
+      await this.notifications.create({
+        userId: report.user_id,
+        type: result.autoResolved ? 'report_marked_resolved' : 'resolution_suggested',
+        reportId,
+        actorId: userId,
+        title: result.autoResolved
+          ? 'Ton signalement a été marqué résolu par la communauté'
+          : 'Quelqu\'un pense que ton signalement est résolu',
+        body: comment,
+      });
+    }
+
+    return result;
+  }
+
+  /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
+  async confirm(reportId: string, userId: string) {
+    return this.db
+      .insertInto('report_confirmations')
+      .values({ report_id: reportId, user_id: userId })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  }
+
+  /** Signalement d'un problème avec le signalement lui-même (doublon, inapproprié, etc.). */
+  async flag(reportId: string, userId: string, reason: string, notes?: string) {
+    return this.db
+      .insertInto('report_flags')
+      .values({ report_id: reportId, user_id: userId, reason: reason as any, notes: notes ?? null })
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 }

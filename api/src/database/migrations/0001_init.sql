@@ -19,7 +19,7 @@ CREATE TYPE message_author_role AS ENUM ('user', 'moderator');
 CREATE TYPE comment_status AS ENUM ('visible', 'hidden', 'flagged');
 CREATE TYPE suggestion_status AS ENUM ('pending', 'accepted', 'dismissed');
 CREATE TYPE notification_type AS ENUM (
-  'resolution_suggested', 'report_marked_resolved', 'report_rejected',
+  'resolution_suggested', 'report_approved', 'report_marked_resolved', 'report_rejected',
   'moderator_replied', 'comment_reply', 'direct_message_received', 'report_purge_warning'
 );
 CREATE TYPE notification_method AS ENUM ('email', 'webhook', 'api');

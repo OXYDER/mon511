@@ -3,10 +3,16 @@ import { Kysely } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { ModerationDecisionDto } from './dto/moderation-decision.dto';
+import { MunicipalityIntegrationsService } from '../municipality-integrations/municipality-integrations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ModerationService {
-  constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+    private readonly municipalityIntegrations: MunicipalityIntegrationsService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   /** File d'attente — signalements en attente de modération, plus récents en premier. */
   async findQueue(regionId?: string) {
@@ -92,6 +98,38 @@ export class ModerationService {
         .execute();
 
       return { reportId, newStatus };
+    }).then(async (result) => {
+      // Effets de bord hors transaction : notification à l'auteur, et envoi
+      // à la municipalité si approuvé. Simplifié en appels directs pour ce
+      // premier déploiement plutôt que via une file BullMQ séparée.
+      const report = await this.db
+        .selectFrom('reports')
+        .select('user_id')
+        .where('id', '=', reportId)
+        .executeTakeFirst();
+
+      if (report?.user_id) {
+        if (dto.decision === 'approve') {
+          await this.notifications.create({
+            userId: report.user_id,
+            type: 'report_approved',
+            reportId,
+            title: 'Ton signalement a été approuvé',
+            body: 'Il est maintenant visible publiquement sur la carte.',
+          });
+          await this.municipalityIntegrations.notifyMunicipality(reportId);
+        } else {
+          await this.notifications.create({
+            userId: report.user_id,
+            type: 'report_rejected',
+            reportId,
+            title: 'Ton signalement a été refusé',
+            body: dto.reason,
+          });
+        }
+      }
+
+      return result;
     });
   }
 

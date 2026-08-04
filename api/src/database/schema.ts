@@ -194,6 +194,44 @@ export interface SiteSettingsTable {
   updated_by: string | null;
 }
 
+export interface ConversationsTable {
+  id: Generated<string>;
+  created_at: Generated<Timestamp>;
+}
+
+export interface ConversationParticipantsTable {
+  conversation_id: string;
+  user_id: string;
+  joined_at: Generated<Timestamp>;
+}
+
+export interface DirectMessagesTable {
+  id: Generated<string>;
+  conversation_id: string;
+  sender_id: string;
+  message: string;
+  read_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+}
+
+export interface UserBlocksTable {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: Generated<Timestamp>;
+}
+
+export interface ReportNotificationsTable {
+  id: Generated<string>;
+  report_id: string;
+  region_id: string;
+  method: 'email' | 'webhook' | 'api';
+  status: Generated<'pending' | 'sent' | 'failed' | 'acknowledged'>;
+  external_reference: string | null;
+  error_message: string | null;
+  attempted_at: Generated<Timestamp>;
+  sent_at: Timestamp | null;
+}
+
 export interface Database {
   regions: RegionsTable;
   roles: RolesTable;
@@ -211,5 +249,10 @@ export interface Database {
   reputation_events: ReputationEventsTable;
   notifications: NotificationsTable;
   municipality_integrations: MunicipalityIntegrationsTable;
+  report_notifications: ReportNotificationsTable;
+  conversations: ConversationsTable;
+  conversation_participants: ConversationParticipantsTable;
+  direct_messages: DirectMessagesTable;
+  user_blocks: UserBlocksTable;
   site_settings: SiteSettingsTable;
 }

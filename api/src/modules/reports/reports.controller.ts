@@ -41,4 +41,21 @@ export class ReportsController {
   ) {
     return this.reportsService.suggestResolution(id, user.userId, dto.comment);
   }
+
+  @Post(':id/confirm')
+  @UseGuards(JwtAuthGuard)
+  confirm(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.confirm(id, user.userId);
+  }
+
+  @Post(':id/flag')
+  @UseGuards(JwtAuthGuard)
+  flag(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('reason') reason: string,
+    @Body('notes') notes?: string,
+  ) {
+    return this.reportsService.flag(id, user.userId, reason, notes);
+  }
 }
