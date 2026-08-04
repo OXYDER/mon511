@@ -14,6 +14,7 @@ import { MunicipalityIntegrationsModule } from './modules/municipality-integrati
 import { CommentsModule } from './modules/comments/comments.module';
 import { MessagingModule } from './modules/messaging/messaging.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { ExternalDataModule } from './modules/external-data/external-data.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     CommentsModule,
     MessagingModule,
     UploadsModule,
+    ExternalDataModule,
   ],
   controllers: [HealthController],
 })

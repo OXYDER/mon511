@@ -232,6 +232,37 @@ export interface ReportNotificationsTable {
   sent_at: Timestamp | null;
 }
 
+export interface ExternalDataSourcesTable {
+  id: Generated<string>;
+  name: string;
+  provider: string;
+  feed_key: string;
+  feed_url: string;
+  format: 'geojson' | 'csv';
+  license_note: string | null;
+  sync_frequency_minutes: Generated<number>;
+  last_synced_at: Timestamp | null;
+  last_sync_status: string | null;
+  last_sync_error: string | null;
+  active: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+}
+
+export interface ExternalIncidentsTable {
+  id: Generated<string>;
+  source_id: string;
+  external_id: string;
+  location: string | null;
+  raw_geometry: Record<string, unknown> | null;
+  title: string | null;
+  description: string | null;
+  category: string | null;
+  raw_data: Record<string, unknown>;
+  first_seen_at: Generated<Timestamp>;
+  last_seen_at: Generated<Timestamp>;
+  is_stale: Generated<boolean>;
+}
+
 export interface Database {
   regions: RegionsTable;
   roles: RolesTable;
@@ -254,5 +285,7 @@ export interface Database {
   conversation_participants: ConversationParticipantsTable;
   direct_messages: DirectMessagesTable;
   user_blocks: UserBlocksTable;
+  external_data_sources: ExternalDataSourcesTable;
+  external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;
 }

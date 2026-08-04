@@ -23,7 +23,8 @@ mon511-repo/
 │           ├── problem-types/
 │           ├── regions/
 │           ├── notifications/
-│           └── municipality-integrations/
+│           ├── municipality-integrations/
+│           └── external-data/         # couche officielle MTMD, distincte des signalements communautaires
 └── web/                        # client React + Vite
     └── src/
         ├── api.ts               # client HTTP + gestion du jeton JWT
@@ -43,6 +44,7 @@ Pour livrer quelque chose de fonctionnel rapidement plutôt qu'une architecture 
 | Simplifié | Impact | À faire plus tard |
 |---|---|---|
 | **Pas de vraie file BullMQ** | Les notifications et l'envoi aux municipalités s'exécutent directement dans la requête HTTP plutôt que dans un worker asynchrone séparé. | Migrer vers de vrais jobs BullMQ si le volume grandit — la logique métier ne change pas, seulement où elle s'exécute. |
+| **Sync des données MTMD manuelle** | La couche officielle (`external-data`) se synchronise via un endpoint admin (`POST /external-data/sources/:feedKey/sync`), pas automatiquement. | Ajouter un `@Cron()` NestJS qui appelle `syncSource` selon `sync_frequency_minutes` de chaque source. |
 | **Pas de purge automatique programmée** | Le job de purge des signalements refusés après 1 an (§ modèle de données) n'a pas de cron réel. | Ajouter un `@Cron()` NestJS ou un job BullMQ répété. |
 | **Régions sans frontières géographiques réelles** | Les régions de départ (`0002_seed.sql`) n'ont pas de polygone `boundary` — la dérivation automatique de région à la création d'un signalement retombe donc sur `null`. | Importer de vraies limites (ex. Statistique Canada, limites des divisions de recensement). |
 | **Carte non intégrée dans le client web** | Le client web actuel affiche les signalements en liste, pas sur une vraie carte MapLibre — les maquettes HTML montraient la carte, mais l'intégrer avec de vraies tuiles est un chantier à part. | Brancher MapLibre GL + un fournisseur de tuiles (MapTiler suggéré dans la discussion stack technique). |
