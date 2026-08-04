@@ -1,5 +1,3 @@
-version: "3.9"
-
 # Tous les ports exposés à l'hôte sont configurables via .env (voir .env.example).
 # Le port interne au conteneur reste fixe (à droite du ":") — seul le port
 # côté hôte (à gauche) change, ce qui évite les conflits avec tes autres
@@ -77,8 +75,6 @@ services:
         condition: service_started
       minio:
         condition: service_started
-      minio-init:
-        condition: service_completed_successfully
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgres://${POSTGRES_USER:-mon511}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mon511}
