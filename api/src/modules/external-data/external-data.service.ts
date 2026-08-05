@@ -23,6 +23,7 @@ export class ExternalDataService {
         'external_incidents.id', 'external_incidents.title', 'external_incidents.description',
         'external_incidents.category', 'external_incidents.last_seen_at',
         'external_data_sources.name as sourceName', 'external_data_sources.provider',
+        'external_data_sources.feed_key as feedKey',
         sql<number>`ST_X(external_incidents.location::geometry)`.as('longitude'),
         sql<number>`ST_Y(external_incidents.location::geometry)`.as('latitude'),
       ])

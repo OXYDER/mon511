@@ -42,6 +42,10 @@ export interface UsersTable {
     show_real_name: boolean;
     dm_permission: 'everyone' | 'shared_reports_only';
   }>;
+  map_layer_preferences: Generated<{
+    travaux_routiers: boolean;
+    conditions_hivernales: boolean;
+  }>;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
 }

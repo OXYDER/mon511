@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, getUserRole } from '../api';
+import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import MapView, { MapPin } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
@@ -24,6 +24,7 @@ interface ExternalIncident {
   provider: string;
   latitude: number;
   longitude: number;
+  feedKey: string;
 }
 
 interface Props {
@@ -39,7 +40,7 @@ const MODERATOR_ROLES = ['moderator', 'admin', 'super_admin'];
 export default function MapPage({ theme, onToggleTheme, onLogout, authenticated, onRequireAuth }: Props) {
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
-  const [showOfficialLayer, setShowOfficialLayer] = useState(false);
+  const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({ travaux_routiers: false, conditions_hivernales: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
@@ -52,6 +53,27 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   const role = getUserRole();
   const isModerator = role !== null && MODERATOR_ROLES.includes(role);
+
+  // Charger les préférences de couches : côté serveur si connecté, sinon localStorage.
+  useEffect(() => {
+    if (authenticated) {
+      api.get<any>('/users/me').then((me) => {
+        if (me.map_layer_preferences) setLayerPrefs(me.map_layer_preferences);
+      });
+    } else {
+      setLayerPrefs(getLocalLayerPrefs());
+    }
+  }, [authenticated]);
+
+  async function toggleLayer(key: keyof LayerPrefs) {
+    const next = { ...layerPrefs, [key]: !layerPrefs[key] };
+    setLayerPrefs(next);
+    if (authenticated) {
+      api.patch('/users/me/map-layers', { [key]: next[key] }).catch(() => {});
+    } else {
+      setLocalLayerPrefs(next);
+    }
+  }
 
   async function loadNearby(lat: number, lng: number) {
     setLoading(true);
@@ -70,7 +92,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function loadOfficialLayer(lat: number, lng: number) {
     try {
       const results = await api.get<ExternalIncident[]>(
-        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=15000`,
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=50000`,
       );
       setExternalIncidents(results);
     } catch {
@@ -78,15 +100,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }
 
-  function toggleOfficialLayer() {
-    const next = !showOfficialLayer;
-    setShowOfficialLayer(next);
-    if (next && center) loadOfficialLayer(center.lat, center.lng);
-  }
-
   function locateAndLoad() {
     if (!navigator.geolocation) {
       loadNearby(45.4042, -71.8929);
+      loadOfficialLayer(45.4042, -71.8929);
       return;
     }
     setLocating(true);
@@ -94,11 +111,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       (pos) => {
         setLocating(false);
         loadNearby(pos.coords.latitude, pos.coords.longitude);
-        if (showOfficialLayer) loadOfficialLayer(pos.coords.latitude, pos.coords.longitude);
+        loadOfficialLayer(pos.coords.latitude, pos.coords.longitude);
       },
       () => {
         setLocating(false);
         loadNearby(45.4042, -71.8929);
+        loadOfficialLayer(45.4042, -71.8929);
       },
     );
   }
@@ -119,15 +137,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     onClick: () => setSelectedReportId(r.id),
   }));
 
-  const officialPins: MapPin[] = showOfficialLayer
-    ? externalIncidents.map((inc) => ({
-        id: inc.id,
-        latitude: inc.latitude,
-        longitude: inc.longitude,
-        icon: '🏛️',
-        colorVar: 'official',
-      }))
-    : [];
+  const visibleExternalIncidents = externalIncidents.filter((inc) =>
+    (inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers) ||
+    (inc.feedKey === 'mtmd_conditions_hivernales' && layerPrefs.conditions_hivernales),
+  );
+
+  const officialPins: MapPin[] = visibleExternalIncidents.map((inc) => ({
+    id: inc.id,
+    latitude: inc.latitude,
+    longitude: inc.longitude,
+    icon: '🏛️',
+    colorVar: 'official',
+  }));
 
   return (
     <div className="app-full">
@@ -165,10 +186,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <aside className={`filters-panel-float ${selectedReportId ? 'mobile-hidden' : ''}`}>
         <h2>Près de vous</h2>
 
+        <div className="layer-toggle" style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 11.5 }}>🚧 Travaux routiers</span>
+          <button className="btn-ghost" onClick={() => toggleLayer('travaux_routiers')}>
+            {layerPrefs.travaux_routiers ? 'Activée' : 'Désactivée'}
+          </button>
+        </div>
         <div className="layer-toggle" style={{ marginBottom: 14 }}>
-          <span style={{ fontSize: 11.5 }}>🏛️ Couche officielle MTMD</span>
-          <button className="btn-ghost" onClick={toggleOfficialLayer}>
-            {showOfficialLayer ? 'Activée' : 'Désactivée'}
+          <span style={{ fontSize: 11.5 }}>❄️ Conditions routières</span>
+          <button className="btn-ghost" onClick={() => toggleLayer('conditions_hivernales')}>
+            {layerPrefs.conditions_hivernales ? 'Activée' : 'Désactivée'}
           </button>
         </div>
 
@@ -176,21 +203,20 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
         <div className="report-list-scroll">
           {loading && <div className="center-msg">Chargement...</div>}
-          {!loading && reports.length === 0 && (!showOfficialLayer || externalIncidents.length === 0) && !error && (
+          {!loading && reports.length === 0 && visibleExternalIncidents.length === 0 && !error && (
             <div className="center-msg">Aucun signalement à proximité.<br />Sois le premier à en ajouter un !</div>
           )}
 
-          {showOfficialLayer &&
-            externalIncidents.map((inc) => (
-              <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
-                <div className="rc-icon-hex official">🏛️</div>
-                <div className="rc-body">
-                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                  <div className="rc-meta">Source officielle</div>
-                </div>
-                <span className="pill official">Officiel</span>
+          {visibleExternalIncidents.map((inc) => (
+            <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
+              <div className="rc-icon-hex official">🏛️</div>
+              <div className="rc-body">
+                <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                <div className="rc-meta">Source officielle</div>
               </div>
-            ))}
+              <span className="pill official">Officiel</span>
+            </div>
+          ))}
 
           {reports.map((r) => (
             <div key={r.id} className="report-card" onClick={() => setSelectedReportId(r.id)}>

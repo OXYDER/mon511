@@ -26,6 +26,15 @@ export class UsersController {
     return this.usersService.updatePrivacySettings(user.userId, dto);
   }
 
+  @Patch('me/map-layers')
+  @UseGuards(JwtAuthGuard)
+  updateMapLayers(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() prefs: Partial<{ travaux_routiers: boolean; conditions_hivernales: boolean }>,
+  ) {
+    return this.usersService.updateMapLayerPreferences(user.userId, prefs);
+  }
+
   @Get(':id')
   publicProfile(@Param('id') id: string) {
     return this.usersService.findPublicProfile(id);

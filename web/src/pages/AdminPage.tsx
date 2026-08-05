@@ -179,6 +179,11 @@ function ExternalDataAdmin() {
   const [results, setResults] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
+  const LABELS: Record<string, string> = {
+    mtmd_travaux_routiers: 'Travaux routiers',
+    mtmd_conditions_hivernales: 'Conditions routières hivernales',
+  };
+
   async function load() {
     try {
       const results = await api.get<any[]>('/external-data/sources');
@@ -198,8 +203,9 @@ function ExternalDataAdmin() {
       );
       setResults((prev) => ({
         ...prev,
-        [feedKey]: result.synced ? `✔ ${result.count} incidents synchronisés` : `✕ ${result.reason}`,
+        [feedKey]: result.synced ? `✔ ${result.count} incidents synchronisés à l'instant` : `✕ ${result.reason}`,
       }));
+      load();
     } catch (err) {
       setResults((prev) => ({ ...prev, [feedKey]: err instanceof Error ? err.message : 'Échec' }));
     } finally {
@@ -222,21 +228,16 @@ function ExternalDataAdmin() {
         <div key={s.id} className="report-card" style={{ cursor: 'default' }}>
           <div className="rc-icon-hex official">🏛️</div>
           <div className="rc-body">
-            <div className="rc-title">{s.regionNameFr ?? s.id}</div>
-            <div className="rc-meta">{results[s.feed_key] ?? (s.auto_send_enabled ? 'Actif' : '')}</div>
+            <div className="rc-title">{LABELS[s.feed_key] ?? s.name}</div>
+            <div className="rc-meta">
+              {results[s.feed_key] ??
+                (s.last_synced_at
+                  ? `Dernière synchro : ${new Date(s.last_synced_at).toLocaleString('fr-CA')} · ${s.last_sync_status === 'ok' ? '✔ ok' : '✕ erreur'}`
+                  : 'Jamais synchronisé')}
+            </div>
           </div>
-        </div>
-      ))}
-      {/* Sources connues câblées directement (feed_key fixes du seed) */}
-      {['mtmd_travaux_routiers', 'mtmd_conditions_hivernales'].map((key) => (
-        <div key={key} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex official">🏛️</div>
-          <div className="rc-body">
-            <div className="rc-title">{key === 'mtmd_travaux_routiers' ? 'Travaux routiers' : 'Conditions routières hivernales'}</div>
-            <div className="rc-meta">{results[key] ?? '—'}</div>
-          </div>
-          <button className="btn-ghost" onClick={() => sync(key)} disabled={syncing === key}>
-            {syncing === key ? 'Synchronisation...' : 'Synchroniser'}
+          <button className="btn-ghost" onClick={() => sync(s.feed_key)} disabled={syncing === s.feed_key}>
+            {syncing === s.feed_key ? 'Synchronisation...' : 'Synchroniser'}
           </button>
         </div>
       ))}

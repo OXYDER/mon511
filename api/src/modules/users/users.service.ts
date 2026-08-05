@@ -13,13 +13,26 @@ export class UsersService {
       .selectFrom('users')
       .select([
         'id', 'email', 'first_name', 'last_name', 'avatar_url', 'locale',
-        'region_id', 'reputation_score', 'privacy_settings', 'created_at',
+        'region_id', 'reputation_score', 'privacy_settings', 'map_layer_preferences', 'created_at',
       ])
       .where('id', '=', id)
       .executeTakeFirst();
 
     if (!user) throw new NotFoundException('Usager introuvable.');
     return user;
+  }
+
+  async updateMapLayerPreferences(userId: string, prefs: Partial<{ travaux_routiers: boolean; conditions_hivernales: boolean }>) {
+    const current = await this.findById(userId);
+    const updated = { ...current.map_layer_preferences, ...prefs };
+
+    await this.db
+      .updateTable('users')
+      .set({ map_layer_preferences: updated, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .execute();
+
+    return updated;
   }
 
   /** Profil public — respecte privacy_settings de l'usager consulté (§ users, modèle de données). */

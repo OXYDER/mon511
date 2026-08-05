@@ -13,6 +13,30 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+const LAYER_PREFS_KEY = 'mon511_layer_prefs';
+
+export interface LayerPrefs {
+  travaux_routiers: boolean;
+  conditions_hivernales: boolean;
+}
+
+const DEFAULT_LAYER_PREFS: LayerPrefs = { travaux_routiers: false, conditions_hivernales: false };
+
+/** Repli localStorage pour les usagers non connectés — les usagers connectés
+ * ont leurs préférences persistées côté serveur (users.map_layer_preferences). */
+export function getLocalLayerPrefs(): LayerPrefs {
+  try {
+    const raw = localStorage.getItem(LAYER_PREFS_KEY);
+    return raw ? { ...DEFAULT_LAYER_PREFS, ...JSON.parse(raw) } : DEFAULT_LAYER_PREFS;
+  } catch {
+    return DEFAULT_LAYER_PREFS;
+  }
+}
+
+export function setLocalLayerPrefs(prefs: LayerPrefs) {
+  localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(prefs));
+}
+
 /** Décode le rôle depuis le payload JWT — usage UI uniquement (affichage
  * conditionnel des liens admin), jamais pour la sécurité réelle : le backend
  * applique ses propres gardes de rôle indépendamment de ce que le client affiche. */
