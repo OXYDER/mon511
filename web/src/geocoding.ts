@@ -27,3 +27,21 @@ export async function searchCity(query: string): Promise<GeocodingResult | null>
   const results = await searchCities(query, 1);
   return results[0] ?? null;
 }
+
+/** Géocodage inverse — retourne le nom du lieu (ville/quartier) le plus
+ * proche d'une coordonnée, pour afficher "où on regarde" sur la carte. */
+export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  if (!MAPTILER_KEY) return null;
+  try {
+    const res = await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const feature = data.features?.[0];
+    if (!feature) return null;
+    // Préfère un nom court (ville/municipalité) plutôt que l'adresse complète.
+    const place = feature.context?.find((c: any) => c.id?.startsWith('place') || c.id?.startsWith('municipality'));
+    return place?.text ?? feature.text ?? feature.place_name ?? null;
+  } catch {
+    return null;
+  }
+}

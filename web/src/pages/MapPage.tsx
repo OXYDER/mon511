@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang } from '../i18n';
-import { searchCities, GeocodingResult } from '../geocoding';
+import { searchCities, reverseGeocode, GeocodingResult } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
@@ -122,6 +122,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   const [searchText, setSearchText] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
+  const [currentAreaName, setCurrentAreaName] = useState('');
   const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [filterTypeIds, setFilterTypeIds] = useState<Set<string>>(new Set());
@@ -188,6 +189,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     setQueryCenter(c);
     loadNearby(c.lat, c.lng, radius);
     loadOfficialLayer(c.lat, c.lng, radius);
+    reverseGeocode(c.lat, c.lng).then((name) => { if (name) setCurrentAreaName(name); });
   }
 
   function locateAndLoad() {
@@ -197,6 +199,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       if (isReal) setUserLocation({ lat, lng });
       loadNearby(lat, lng);
       loadOfficialLayer(lat, lng);
+      reverseGeocode(lat, lng).then((name) => { if (name) setCurrentAreaName(name); });
     };
     if (!navigator.geolocation) {
       apply(45.4042, -71.8929, false);
@@ -416,12 +419,24 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <form className="search-bar" onSubmit={handleSearch}>
           <span>🔍</span>
           <input
-            placeholder={t('rechercher', lang)}
+            placeholder={currentAreaName || t('rechercher', lang)}
             value={searchText}
-            onChange={(e) => { setSearchText(e.target.value); setShowDropdown(true); }}
+            onChange={(e) => {
+              setSearchText(e.target.value);
+              setShowDropdown(true);
+              if (e.target.value.trim() === '') setAppliedSearch('');
+            }}
             onFocus={() => setShowDropdown(true)}
             onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
           />
+          {searchText && (
+            <span
+              onClick={() => { setSearchText(''); setAppliedSearch(''); setShowDropdown(false); }}
+              style={{ cursor: 'pointer', color: 'var(--text-muted)' }}
+            >
+              ✕
+            </span>
+          )}
         </form>
 
         {showDropdown && searchText.trim() && (citySuggestions.length > 0 || reportSuggestions.length > 0) && (
