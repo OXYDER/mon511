@@ -31,50 +31,68 @@ export default function AuthPage({ onAuthenticated }: Props) {
   }
 
   return (
-    <div className="content">
-      <div className="tabs">
-        <button className={`tab-item ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>
-          Connexion
-        </button>
-        <button className={`tab-item ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>
-          Créer un compte
-        </button>
-      </div>
+    <div className="content" style={{ display: 'flex', alignItems: 'center', minHeight: 'calc(100vh - 130px)' }}>
+      <div style={{ width: '100%', background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 16, boxShadow: 'var(--shadow-panel)', padding: '26px 22px' }}>
+        <div className="tabs">
+          <button className={`tab-item ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>
+            Connexion
+          </button>
+          <button className={`tab-item ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>
+            Créer un compte
+          </button>
+        </div>
 
-      {error && <div className="error-banner">{error}</div>}
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 600, marginBottom: 4 }}>
+          {mode === 'login' ? 'Content de vous revoir' : 'Créer un compte'}
+        </h1>
+        <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+          {mode === 'login'
+            ? 'Connectez-vous pour signaler et suivre les incidents près de chez vous.'
+            : 'Rejoignez la communauté et aidez à garder les routes sécuritaires.'}
+        </p>
 
-      <form onSubmit={submit}>
-        {mode === 'register' && (
+        {error && <div className="error-banner">{error}</div>}
+
+        <form onSubmit={submit}>
+          {mode === 'register' && (
+            <div className="field-group">
+              <label className="field-label">Prénom</label>
+              <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            </div>
+          )}
           <div className="field-group">
-            <label className="field-label">Prénom</label>
-            <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+            <label className="field-label">Courriel</label>
+            <input
+              className="text-input"
+              type="email"
+              required
+              placeholder="prenom.nom@courriel.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-        )}
-        <div className="field-group">
-          <label className="field-label">Courriel</label>
-          <input
-            className="text-input"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </div>
-        <div className="field-group">
-          <label className="field-label">Mot de passe</label>
-          <input
-            className="text-input"
-            type="password"
-            required
-            minLength={mode === 'register' ? 10 : undefined}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </div>
-        <button className="btn-primary" type="submit" disabled={loading}>
-          {loading ? 'Un instant...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
-        </button>
-      </form>
+          <div className="field-group">
+            <label className="field-label">Mot de passe</label>
+            <input
+              className="text-input"
+              type="password"
+              required
+              minLength={mode === 'register' ? 10 : undefined}
+              placeholder="••••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            {mode === 'register' && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                Minimum 10 caractères.
+              </div>
+            )}
+          </div>
+          <button className="btn-primary" type="submit" disabled={loading}>
+            {loading ? 'Un instant...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

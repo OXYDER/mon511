@@ -8,13 +8,11 @@ interface Report {
   addressText: string | null;
   problemTypeNameFr: string;
   problemTypeIcon: string | null;
-  createdAt: string;
 }
 
 interface ExternalIncident {
   id: string;
   title: string | null;
-  description: string | null;
   sourceName: string;
   provider: string;
 }
@@ -53,7 +51,6 @@ export default function MapPage({ onOpenReport }: Props) {
       );
       setExternalIncidents(results);
     } catch {
-      // Couche optionnelle — un échec ici ne doit pas bloquer l'affichage des signalements communautaires.
       setExternalIncidents([]);
     }
   }
@@ -90,21 +87,15 @@ export default function MapPage({ onOpenReport }: Props) {
 
   return (
     <div className="content">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 600 }}>Près de vous</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>Près de vous</span>
         <button className="btn-ghost" onClick={locateAndLoad} disabled={locating}>
           {locating ? '⏳' : '🎯'} Localiser
         </button>
       </div>
 
-      <div
-        style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '10px 12px', border: '1px solid var(--panel-border)', borderRadius: 9,
-          marginBottom: 14, fontSize: 12.5,
-        }}
-      >
-        <span>🏛️ Couche officielle MTMD (travaux, conditions hivernales)</span>
+      <div className="layer-toggle">
+        <span>🏛️ Couche officielle MTMD</span>
         <button className="btn-ghost" onClick={toggleOfficialLayer}>
           {showOfficialLayer ? 'Activée' : 'Désactivée'}
         </button>
@@ -112,27 +103,27 @@ export default function MapPage({ onOpenReport }: Props) {
 
       {error && <div className="error-banner">{error}</div>}
       {loading && <div className="center-msg">Chargement des signalements...</div>}
-      {!loading && reports.length === 0 && externalIncidents.length === 0 && !error && (
-        <div className="center-msg">Aucun signalement à proximité pour l'instant.</div>
+      {!loading && reports.length === 0 && (!showOfficialLayer || externalIncidents.length === 0) && !error && (
+        <div className="center-msg">Aucun signalement à proximité pour l'instant.<br />Sois le premier à en ajouter un !</div>
       )}
 
       {showOfficialLayer &&
         externalIncidents.map((inc) => (
-          <div key={inc.id} className="report-card" style={{ borderColor: '#3B9CFF' }}>
-            <div className="rc-icon">🏛️</div>
+          <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
+            <div className="rc-icon-hex official">🏛️</div>
             <div className="rc-body">
               <div className="rc-title">{inc.title ?? inc.sourceName}</div>
               <div className="rc-meta">Source officielle · {inc.provider}</div>
             </div>
-            <span className="pill" style={{ background: 'rgba(59,156,255,0.14)', color: '#3B9CFF' }}>
-              Officiel
-            </span>
+            <span className="pill official">Officiel</span>
           </div>
         ))}
 
       {reports.map((r) => (
         <div key={r.id} className="report-card" onClick={() => onOpenReport(r.id)}>
-          <div className="rc-icon">{r.problemTypeIcon ?? '📍'}</div>
+          <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+            {r.problemTypeIcon ?? '📍'}
+          </div>
           <div className="rc-body">
             <div className="rc-title">{r.problemTypeNameFr}</div>
             <div className="rc-meta">{r.addressText ?? 'Localisation GPS'}</div>

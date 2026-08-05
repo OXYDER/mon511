@@ -43,7 +43,11 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
   async function suggestResolved() {
     try {
       const result = await api.post<{ autoResolved: boolean }>(`/reports/${reportId}/suggest-resolution`, {});
-      setFeedback(result.autoResolved ? 'Merci ! Le signalement est maintenant marqué résolu.' : 'Suggestion envoyée à la modération et à l\'auteur.');
+      setFeedback(
+        result.autoResolved
+          ? 'Merci ! Le signalement est maintenant marqué résolu.'
+          : "Suggestion envoyée à la modération et à l'auteur.",
+      );
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action impossible.');
@@ -69,7 +73,7 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
       setNewComment('');
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible d\'envoyer le commentaire.');
+      setError(err instanceof Error ? err.message : "Impossible d'envoyer le commentaire.");
     }
   }
 
@@ -78,14 +82,16 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
 
   return (
     <div className="content">
-      <button className="btn-ghost" onClick={onBack} style={{ marginBottom: 14 }}>← Retour</button>
+      <button className="btn-ghost" onClick={onBack} style={{ marginBottom: 16 }}>← Retour</button>
 
-      <div className="detail-header">
-        <div className="detail-title">{report.description || 'Signalement'}</div>
-        <div className="rc-meta">{report.address_text ?? 'Position GPS'} · {new Date(report.created_at).toLocaleDateString('fr-CA')}</div>
+      <div className="detail-title">{report.description || 'Signalement'}</div>
+      <div className="detail-meta-row">
+        <span>📍 {report.address_text ?? 'Position GPS'}</span>
+        <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
+        <span>👍 {report.confirmationsCount} confirmations</span>
       </div>
 
-      {feedback && <div className="error-banner" style={{ background: 'rgba(47,191,113,0.14)', color: 'var(--status-resolved)', borderColor: 'var(--status-resolved)' }}>{feedback}</div>}
+      {feedback && <div className="success-banner" style={{ marginTop: 16 }}>{feedback}</div>}
 
       <div className="action-row">
         <button className="btn-ghost" onClick={confirm}>👍 Confirmer</button>
@@ -93,16 +99,15 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
         <button className="btn-ghost btn-danger" onClick={flag}>🚩 Signaler</button>
       </div>
 
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, margin: '20px 0 10px' }}>
-        Commentaires ({comments.length})
-      </div>
+      <div className="section-label">Commentaires ({comments.length})</div>
+      {comments.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun commentaire pour l'instant.</div>}
       {comments.map((c) => (
         <div key={c.id} className="comment">
           <div className="comment-author">{c.authorEmail?.split('@')[0]}</div>
           {c.message}
         </div>
       ))}
-      <form onSubmit={submitComment} style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+      <form onSubmit={submitComment} className="comment-row">
         <input
           className="text-input"
           placeholder="Ajouter un commentaire..."

@@ -64,7 +64,7 @@ export default function CreateReportPage({ onCreated }: Props) {
       });
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Impossible d\'envoyer le signalement.');
+      setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
     } finally {
       setSubmitting(false);
     }
@@ -73,6 +73,9 @@ export default function CreateReportPage({ onCreated }: Props) {
   return (
     <div className="content">
       <div className="detail-title">Nouveau signalement</div>
+      <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 20 }}>
+        Aide la communauté en signalant ce que tu observes sur la route.
+      </p>
 
       {error && <div className="error-banner">{error}</div>}
 
@@ -86,7 +89,7 @@ export default function CreateReportPage({ onCreated }: Props) {
                 className={`type-option ${typeId === t.id ? 'active' : ''}`}
                 onClick={() => setTypeId(t.id)}
               >
-                <span style={{ fontSize: 17 }}>{t.icon ?? '📍'}</span>
+                <span className="ti">{t.icon ?? '📍'}</span>
                 <span>{t.nameFr}</span>
               </div>
             ))}
@@ -95,9 +98,22 @@ export default function CreateReportPage({ onCreated }: Props) {
 
         <div className="field-group">
           <label className="field-label">Localisation</label>
-          <button type="button" className="btn-ghost" onClick={locate} disabled={locating} style={{ width: '100%' }}>
-            {locating ? 'Localisation en cours...' : coords ? `📍 Position capturée (±${Math.round(coords.accuracy)} m)` : '🎯 Utiliser ma position actuelle'}
-          </button>
+          <div className="geo-btn-row">
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={locate}
+              disabled={locating}
+              style={{ width: '100%' }}
+            >
+              {locating ? 'Localisation en cours...' : coords ? '📍 Position capturée' : '🎯 Utiliser ma position actuelle'}
+            </button>
+          </div>
+          {coords && (
+            <div className="geo-status ok">
+              Position précise capturée — précision ±{Math.round(coords.accuracy)} m
+            </div>
+          )}
         </div>
 
         <div className="field-group">
@@ -107,7 +123,7 @@ export default function CreateReportPage({ onCreated }: Props) {
 
         <div className="field-group">
           <label className="field-label">Description</label>
-          <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <textarea rows={3} placeholder="Décrivez le problème observé..." value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
 
         <div className="field-group">
@@ -126,9 +142,12 @@ export default function CreateReportPage({ onCreated }: Props) {
               onChange={(e) => setMunicipalityName(e.target.value)}
             />
           )}
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+            Aide à prioriser les cas déjà signalés aux autorités.
+          </div>
         </div>
 
-        <button className="btn-primary" type="submit" disabled={submitting}>
+        <button className="btn-primary" type="submit" disabled={submitting} style={{ marginTop: 6 }}>
           {submitting ? 'Envoi...' : 'Envoyer le signalement'}
         </button>
       </form>

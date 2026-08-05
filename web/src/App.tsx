@@ -12,6 +12,19 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [view, setView] = useState<View>('map');
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    document.documentElement.setAttribute('data-theme', next);
+  }
+
+  const themeToggleBtn = (
+    <button className="icon-btn" onClick={toggleTheme} title="Changer de thème">
+      {theme === 'dark' ? '🌙' : '☀️'}
+    </button>
+  );
 
   if (!authenticated) {
     return (
@@ -21,6 +34,7 @@ export default function App() {
             <span className="brand-mark">511</span>
             <span className="brand-name">mon511.ca</span>
           </div>
+          <div className="topbar-actions">{themeToggleBtn}</div>
         </header>
         <AuthPage onAuthenticated={() => setAuthenticated(true)} />
       </div>
@@ -44,6 +58,7 @@ export default function App() {
           <span className="brand-mark">511</span>
           <span className="brand-name">mon511.ca</span>
         </div>
+        <div className="topbar-actions">{themeToggleBtn}</div>
       </header>
 
       {view === 'map' && <MapPage onOpenReport={openReport} />}
@@ -55,13 +70,16 @@ export default function App() {
 
       <nav className="bottom-nav">
         <button className={`nav-tab ${view === 'map' ? 'active' : ''}`} onClick={() => setView('map')}>
-          🗺️ Carte
+          <span className="nt-ico">🗺️</span>
+          <span>Carte</span>
         </button>
         <button className={`nav-tab ${view === 'create' ? 'active' : ''}`} onClick={() => setView('create')}>
-          + Signaler
+          <span className="nt-ico">➕</span>
+          <span>Signaler</span>
         </button>
         <button className={`nav-tab ${view === 'profile' ? 'active' : ''}`} onClick={() => setView('profile')}>
-          👤 Profil
+          <span className="nt-ico">👤</span>
+          <span>Profil</span>
         </button>
       </nav>
     </div>
