@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import ToggleSwitch from '../components/ToggleSwitch';
 
 interface Props {
   onClose: () => void;
@@ -288,9 +289,7 @@ function ProblemTypesAdmin() {
             <div className="rc-title">{t.name_fr}</div>
             <div className="rc-meta">{t.categoryNameFr}</div>
           </div>
-          <button className="btn-ghost" onClick={() => toggleActive(t.id, t.active)}>
-            {t.active ? 'Actif' : 'Inactif'}
-          </button>
+          <ToggleSwitch on={t.active} onToggle={() => toggleActive(t.id, t.active)} title={t.active ? 'Actif' : 'Inactif'} />
         </div>
       ))}
     </div>
@@ -342,9 +341,11 @@ function UsersAdmin() {
             <div className="rc-title">{u.email}</div>
             <div className="rc-meta">{u.roleName} · réputation {u.reputation_score}</div>
           </div>
-          <button className="btn-ghost" onClick={() => toggleSuspend(u.id, u.status)}>
-            {u.status === 'suspended' ? 'Réactiver' : 'Suspendre'}
-          </button>
+          <ToggleSwitch
+            on={u.status !== 'suspended'}
+            onToggle={() => toggleSuspend(u.id, u.status)}
+            title={u.status === 'suspended' ? 'Suspendu — cliquer pour réactiver' : 'Actif — cliquer pour suspendre'}
+          />
         </div>
       ))}
     </div>
@@ -384,9 +385,7 @@ function SiteSettingsAdmin() {
       {booleanSettings.map((s) => (
         <div key={s.key} className="privacy-row">
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{s.key}</span>
-          <button className="btn-ghost" onClick={() => toggle(s.key, s.value)}>
-            {s.value ? 'Activé' : 'Désactivé'}
-          </button>
+          <ToggleSwitch on={s.value} onToggle={() => toggle(s.key, s.value)} />
         </div>
       ))}
 

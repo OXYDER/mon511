@@ -6,22 +6,24 @@ export interface GeocodingResult {
   lng: number;
 }
 
-/** Recherche une ville/adresse au Québec via MapTiler. Retourne null si pas
- * de clé configurée ou aucun résultat — l'appelant retombe alors sur la
- * recherche textuelle locale uniquement. */
-export async function searchCity(query: string): Promise<GeocodingResult | null> {
-  if (!MAPTILER_KEY || !query.trim()) return null;
+/** Recherche plusieurs villes/adresses au Québec via MapTiler, pour un menu
+ * déroulant de suggestions façon Google Maps. */
+export async function searchCities(query: string, limit = 4): Promise<GeocodingResult[]> {
+  if (!MAPTILER_KEY || !query.trim()) return [];
   try {
     const res = await fetch(
-      `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${MAPTILER_KEY}&country=ca&limit=1`,
+      `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${MAPTILER_KEY}&country=ca&limit=${limit}`,
     );
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = await res.json();
-    const feature = data.features?.[0];
-    if (!feature) return null;
-    const [lng, lat] = feature.center;
-    return { name: feature.place_name, lat, lng };
+    return (data.features ?? []).map((f: any) => ({ name: f.place_name, lat: f.center[1], lng: f.center[0] }));
   } catch {
-    return null;
+    return [];
   }
+}
+
+/** Repli pratique pour un seul résultat (ex. soumission directe du formulaire). */
+export async function searchCity(query: string): Promise<GeocodingResult | null> {
+  const results = await searchCities(query, 1);
+  return results[0] ?? null;
 }

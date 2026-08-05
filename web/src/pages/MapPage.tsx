@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang } from '../i18n';
-import { searchCity } from '../geocoding';
+import { searchCities, GeocodingResult } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
@@ -97,6 +97,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [panelView, setPanelView] = useState<PanelView>('list');
 
   const [searchText, setSearchText] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
   const [filterTypeIds, setFilterTypeIds] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<'all' | 'unresolved' | 'resolved'>('all');
 
@@ -184,14 +187,41 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!searchText.trim()) return;
-    const city = await searchCity(searchText);
-    if (city) {
-      setMapCamera({ lat: city.lat, lng: city.lng });
-      loadNearby(city.lat, city.lng);
-      loadOfficialLayer(city.lat, city.lng);
+    setShowDropdown(false);
+    setAppliedSearch(searchText);
+    const results = await searchCities(searchText, 1);
+    if (results[0]) {
+      setMapCamera({ lat: results[0].lat, lng: results[0].lng });
+      loadNearby(results[0].lat, results[0].lng);
+      loadOfficialLayer(results[0].lat, results[0].lng);
     }
   }
+
+  function selectCitySuggestion(city: GeocodingResult) {
+    setSearchText(city.name);
+    setAppliedSearch('');
+    setShowDropdown(false);
+    setMapCamera({ lat: city.lat, lng: city.lng });
+    loadNearby(city.lat, city.lng);
+    loadOfficialLayer(city.lat, city.lng);
+  }
+
+  function selectReportSuggestion(r: Report) {
+    setSearchText('');
+    setAppliedSearch('');
+    setShowDropdown(false);
+    openReport(r);
+  }
+
+  // Suggestions de villes (débattues) pendant la frappe — n'affecte PAS la
+  // liste/carte tant que rien n'est choisi ou validé.
+  useEffect(() => {
+    if (!searchText.trim()) { setCitySuggestions([]); return; }
+    const timeout = setTimeout(() => {
+      searchCities(searchText, 4).then(setCitySuggestions);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [searchText]);
 
   useEffect(() => {
     locateAndLoad();
@@ -219,7 +249,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   const activeFilterCount = filterTypeIds.size + (filterStatus !== 'all' ? 1 : 0);
 
-  const searchLower = searchText.trim().toLowerCase();
+  const searchLower = appliedSearch.trim().toLowerCase();
+  const liveSearchLower = searchText.trim().toLowerCase();
+  const reportSuggestions = liveSearchLower
+    ? reports.filter((r) => `${r.problemTypeNameFr} ${r.addressText ?? ''}`.toLowerCase().includes(liveSearchLower)).slice(0, 5)
+    : [];
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
       if (filterTypeIds.size > 0 && r.problemTypeId && !filterTypeIds.has(r.problemTypeId)) return false;
@@ -316,22 +350,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <button className="icon-btn" title="FR / EN" onClick={toggleLang} style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
             {lang === 'fr' ? 'EN' : 'FR'}
           </button>
-          <button
-            className="icon-btn"
-            title={lang === 'fr' ? 'Alertes MTQ dans la zone visible' : 'MTQ alerts in the visible area'}
-            onClick={() => {
-              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales;
-              const next = { travaux_routiers: anyOff, conditions_hivernales: anyOff };
-              setLayerPrefs(next);
-              if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
-              else setLocalLayerPrefs(next);
-            }}
-          >
-            🔔
-            {externalIncidents.length > 0 && (
-              <span className="badge-dot">{externalIncidents.length}</span>
-            )}
-          </button>
           <button className="icon-btn" title={t('changerTheme', lang)} onClick={onToggleTheme}>
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
@@ -346,9 +364,36 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <input
             placeholder={t('rechercher', lang)}
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => { setSearchText(e.target.value); setShowDropdown(true); }}
+            onFocus={() => setShowDropdown(true)}
+            onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
           />
         </form>
+
+        {showDropdown && searchText.trim() && (citySuggestions.length > 0 || reportSuggestions.length > 0) && (
+          <div className="search-dropdown">
+            {citySuggestions.length > 0 && (
+              <>
+                <div className="search-dropdown-section-title">{lang === 'fr' ? 'Villes' : 'Cities'}</div>
+                {citySuggestions.map((c) => (
+                  <div key={c.name} className="search-dropdown-item" onClick={() => selectCitySuggestion(c)}>
+                    <span>📍</span><span>{c.name}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {reportSuggestions.length > 0 && (
+              <>
+                <div className="search-dropdown-section-title">{lang === 'fr' ? 'Signalements' : 'Reports'}</div>
+                {reportSuggestions.map((r) => (
+                  <div key={r.id} className="search-dropdown-item" onClick={() => selectReportSuggestion(r)}>
+                    <span>{r.problemTypeIcon ?? '📍'}</span><span>{r.problemTypeNameFr} — {r.addressText ?? 'GPS'}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="panel-icon-row">
           <button
@@ -372,6 +417,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             onClick={() => setPanelView('legend')}
           >
             🗺️
+          </button>
+          <button
+            className="panel-icon-btn"
+            title={lang === 'fr' ? 'Alertes MTQ dans la zone visible — clic pour tout activer/désactiver' : 'MTQ alerts in the visible area — click to toggle all'}
+            onClick={() => {
+              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales;
+              const next = { travaux_routiers: anyOff, conditions_hivernales: anyOff };
+              setLayerPrefs(next);
+              if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
+              else setLocalLayerPrefs(next);
+            }}
+          >
+            🔔
+            {externalIncidents.length > 0 && (
+              <span className="badge-dot">{externalIncidents.length}</span>
+            )}
           </button>
         </div>
 
