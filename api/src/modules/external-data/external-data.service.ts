@@ -21,11 +21,14 @@ export class ExternalDataService {
       .innerJoin('external_data_sources', 'external_data_sources.id', 'external_incidents.source_id')
       .select([
         'external_incidents.id', 'external_incidents.title', 'external_incidents.description',
-        'external_incidents.category', 'external_incidents.last_seen_at',
+        'external_incidents.category', 'external_incidents.last_seen_at', 'external_incidents.raw_geometry',
         'external_data_sources.name as sourceName', 'external_data_sources.provider',
         'external_data_sources.feed_key as feedKey',
         sql<number>`ST_X(external_incidents.location::geometry)`.as('longitude'),
         sql<number>`ST_Y(external_incidents.location::geometry)`.as('latitude'),
+        sql<string | null>`external_incidents.raw_data->>'debut'`.as('debut'),
+        sql<string | null>`external_incidents.raw_data->>'fin'`.as('fin'),
+        sql<string | null>`external_incidents.raw_data->>'CodeCouleurEtatChaussee'`.as('roadConditionColorCode'),
       ])
       .where('external_incidents.is_stale', '=', false)
       .where('external_incidents.location', 'is not', null)
@@ -87,7 +90,13 @@ export class ExternalDataService {
         seenExternalIds.push(externalId);
 
         const centroid = this.computeCentroid(feature.geometry);
-        const title = feature.properties?.description ?? feature.properties?.nom ?? source.name;
+        const props = feature.properties ?? {};
+        // Champs différents selon le flux — on essaie plusieurs candidats
+        // connus plutôt qu'un seul nom générique (qui retombait toujours
+        // sur le nom de la source faute de correspondance).
+        const title =
+          props.identificationDesTravaux ?? props.localisation ?? props.NomRoute ?? props.description ?? props.nom ?? source.name;
+        const description = props.descriptionFrancais ?? props.DescriptionEtatChausseeFR ?? null;
 
         await this.db
           .insertInto('external_incidents')
@@ -99,9 +108,9 @@ export class ExternalDataService {
               : null,
             raw_geometry: feature.geometry ?? null,
             title,
-            description: feature.properties?.description ?? null,
+            description,
             category: source.feed_key,
-            raw_data: feature.properties ?? {},
+            raw_data: props,
             last_seen_at: new Date() as any,
             is_stale: false,
           })
@@ -109,7 +118,10 @@ export class ExternalDataService {
             oc.columns(['source_id', 'external_id']).doUpdateSet({
               last_seen_at: new Date() as any,
               is_stale: false,
-              raw_data: feature.properties ?? {},
+              raw_data: props,
+              title,
+              description,
+              raw_geometry: feature.geometry ?? null,
             }),
           )
           .execute();

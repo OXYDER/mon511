@@ -11,9 +11,17 @@ export interface MapPin {
   onClick?: () => void;
 }
 
+export interface RoadLineFeature {
+  id: string;
+  geometry: any;
+  color: string;
+  onClick?: () => void;
+}
+
 interface Props {
   center: { lat: number; lng: number } | null;
   pins: MapPin[];
+  lines?: RoadLineFeature[];
   height?: number | string;
   fullBleed?: boolean;
   theme?: 'dark' | 'light';
@@ -39,11 +47,53 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
+export default function MapView({ center, pins, lines = [], height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const linesClickMapRef = useRef<Record<string, () => void>>({});
+
+  // Ref toujours à jour pour éviter les fermetures obsolètes dans les
+  // gestionnaires d'événements enregistrés une seule fois.
+  const linesRef = useRef<RoadLineFeature[]>(lines);
+  linesRef.current = lines;
+
+  function buildLinesGeoJson() {
+    return {
+      type: 'FeatureCollection' as const,
+      features: linesRef.current
+        .filter((l) => l.geometry)
+        .map((l) => ({
+          type: 'Feature' as const,
+          geometry: l.geometry,
+          properties: { id: l.id, color: l.color },
+        })),
+    };
+  }
+
+  function ensureLinesLayer() {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!map.getSource('road-conditions')) {
+      map.addSource('road-conditions', { type: 'geojson', data: buildLinesGeoJson() as any });
+      map.addLayer({
+        id: 'road-conditions-layer',
+        type: 'line',
+        source: 'road-conditions',
+        paint: { 'line-color': ['get', 'color'], 'line-width': 5, 'line-opacity': 0.9 },
+        layout: { 'line-cap': 'round', 'line-join': 'round' },
+      });
+      map.on('click', 'road-conditions-layer', (e) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (id) linesClickMapRef.current[id]?.();
+      });
+      map.on('mouseenter', 'road-conditions-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
+      map.on('mouseleave', 'road-conditions-layer', () => { map.getCanvas().style.cursor = ''; });
+    } else {
+      (map.getSource('road-conditions') as any)?.setData(buildLinesGeoJson());
+    }
+  }
 
   function styleUrlFor(t: 'dark' | 'light') {
     if (!MAPTILER_KEY) return 'https://demotiles.maplibre.org/style.json';
@@ -62,6 +112,7 @@ export default function MapView({ center, pins, height = 320, fullBleed = false,
       zoom: 12,
     });
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    mapRef.current.on('style.load', ensureLinesLayer);
 
     mapRef.current.on('moveend', () => {
       if (!mapRef.current || !onViewportChange) return;
@@ -125,6 +176,17 @@ export default function MapView({ center, pins, height = 320, fullBleed = false,
       markersRef.current.push(marker);
     }
   }, [pins]);
+
+  // Redessiner les lignes (segments de route) à chaque changement de liste
+  useEffect(() => {
+    linesClickMapRef.current = Object.fromEntries(
+      lines.filter((l) => l.onClick).map((l) => [l.id, l.onClick as () => void]),
+    );
+    if (mapRef.current && mapRef.current.isStyleLoaded()) {
+      ensureLinesLayer();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
 
   return (
     <div

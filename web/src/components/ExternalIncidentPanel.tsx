@@ -6,42 +6,69 @@ interface Props {
   onClose: () => void;
 }
 
-const FRIENDLY_LABELS: Record<string, string> = {
-  nom_route: 'Route',
-  numero_route: 'Numéro de route',
-  municipalite: 'Municipalité',
-  mrc: 'MRC',
-  region: 'Région administrative',
-  date_debut: 'Début',
-  date_fin: 'Fin',
-  nature_travaux: 'Nature des travaux',
-  entrave: 'Entrave',
-  restriction: 'Restriction',
-  direction: 'Direction',
-  chaussee: 'État de la chaussée',
-  visibilite: 'Visibilité',
-};
-
-function humanizeKey(key: string) {
-  return FRIENDLY_LABELS[key.toLowerCase()] ?? key.replace(/_/g, ' ');
+function parseMtmdDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value.replace(/\//g, '-'));
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
+
+function formatDateTime(value: string | null | undefined): string {
+  const d = parseMtmdDate(value);
+  return d ? d.toLocaleString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+}
+
+// Champs à afficher, dans l'ordre, avec un libellé humain et un formateur
+// optionnel — plutôt que de tout déverser en vrac, on choisit ce qui compte
+// vraiment pour chaque type de flux (noms de champs confirmés depuis un
+// vrai échantillon de données du MTMD).
+const TRAVAUX_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['identificationDesTravaux', 'Nature des travaux'],
+  ['localisation', 'Localisation'],
+  ['routeAutoroute', 'Route / autoroute'],
+  ['direction', 'Direction'],
+  ['entrave', 'Entrave'],
+  ['entraveType', "Type d'entrave"],
+  ['debut', 'Début', formatDateTime],
+  ['fin', 'Fin prévue', formatDateTime],
+  ['miseAJour', 'Dernière mise à jour', formatDateTime],
+  ['detoursEtItinerairesFacultatifs', 'Détours suggérés'],
+];
+
+const CONDITIONS_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['NomRoute', 'Route'],
+  ['NomRegion', 'Région administrative'],
+  ['LocalisationDebutFR', 'Entre'],
+  ['LocalisationFinFR', 'Et'],
+  ['DescriptionEtatChausseeFR', 'État de la chaussée'],
+  ['DescriptionVisibiliteFR', 'Visibilité'],
+  ['IndicateurPresenceLamesNeige', 'Lames à neige sur place', (v) => (v === 'Y' ? 'Oui' : 'Non')],
+  ['EnVigueurDepuis', 'En vigueur depuis', formatDateTime],
+];
 
 export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const [incident, setIncident] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setIncident(null);
     api
       .get<any>(`/external-data/incidents/${incidentId}`)
       .then(setIncident)
       .catch((err) => setError(err instanceof Error ? err.message : 'Détail introuvable.'));
   }, [incidentId]);
 
-  const rawEntries = incident?.raw_data
-    ? Object.entries(incident.raw_data).filter(([, v]) => v !== null && v !== '' && v !== undefined)
-    : [];
-
   const isTravaux = incident?.category === 'mtmd_travaux_routiers';
+  const fieldDefs = isTravaux ? TRAVAUX_FIELDS : CONDITIONS_FIELDS;
+
+  const rows = incident
+    ? fieldDefs
+        .map(([key, label, formatter]) => {
+          const raw = incident.raw_data?.[key];
+          if (raw === null || raw === undefined || raw === '') return null;
+          return { label, value: formatter ? formatter(raw) : String(raw) };
+        })
+        .filter(Boolean) as { label: string; value: string }[]
+    : [];
 
   return (
     <div className="detail-panel-float mobile-visible">
@@ -58,29 +85,19 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
 
       {incident && (
         <>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
             {incident.title ?? incident.sourceName}
           </div>
-          {incident.description && (
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
-              {incident.description}
-            </div>
-          )}
 
-          {rawEntries.length > 0 && (
-            <>
-              <div className="section-label" style={{ fontSize: 13, marginTop: 12 }}>Détails</div>
-              {rawEntries.map(([key, value]) => (
-                <div
-                  key={key}
-                  style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}
-                >
-                  <span style={{ color: 'var(--text-muted)' }}>{humanizeKey(key)}</span>
-                  <span style={{ textAlign: 'right' }}>{String(value)}</span>
-                </div>
-              ))}
-            </>
-          )}
+          {rows.map((r) => (
+            <div
+              key={r.label}
+              style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}
+            >
+              <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>{r.label}</span>
+              <span style={{ textAlign: 'right' }}>{r.value}</span>
+            </div>
+          ))}
 
           <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 16, lineHeight: 1.5 }}>
             Source : {incident.provider} · {incident.sourceName}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
-import MapView, { MapPin } from '../components/MapView';
+import MapView, { MapPin, RoadLineFeature } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
 import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
@@ -27,6 +27,31 @@ interface ExternalIncident {
   latitude: number;
   longitude: number;
   feedKey: string;
+  debut: string | null;
+  fin: string | null;
+  roadConditionColorCode: string | null;
+  raw_geometry: any;
+}
+
+/** Parse le format de date du MTMD ("YYYY/MM/DD HH:mm:ss") et calcule le statut. */
+function parseMtmdDate(value: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value.replace(/\//g, '-'));
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function travauxStatus(debut: string | null, fin: string | null): { label: string; color: string } {
+  const now = new Date();
+  const d = parseMtmdDate(debut);
+  const f = parseMtmdDate(fin);
+  if (d && now < d) return { label: 'À venir', color: 'var(--official-blue)' };
+  if (f && now > f) return { label: 'Terminé', color: 'var(--text-muted)' };
+  return { label: 'En cours', color: 'var(--status-unresolved)' };
+}
+
+function formatMtmdDate(value: string | null): string {
+  const d = parseMtmdDate(value);
+  return d ? d.toLocaleDateString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 }
 
 type Selection = { type: 'report' | 'external'; id: string } | null;
@@ -159,19 +184,33 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     onClick: () => openReport(r),
   }));
 
-  const visibleExternalIncidents = externalIncidents.filter((inc) =>
-    (inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers) ||
-    (inc.feedKey === 'mtmd_conditions_hivernales' && layerPrefs.conditions_hivernales),
+  const visibleTravaux = externalIncidents.filter(
+    (inc) => inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers,
+  );
+  const visibleConditions = externalIncidents.filter(
+    (inc) => inc.feedKey === 'mtmd_conditions_hivernales' && layerPrefs.conditions_hivernales,
   );
 
-  const officialPins: MapPin[] = visibleExternalIncidents.map((inc) => ({
+  // Travaux : affichés comme pins + dans la liste, avec statut et dates.
+  const officialPins: MapPin[] = visibleTravaux.map((inc) => ({
     id: inc.id,
     latitude: inc.latitude,
     longitude: inc.longitude,
-    icon: inc.feedKey === 'mtmd_travaux_routiers' ? '🚧' : '❄️',
+    icon: '🚧',
     colorVar: 'official',
     onClick: () => openExternal(inc),
   }));
+
+  // Conditions routières : uniquement surlignées sur la carte (pas dans la
+  // liste), colorées avec le code couleur officiel du MTMD lui-même.
+  const conditionLines: RoadLineFeature[] = visibleConditions
+    .filter((inc) => inc.raw_geometry)
+    .map((inc) => ({
+      id: inc.id,
+      geometry: inc.raw_geometry,
+      color: inc.roadConditionColorCode ? `#${inc.roadConditionColorCode}` : '#3B9CFF',
+      onClick: () => openExternal(inc),
+    }));
 
   return (
     <div className="app-full">
@@ -179,6 +218,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <MapView
           center={mapCamera}
           pins={[...reportPins, ...officialPins]}
+          lines={conditionLines}
           fullBleed
           theme={theme}
           onViewportChange={handleViewportChange}
@@ -228,20 +268,25 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
         <div className="report-list-scroll">
           {loading && <div className="center-msg">Chargement...</div>}
-          {!loading && reports.length === 0 && visibleExternalIncidents.length === 0 && !error && (
+          {!loading && reports.length === 0 && visibleTravaux.length === 0 && !error && (
             <div className="center-msg">Aucun signalement à proximité.<br />Sois le premier à en ajouter un !</div>
           )}
 
-          {visibleExternalIncidents.map((inc) => (
-            <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
-              <div className="rc-icon-hex official">{inc.feedKey === 'mtmd_travaux_routiers' ? '🚧' : '❄️'}</div>
-              <div className="rc-body">
-                <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                <div className="rc-meta">Source officielle</div>
+          {visibleTravaux.map((inc) => {
+            const status = travauxStatus(inc.debut, inc.fin);
+            return (
+              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                <div className="rc-icon-hex official">🚧</div>
+                <div className="rc-body">
+                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">{formatMtmdDate(inc.debut)} → {formatMtmdDate(inc.fin)}</div>
+                </div>
+                <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: status.color }}>
+                  {status.label}
+                </span>
               </div>
-              <span className="pill official">Officiel</span>
-            </div>
-          ))}
+            );
+          })}
 
           {reports.map((r) => (
             <div key={r.id} className="report-card" onClick={() => openReport(r)}>
