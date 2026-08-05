@@ -5,7 +5,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types';
+type Tab = 'queue' | 'types' | 'external';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -21,17 +21,21 @@ export default function AdminPage({ onClose }: Props) {
       </header>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 24px 60px' }}>
-        <div className="tabs" style={{ maxWidth: 360, marginBottom: 24 }}>
+        <div className="tabs" style={{ maxWidth: 480, marginBottom: 24 }}>
           <button className={`tab-item ${tab === 'queue' ? 'active' : ''}`} onClick={() => setTab('queue')}>
             File de modération
           </button>
           <button className={`tab-item ${tab === 'types' ? 'active' : ''}`} onClick={() => setTab('types')}>
             Catégories &amp; types
           </button>
+          <button className={`tab-item ${tab === 'external' ? 'active' : ''}`} onClick={() => setTab('external')}>
+            Données officielles
+          </button>
         </div>
 
         {tab === 'queue' && <ModerationQueue />}
         {tab === 'types' && <ProblemTypesAdmin />}
+        {tab === 'external' && <ExternalDataAdmin />}
       </div>
     </div>
   );
@@ -165,6 +169,77 @@ function ModerationQueue() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function ExternalDataAdmin() {
+  const [sources, setSources] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const results = await api.get<any[]>('/external-data/sources');
+      setSources(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function sync(feedKey: string) {
+    setSyncing(feedKey);
+    try {
+      const result = await api.post<{ synced: boolean; count?: number; reason?: string }>(
+        `/external-data/sources/${feedKey}/sync`,
+      );
+      setResults((prev) => ({
+        ...prev,
+        [feedKey]: result.synced ? `✔ ${result.count} incidents synchronisés` : `✕ ${result.reason}`,
+      }));
+    } catch (err) {
+      setResults((prev) => ({ ...prev, [feedKey]: err instanceof Error ? err.message : 'Échec' }));
+    } finally {
+      setSyncing(null);
+    }
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Sources externes (MTMD)
+      </div>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+        Synchronisation manuelle pour l'instant — pas encore de cron automatique.
+        Voir le README pour la migration vers un vrai job planifié.
+      </p>
+      {sources.map((s) => (
+        <div key={s.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex official">🏛️</div>
+          <div className="rc-body">
+            <div className="rc-title">{s.regionNameFr ?? s.id}</div>
+            <div className="rc-meta">{results[s.feed_key] ?? (s.auto_send_enabled ? 'Actif' : '')}</div>
+          </div>
+        </div>
+      ))}
+      {/* Sources connues câblées directement (feed_key fixes du seed) */}
+      {['mtmd_travaux_routiers', 'mtmd_conditions_hivernales'].map((key) => (
+        <div key={key} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex official">🏛️</div>
+          <div className="rc-body">
+            <div className="rc-title">{key === 'mtmd_travaux_routiers' ? 'Travaux routiers' : 'Conditions routières hivernales'}</div>
+            <div className="rc-meta">{results[key] ?? '—'}</div>
+          </div>
+          <button className="btn-ghost" onClick={() => sync(key)} disabled={syncing === key}>
+            {syncing === key ? 'Synchronisation...' : 'Synchroniser'}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

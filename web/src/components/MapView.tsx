@@ -16,6 +16,7 @@ interface Props {
   pins: MapPin[];
   height?: number | string;
   fullBleed?: boolean;
+  theme?: 'dark' | 'light';
 }
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
@@ -26,24 +27,24 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, height = 320, fullBleed = false }: Props) {
+export default function MapView({ center, pins, height = 320, fullBleed = false, theme = 'dark' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+
+  function styleUrlFor(t: 'dark' | 'light') {
+    if (!MAPTILER_KEY) return 'https://demotiles.maplibre.org/style.json';
+    const styleName = t === 'dark' ? 'streets-v2-dark' : 'streets-v2-light';
+    return `https://api.maptiler.com/maps/${styleName}/style.json?key=${MAPTILER_KEY}`;
+  }
 
   // Initialisation de la carte une seule fois
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const styleUrl = MAPTILER_KEY
-      ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`
-      : // Repli sans clé MapTiler : style vectoriel de démonstration public (limité, à remplacer
-        // par une vraie clé dans .env pour un usage réel — voir MAPTILER_API_KEY).
-        'https://demotiles.maplibre.org/style.json';
-
     mapRef.current = new maplibregl.Map({
       container: containerRef.current,
-      style: styleUrl,
+      style: styleUrlFor(theme),
       center: center ? [center.lng, center.lat] : [-71.8929, 45.4042],
       zoom: 12,
     });
@@ -55,6 +56,14 @@ export default function MapView({ center, pins, height = 320, fullBleed = false 
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Changer le style de tuiles quand le thème change, sans recréer la carte
+  useEffect(() => {
+    if (mapRef.current) {
+      mapRef.current.setStyle(styleUrlFor(theme));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [theme]);
 
   // Recentrer quand la position change
   useEffect(() => {

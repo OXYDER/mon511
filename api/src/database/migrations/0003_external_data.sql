@@ -54,8 +54,8 @@ INSERT INTO external_data_sources (name, provider, feed_key, feed_url, format, l
     'Conditions routières hivernales',
     'MTMD',
     'mtmd_conditions_hivernales',
-    'https://ws.mapserver.transports.gouv.qc.ca/swtq?service=wfs&version=2.0.0&request=getfeature&typename=ms:conditions_routieres&outfile=CondRoutHiver_Continu&outputformat=csv',
-    'csv',
-    'Licence Ouverte du gouvernement du Québec — mise à jour quotidienne (3h-6h) en hiver, sur changement. Format CSV, pas GeoJSON — parseur distinct requis.',
+    'https://ws.mapserver.transports.gouv.qc.ca/swtq?service=wfs&version=2.0.0&request=getfeature&typename=ms:conditions_routieres&outfile=CondRoutHiver_Continu&srsname=EPSG:4326&outputformat=geojson',
+    'geojson',
+    'Licence Ouverte du gouvernement du Québec — mise à jour quotidienne (3h-6h) en hiver, sur changement.',
     60
   );

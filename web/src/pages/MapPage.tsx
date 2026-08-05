@@ -132,7 +132,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   return (
     <div className="app-full">
       <div className="map-background">
-        <MapView center={center} pins={[...reportPins, ...officialPins]} fullBleed />
+        <MapView center={center} pins={[...reportPins, ...officialPins]} fullBleed theme={theme} />
       </div>
 
       <header className="topbar-float">
