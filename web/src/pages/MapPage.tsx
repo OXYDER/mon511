@@ -104,6 +104,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     conditions_hivernales: false,
     avertissements: false,
     debit_circulation: false,
+    feux_foret: false,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -309,6 +310,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => inc.feedKey === 'mtmd_debit_circulation' && layerPrefs.debit_circulation,
   );
 
+  const visibleFeux = externalIncidents.filter(
+    (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret,
+  );
+
   const reportPins: MapPin[] = filteredReports.map((r) => ({
     id: r.id,
     latitude: r.latitude,
@@ -326,6 +331,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     ...visibleAvertissements.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '⚠️', colorVar: 'official' as const, onClick: () => openExternal(inc),
+    })),
+    ...visibleFeux.map((inc) => ({
+      id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
+      icon: '🔥', colorVar: 'official' as const, onClick: () => openExternal(inc),
     })),
   ];
 
@@ -468,12 +477,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             title={lang === 'fr' ? 'Alertes MTQ dans la zone visible — clic pour tout activer/désactiver' : 'MTQ alerts in the visible area — click to toggle all'}
             onClick={() => {
               const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales
-                || !layerPrefs.avertissements || !layerPrefs.debit_circulation;
+                || !layerPrefs.avertissements || !layerPrefs.debit_circulation || !layerPrefs.feux_foret;
               const next: LayerPrefs = {
                 travaux_routiers: anyOff,
                 conditions_hivernales: anyOff,
                 avertissements: anyOff,
                 debit_circulation: anyOff,
+                feux_foret: anyOff,
               };
               setLayerPrefs(next);
               if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
@@ -503,6 +513,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚗 {lang === 'fr' ? 'Débit de circulation' : 'Traffic volume'}</span>
           <ToggleSwitch on={layerPrefs.debit_circulation} onToggle={() => toggleLayer('debit_circulation')} />
         </div>
+        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔥 {lang === 'fr' ? 'Feux de forêt (SOPFEU)' : 'Forest fires (SOPFEU)'}</span>
+          <ToggleSwitch on={layerPrefs.feux_foret} onToggle={() => toggleLayer('feux_foret')} />
+        </div>
 
         {error && <div className="error-banner">{error}</div>}
 
@@ -524,6 +538,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             <div className="legend-section">
               <div className="legend-section-title">{lang === 'fr' ? 'Avertissements' : 'Advisories'}</div>
               <div className="legend-row"><div className="legend-icon-box">⚠️</div><span>{lang === 'fr' ? 'Fermeture, incident, obstacle' : 'Closure, incident, obstacle'}</span></div>
+            </div>
+            <div className="legend-section">
+              <div className="legend-section-title">{lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</div>
+              <div className="legend-row"><div className="legend-icon-box">🔥</div><span>{lang === 'fr' ? 'Incendie de forêt actif (SOPFEU)' : 'Active forest fire (SOPFEU)'}</span></div>
             </div>
             {layerPrefs.conditions_hivernales && (
               <div className="legend-section">
@@ -583,9 +601,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {panelView === 'list' && (
           <div className="report-list-scroll">
             {loading && <div className="center-msg">{t('chargement', lang)}</div>}
-            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && !error && (
+            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && !error && (
               <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
             )}
+
+            {visibleFeux.map((inc) => (
+              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                <div className="rc-icon-hex official">🔥</div>
+                <div className="rc-body">
+                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">SOPFEU</div>
+                </div>
+                <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--status-danger)' }}>
+                  {lang === 'fr' ? 'Actif' : 'Active'}
+                </span>
+              </div>
+            ))}
 
             {visibleAvertissements.map((inc) => (
               <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>

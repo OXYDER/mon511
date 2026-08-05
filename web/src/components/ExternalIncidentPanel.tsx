@@ -80,31 +80,44 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const isTravaux = category === 'mtmd_travaux_routiers';
   const isAvertissement = category === 'mtmd_avertissements';
   const isCirculation = category === 'mtmd_debit_circulation';
+  const isConditions = category === 'mtmd_conditions_hivernales';
+  const isKnownCategory = isTravaux || isAvertissement || isCirculation || isConditions;
   const fieldDefs = isTravaux
     ? TRAVAUX_FIELDS
     : isAvertissement
       ? AVERTISSEMENTS_FIELDS
       : isCirculation
         ? CIRCULATION_FIELDS
-        : CONDITIONS_FIELDS;
+        : isConditions
+          ? CONDITIONS_FIELDS
+          : []; // catégorie inconnue (ex. feux de forêt tant que les champs ne sont pas confirmés) → repli générique plus bas
 
-  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : '❄️';
+  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : isConditions ? '❄️' : '🏛️';
   const panelTitle = isTravaux
     ? 'Travaux routiers'
     : isAvertissement
       ? 'Avertissement routier'
       : isCirculation
         ? 'Débit de circulation'
-        : 'Conditions routières';
+        : isConditions
+          ? 'Conditions routières'
+          : (incident?.sourceName ?? 'Information officielle');
 
   const rows = incident
-    ? fieldDefs
-        .map(([key, label, formatter]) => {
-          const raw = incident.raw_data?.[key];
-          if (raw === null || raw === undefined || raw === '') return null;
-          return { label, value: formatter ? formatter(raw) : String(raw) };
-        })
-        .filter(Boolean) as { label: string; value: string }[]
+    ? isKnownCategory
+      ? (fieldDefs
+          .map(([key, label, formatter]) => {
+            const raw = incident.raw_data?.[key];
+            if (raw === null || raw === undefined || raw === '') return null;
+            return { label, value: formatter ? formatter(raw) : String(raw) };
+          })
+          .filter(Boolean) as { label: string; value: string }[])
+      : // Catégorie pas encore curée : on affiche tous les champs bruts plutôt
+        // que de deviner lesquels sont pertinents (ex. feux de forêt, en
+        // attente de confirmation des vrais noms de champs).
+        Object.entries(incident.raw_data ?? {})
+          .filter(([, v]) => v !== null && v !== undefined && v !== '')
+          .map(([key, value]) => ({ label: key, value: String(value) }))
     : [];
 
   return (

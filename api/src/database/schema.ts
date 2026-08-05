@@ -242,7 +242,7 @@ export interface ExternalDataSourcesTable {
   provider: string;
   feed_key: string;
   feed_url: string;
-  format: 'geojson' | 'csv';
+  format: 'geojson' | 'csv' | 'json';
   license_note: string | null;
   sync_frequency_minutes: Generated<number>;
   last_synced_at: Timestamp | null;

@@ -79,10 +79,12 @@ export class ExternalDataService {
       .executeTakeFirst();
 
     if (!source) return { synced: false, reason: 'source introuvable' };
-    if (source.format !== 'geojson') {
-      return { synced: false, reason: `format ${source.format} non supporté par ce parseur pour l'instant` };
-    }
+    if (source.format === 'geojson') return this.syncGeojsonSource(source);
+    if (source.format === 'json') return this.syncJsonSource(source);
+    return { synced: false, reason: `format ${source.format} non supporté par ce parseur pour l'instant` };
+  }
 
+  private async syncGeojsonSource(source: any) {
     try {
       const res = await fetch(source.feed_url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -134,33 +136,99 @@ export class ExternalDataService {
           .execute();
       }
 
-      // Tout ce qui n'est plus dans le flux est marqué comme périmé plutôt
-      // que supprimé — garde l'historique sans polluer la couche active.
-      if (seenExternalIds.length > 0) {
+      return this.finalizeSync(source, seenExternalIds);
+    } catch (error) {
+      return this.failSync(source, error);
+    }
+  }
+
+  /**
+   * Sync pour les APIs REST classiques (pas du GeoJSON) — ex. SOPFEU. On
+   * essaie plusieurs noms de champs candidats pour les coordonnées plutôt
+   * que d'en supposer un seul, faute d'avoir vu un échantillon confirmé
+   * avant le premier déploiement de cette source.
+   */
+  private async syncJsonSource(source: any) {
+    try {
+      const res = await fetch(source.feed_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const items: any[] = Array.isArray(data) ? data : (data.items ?? data.data ?? data.results ?? []);
+
+      const seenExternalIds: string[] = [];
+      const LAT_KEYS = ['lat', 'Lat', 'latitude', 'Latitude', 'LAT', 'y', 'Y'];
+      const LNG_KEYS = ['lon', 'Lon', 'lng', 'Lng', 'longitude', 'Longitude', 'LON', 'x', 'X'];
+
+      for (const item of items) {
+        const externalId = String(item.id ?? item.noFeu ?? item.NoFeu ?? item.numero ?? JSON.stringify(item));
+        seenExternalIds.push(externalId);
+
+        const latKey = LAT_KEYS.find((k) => item[k] !== undefined);
+        const lngKey = LNG_KEYS.find((k) => item[k] !== undefined);
+        const lat = latKey ? parseFloat(item[latKey]) : null;
+        const lng = lngKey ? parseFloat(item[lngKey]) : null;
+        const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
+
+        const title = item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
+
         await this.db
-          .updateTable('external_incidents')
-          .set({ is_stale: true })
-          .where('source_id', '=', source.id)
-          .where('external_id', 'not in', seenExternalIds)
+          .insertInto('external_incidents')
+          .values({
+            source_id: source.id,
+            external_id: externalId,
+            location: hasCoords ? (sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)` as any) : null,
+            raw_geometry: null,
+            title,
+            description: null,
+            category: source.feed_key,
+            raw_data: item,
+            last_seen_at: new Date() as any,
+            is_stale: false,
+          })
+          .onConflict((oc) =>
+            oc.columns(['source_id', 'external_id']).doUpdateSet({
+              last_seen_at: new Date() as any,
+              is_stale: false,
+              raw_data: item,
+              title,
+            }),
+          )
           .execute();
       }
 
-      await this.db
-        .updateTable('external_data_sources')
-        .set({ last_synced_at: new Date() as any, last_sync_status: 'ok', last_sync_error: null })
-        .where('id', '=', source.id)
-        .execute();
-
-      return { synced: true, count: seenExternalIds.length };
+      return this.finalizeSync(source, seenExternalIds);
     } catch (error) {
-      this.logger.error(`Échec de synchronisation pour ${feedKey}`, error as Error);
-      await this.db
-        .updateTable('external_data_sources')
-        .set({ last_sync_status: 'error', last_sync_error: String(error) })
-        .where('id', '=', source.id)
-        .execute();
-      return { synced: false, reason: String(error) };
+      return this.failSync(source, error);
     }
+  }
+
+  private async finalizeSync(source: any, seenExternalIds: string[]) {
+    if (seenExternalIds.length > 0) {
+      await this.db
+        .updateTable('external_incidents')
+        .set({ is_stale: true })
+        .where('source_id', '=', source.id)
+        .where('external_id', 'not in', seenExternalIds)
+        .execute();
+    }
+
+    await this.db
+      .updateTable('external_data_sources')
+      .set({ last_synced_at: new Date() as any, last_sync_status: 'ok', last_sync_error: null })
+      .where('id', '=', source.id)
+      .execute();
+
+    return { synced: true, count: seenExternalIds.length };
+  }
+
+  private async failSync(source: any, error: unknown) {
+    this.logger.error(`Échec de synchronisation pour ${source.feed_key}`, error as Error);
+    await this.db
+      .updateTable('external_data_sources')
+      .set({ last_sync_status: 'error', last_sync_error: String(error) })
+      .where('id', '=', source.id)
+      .execute();
+    return { synced: false, reason: String(error) };
   }
 
   /** Centroïde approximatif — suffisant pour placer un pin, pas pour un rendu de tracé précis. */
