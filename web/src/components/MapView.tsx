@@ -22,6 +22,7 @@ interface Props {
   center: { lat: number; lng: number } | null;
   pins: MapPin[];
   lines?: RoadLineFeature[];
+  userLocation?: { lat: number; lng: number } | null;
   height?: number | string;
   fullBleed?: boolean;
   theme?: 'dark' | 'light';
@@ -47,10 +48,11 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const userMarkerRef = useRef<Marker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const linesClickMapRef = useRef<Record<string, () => void>>({});
 
@@ -176,6 +178,22 @@ export default function MapView({ center, pins, lines = [], height = 320, fullBl
       markersRef.current.push(marker);
     }
   }, [pins]);
+
+  // Point "vous êtes ici" — marqueur dédié, distinct des pins de signalement
+  useEffect(() => {
+    if (!mapRef.current) return;
+    userMarkerRef.current?.remove();
+    userMarkerRef.current = null;
+
+    if (userLocation) {
+      const el = document.createElement('div');
+      el.className = 'you-are-here-dot';
+      el.innerHTML = '<div class="you-are-here-ring"></div><div class="you-are-here-core"></div>';
+      userMarkerRef.current = new maplibregl.Marker({ element: el })
+        .setLngLat([userLocation.lng, userLocation.lat])
+        .addTo(mapRef.current);
+    }
+  }, [userLocation]);
 
   // Redessiner les lignes (segments de route) à chaque changement de liste
   useEffect(() => {

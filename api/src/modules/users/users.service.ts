@@ -86,4 +86,48 @@ export class UsersService {
       .orderBy('reports.created_at', 'desc')
       .execute();
   }
+
+  /** Liste complète pour l'admin — recherche simple par courriel incluse. */
+  async findAllForAdmin(search?: string) {
+    let query = this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select([
+        'users.id', 'users.email', 'users.first_name', 'users.last_name',
+        'users.status', 'users.reputation_score', 'users.created_at',
+        'roles.name as roleName', 'roles.id as roleId',
+      ])
+      .orderBy('users.created_at', 'desc')
+      .limit(200);
+
+    if (search) {
+      query = query.where('users.email', 'ilike', `%${search}%`);
+    }
+
+    return query.execute();
+  }
+
+  async setStatus(userId: string, status: 'active' | 'suspended' | 'banned') {
+    return this.db
+      .updateTable('users')
+      .set({ status, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .returning(['id', 'status'])
+      .executeTakeFirstOrThrow();
+  }
+
+  async setRole(userId: string, roleName: string) {
+    const role = await this.db
+      .selectFrom('roles')
+      .select('id')
+      .where('name', '=', roleName)
+      .executeTakeFirstOrThrow();
+
+    return this.db
+      .updateTable('users')
+      .set({ role_id: role.id, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .returning(['id'])
+      .executeTakeFirstOrThrow();
+  }
 }

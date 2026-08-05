@@ -29,6 +29,7 @@ export class ExternalDataService {
         sql<string | null>`external_incidents.raw_data->>'debut'`.as('debut'),
         sql<string | null>`external_incidents.raw_data->>'fin'`.as('fin'),
         sql<string | null>`external_incidents.raw_data->>'CodeCouleurEtatChaussee'`.as('roadConditionColorCode'),
+        sql<string | null>`external_incidents.raw_data->>'DescriptionEtatChausseeFR'`.as('roadConditionLabel'),
       ])
       .where('external_incidents.is_stale', '=', false)
       .where('external_incidents.location', 'is not', null)

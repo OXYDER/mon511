@@ -6,7 +6,7 @@ import AuthModal from './components/AuthModal';
 export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -26,14 +26,15 @@ export default function App() {
         onToggleTheme={toggleTheme}
         onLogout={logout}
         authenticated={authenticated}
-        onRequireAuth={() => setShowAuthModal(true)}
+        onRequireAuth={(mode = 'login') => setAuthModalMode(mode)}
       />
-      {showAuthModal && (
+      {authModalMode && (
         <AuthModal
-          onClose={() => setShowAuthModal(false)}
+          initialMode={authModalMode}
+          onClose={() => setAuthModalMode(null)}
           onAuthenticated={() => {
             setAuthenticated(true);
-            setShowAuthModal(false);
+            setAuthModalMode(null);
           }}
         />
       )}

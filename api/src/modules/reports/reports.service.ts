@@ -27,6 +27,7 @@ export class ReportsService {
         'reports.description',
         'reports.address_text',
         'reports.created_at',
+        'reports.problem_type_id as problemTypeId',
         'problem_types.name_fr as problemTypeNameFr',
         'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',

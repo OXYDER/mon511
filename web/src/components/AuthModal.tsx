@@ -4,10 +4,11 @@ import { api, setToken } from '../api';
 interface Props {
   onClose: () => void;
   onAuthenticated: () => void;
+  initialMode?: 'login' | 'register';
 }
 
-export default function AuthModal({ onClose, onAuthenticated }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login' }: Props) {
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');

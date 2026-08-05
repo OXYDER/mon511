@@ -5,7 +5,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -21,7 +21,7 @@ export default function AdminPage({ onClose }: Props) {
       </header>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 24px 60px' }}>
-        <div className="tabs" style={{ maxWidth: 480, marginBottom: 24 }}>
+        <div className="tabs" style={{ maxWidth: 620, marginBottom: 24, flexWrap: 'wrap' }}>
           <button className={`tab-item ${tab === 'queue' ? 'active' : ''}`} onClick={() => setTab('queue')}>
             File de modération
           </button>
@@ -31,11 +31,19 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'external' ? 'active' : ''}`} onClick={() => setTab('external')}>
             Données officielles
           </button>
+          <button className={`tab-item ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
+            Utilisateurs
+          </button>
+          <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
+            Paramètres
+          </button>
         </div>
 
         {tab === 'queue' && <ModerationQueue />}
         {tab === 'types' && <ProblemTypesAdmin />}
         {tab === 'external' && <ExternalDataAdmin />}
+        {tab === 'users' && <UsersAdmin />}
+        {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
   );
@@ -283,6 +291,112 @@ function ProblemTypesAdmin() {
           <button className="btn-ghost" onClick={() => toggleActive(t.id, t.active)}>
             {t.active ? 'Actif' : 'Inactif'}
           </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function UsersAdmin() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const results = await api.get<any[]>(`/users/admin/all${search ? `?search=${encodeURIComponent(search)}` : ''}`);
+      setUsers(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function toggleSuspend(id: string, current: string) {
+    const next = current === 'suspended' ? 'active' : 'suspended';
+    await api.patch(`/users/admin/${id}/status`, { status: next });
+    load();
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Utilisateurs ({users.length})
+      </div>
+      <div className="field-group" style={{ maxWidth: 320 }}>
+        <input
+          className="text-input"
+          placeholder="Rechercher par courriel..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && load()}
+        />
+      </div>
+      {users.map((u) => (
+        <div key={u.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex">{(u.first_name?.[0] ?? u.email[0]).toUpperCase()}</div>
+          <div className="rc-body">
+            <div className="rc-title">{u.email}</div>
+            <div className="rc-meta">{u.roleName} · réputation {u.reputation_score}</div>
+          </div>
+          <button className="btn-ghost" onClick={() => toggleSuspend(u.id, u.status)}>
+            {u.status === 'suspended' ? 'Réactiver' : 'Suspendre'}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SiteSettingsAdmin() {
+  const [settings, setSettings] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const results = await api.get<any[]>('/site-settings');
+      setSettings(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function toggle(key: string, current: unknown) {
+    await api.patch(`/site-settings/${key}`, { value: !current });
+    load();
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  const booleanSettings = settings.filter((s) => typeof s.value === 'boolean');
+  const otherSettings = settings.filter((s) => typeof s.value !== 'boolean');
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Comportement de la plateforme
+      </div>
+      {booleanSettings.map((s) => (
+        <div key={s.key} className="privacy-row">
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{s.key}</span>
+          <button className="btn-ghost" onClick={() => toggle(s.key, s.value)}>
+            {s.value ? 'Activé' : 'Désactivé'}
+          </button>
+        </div>
+      ))}
+
+      <div className="section-label">Autres paramètres</div>
+      {otherSettings.map((s) => (
+        <div key={s.key} className="privacy-row" style={{ alignItems: 'flex-start' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, flexShrink: 0, marginRight: 12 }}>{s.key}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', textAlign: 'right', wordBreak: 'break-word', maxWidth: 300 }}>
+            {typeof s.value === 'string' ? s.value : JSON.stringify(s.value)}
+          </span>
         </div>
       ))}
     </div>
