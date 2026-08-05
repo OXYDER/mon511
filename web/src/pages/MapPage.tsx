@@ -83,11 +83,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }
 
-  async function loadNearby(lat: number, lng: number) {
+  async function loadNearby(lat: number, lng: number, radius = 15000) {
     setLoading(true);
     setError(null);
     try {
-      const results = await api.get<Report[]>(`/reports/nearby?lat=${lat}&lng=${lng}&radius=15000`);
+      const results = await api.get<Report[]>(`/reports/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(radius, 100000)}`);
       setReports(results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger les signalements.');
@@ -96,15 +96,23 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }
 
-  async function loadOfficialLayer(lat: number, lng: number) {
+  async function loadOfficialLayer(lat: number, lng: number, radius = 50000) {
     try {
       const results = await api.get<ExternalIncident[]>(
-        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=50000`,
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 150000)}`,
       );
       setExternalIncidents(results);
     } catch {
       setExternalIncidents([]);
     }
+  }
+
+  /** Se déclenche quand la carte s'arrête de bouger (glisser ou zoom) — met
+   * à jour la liste pour ne montrer que ce qui est visible à l'écran. */
+  function handleViewportChange(c: { lat: number; lng: number }, radius: number) {
+    setQueryCenter(c);
+    loadNearby(c.lat, c.lng, radius);
+    loadOfficialLayer(c.lat, c.lng, radius);
   }
 
   function locateAndLoad() {
@@ -168,7 +176,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   return (
     <div className="app-full">
       <div className="map-background">
-        <MapView center={mapCamera} pins={[...reportPins, ...officialPins]} fullBleed theme={theme} />
+        <MapView
+          center={mapCamera}
+          pins={[...reportPins, ...officialPins]}
+          fullBleed
+          theme={theme}
+          onViewportChange={handleViewportChange}
+        />
       </div>
 
       <header className="topbar-float">
@@ -199,7 +213,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       </header>
 
       <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''}`}>
-        <h2>Près de vous</h2>
+        <h2>Sur la carte</h2>
 
         <div className="layer-toggle" style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 Travaux routiers</span>

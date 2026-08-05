@@ -17,6 +17,18 @@ interface Props {
   height?: number | string;
   fullBleed?: boolean;
   theme?: 'dark' | 'light';
+  onViewportChange?: (center: { lat: number; lng: number }, radiusMeters: number) => void;
+}
+
+/** Distance approximative en mètres entre deux points (formule haversine). */
+function haversineDistance(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
 }
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
@@ -27,10 +39,11 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, height = 320, fullBleed = false, theme = 'dark' }: Props) {
+export default function MapView({ center, pins, height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function styleUrlFor(t: 'dark' | 'light') {
     if (!MAPTILER_KEY) return 'https://demotiles.maplibre.org/style.json';
@@ -49,6 +62,18 @@ export default function MapView({ center, pins, height = 320, fullBleed = false,
       zoom: 12,
     });
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+    mapRef.current.on('moveend', () => {
+      if (!mapRef.current || !onViewportChange) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        const c = mapRef.current!.getCenter();
+        const bounds = mapRef.current!.getBounds();
+        const centerPoint = { lat: c.lat, lng: c.lng };
+        const radius = haversineDistance(centerPoint, { lat: bounds.getNorth(), lng: bounds.getEast() });
+        onViewportChange(centerPoint, Math.max(radius, 500));
+      }, 400);
+    });
 
     return () => {
       mapRef.current?.remove();
