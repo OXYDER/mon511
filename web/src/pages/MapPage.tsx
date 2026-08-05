@@ -30,11 +30,13 @@ interface Props {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onLogout: () => void;
+  authenticated: boolean;
+  onRequireAuth: () => void;
 }
 
 const MODERATOR_ROLES = ['moderator', 'admin', 'super_admin'];
 
-export default function MapPage({ theme, onToggleTheme, onLogout }: Props) {
+export default function MapPage({ theme, onToggleTheme, onLogout, authenticated, onRequireAuth }: Props) {
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
   const [showOfficialLayer, setShowOfficialLayer] = useState(false);
@@ -139,10 +141,21 @@ export default function MapPage({ theme, onToggleTheme, onLogout }: Props) {
           <span className="brand-name">mon511.ca</span>
         </div>
         <div className="topbar-actions">
-          {isModerator && (
-            <button className="icon-btn" title="Administration" onClick={() => setShowAdmin(true)}>🛡️</button>
+          {authenticated ? (
+            <>
+              {isModerator && (
+                <button className="icon-btn" title="Administration" onClick={() => setShowAdmin(true)}>🛡️</button>
+              )}
+              <button className="icon-btn" title="Mon profil" onClick={() => setShowProfileModal(true)}>👤</button>
+            </>
+          ) : (
+            <>
+              <button className="btn-ghost" onClick={onRequireAuth}>Connexion</button>
+              <button className="btn-primary" style={{ width: 'auto', padding: '9px 16px' }} onClick={onRequireAuth}>
+                S'inscrire
+              </button>
+            </>
           )}
-          <button className="icon-btn" title="Mon profil" onClick={() => setShowProfileModal(true)}>👤</button>
           <button className="icon-btn" title="Changer de thème" onClick={onToggleTheme}>
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
@@ -201,6 +214,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout }: Props) {
           reportId={selectedReportId}
           onClose={() => setSelectedReportId(null)}
           onChanged={() => center && loadNearby(center.lat, center.lng)}
+          authenticated={authenticated}
+          onRequireAuth={onRequireAuth}
         />
       )}
 
@@ -208,7 +223,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout }: Props) {
         {locating ? '⏳' : '🎯'}
       </button>
 
-      <button className="fab" onClick={() => setShowCreateModal(true)}>
+      <button className="fab" onClick={() => (authenticated ? setShowCreateModal(true) : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
         <span>Signaler</span>
       </button>

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { getToken, clearToken } from './api';
-import AuthPage from './pages/AuthPage';
 import MapPage from './pages/MapPage';
+import AuthModal from './components/AuthModal';
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -18,24 +19,24 @@ export default function App() {
     setAuthenticated(false);
   }
 
-  if (!authenticated) {
-    return (
-      <div className="app-shell">
-        <header className="topbar">
-          <div className="brand-row">
-            <span className="brand-mark">511</span>
-            <span className="brand-name">mon511.ca</span>
-          </div>
-          <div className="topbar-actions">
-            <button className="icon-btn" onClick={toggleTheme} title="Changer de thème">
-              {theme === 'dark' ? '🌙' : '☀️'}
-            </button>
-          </div>
-        </header>
-        <AuthPage onAuthenticated={() => setAuthenticated(true)} />
-      </div>
-    );
-  }
-
-  return <MapPage theme={theme} onToggleTheme={toggleTheme} onLogout={logout} />;
+  return (
+    <>
+      <MapPage
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLogout={logout}
+        authenticated={authenticated}
+        onRequireAuth={() => setShowAuthModal(true)}
+      />
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onAuthenticated={() => {
+            setAuthenticated(true);
+            setShowAuthModal(false);
+          }}
+        />
+      )}
+    </>
+  );
 }

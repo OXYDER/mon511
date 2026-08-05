@@ -5,9 +5,11 @@ interface Props {
   reportId: string;
   onClose: () => void;
   onChanged: () => void;
+  authenticated: boolean;
+  onRequireAuth: () => void;
 }
 
-export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
+export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth }: Props) {
   const [report, setReport] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -33,6 +35,7 @@ export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
   }, [reportId]);
 
   async function confirm() {
+    if (!authenticated) return onRequireAuth();
     try {
       await api.post(`/reports/${reportId}/confirm`);
       setFeedback('Confirmation enregistrée. Merci !');
@@ -42,6 +45,7 @@ export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
   }
 
   async function suggestResolved() {
+    if (!authenticated) return onRequireAuth();
     try {
       const result = await api.post<{ autoResolved: boolean }>(`/reports/${reportId}/suggest-resolution`, {});
       setFeedback(
@@ -57,6 +61,7 @@ export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
   }
 
   async function flag() {
+    if (!authenticated) return onRequireAuth();
     const reason = window.prompt('Motif (duplicate, inappropriate, wrong_location, spam, other) :', 'duplicate');
     if (!reason) return;
     try {
@@ -69,6 +74,7 @@ export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
 
   async function submitComment(e: React.FormEvent) {
     e.preventDefault();
+    if (!authenticated) return onRequireAuth();
     if (!newComment.trim()) return;
     try {
       await api.post(`/reports/${reportId}/comments`, { message: newComment });
