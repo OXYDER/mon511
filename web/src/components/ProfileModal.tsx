@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, clearToken } from '../api';
+import ToggleSwitch from './ToggleSwitch';
 
 interface Props {
   onClose: () => void;
@@ -56,9 +57,7 @@ export default function ProfileModal({ onClose, onLogout }: Props) {
               {PRIVACY_LABELS.map(([key, label]) => (
                 <div key={key} className="privacy-row">
                   <span>{label}</span>
-                  <button className="btn-ghost" onClick={() => togglePrivacy(key, me.privacy_settings[key])}>
-                    {me.privacy_settings[key] ? 'Activé' : 'Désactivé'}
-                  </button>
+                  <ToggleSwitch on={me.privacy_settings[key]} onToggle={() => togglePrivacy(key, me.privacy_settings[key])} />
                 </div>
               ))}
 

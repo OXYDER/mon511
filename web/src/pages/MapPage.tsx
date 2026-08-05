@@ -3,7 +3,9 @@ import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } 
 import MapView, { MapPin } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
+import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
 import ProfileModal from '../components/ProfileModal';
+import ToggleSwitch from '../components/ToggleSwitch';
 import AdminPage from './AdminPage';
 
 interface Report {
@@ -27,6 +29,8 @@ interface ExternalIncident {
   feedKey: string;
 }
 
+type Selection = { type: 'report' | 'external'; id: string } | null;
+
 interface Props {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
@@ -44,17 +48,21 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
-  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
+
+  // queryCenter : coordonnée utilisée pour interroger l'API ("près de moi").
+  // mapCamera : position de la caméra sur la carte — change aussi quand on
+  // clique un pin/une carte de la liste, sans recharger la liste elle-même.
+  const [queryCenter, setQueryCenter] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number } | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
-  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Selection>(null);
 
   const role = getUserRole();
   const isModerator = role !== null && MODERATOR_ROLES.includes(role);
 
-  // Charger les préférences de couches : côté serveur si connecté, sinon localStorage.
   useEffect(() => {
     if (authenticated) {
       api.get<any>('/users/me').then((me) => {
@@ -78,7 +86,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function loadNearby(lat: number, lng: number) {
     setLoading(true);
     setError(null);
-    setCenter({ lat, lng });
     try {
       const results = await api.get<Report[]>(`/reports/nearby?lat=${lat}&lng=${lng}&radius=15000`);
       setReports(results);
@@ -101,23 +108,20 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   }
 
   function locateAndLoad() {
+    const apply = (lat: number, lng: number) => {
+      setQueryCenter({ lat, lng });
+      setMapCamera({ lat, lng });
+      loadNearby(lat, lng);
+      loadOfficialLayer(lat, lng);
+    };
     if (!navigator.geolocation) {
-      loadNearby(45.4042, -71.8929);
-      loadOfficialLayer(45.4042, -71.8929);
+      apply(45.4042, -71.8929);
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        loadNearby(pos.coords.latitude, pos.coords.longitude);
-        loadOfficialLayer(pos.coords.latitude, pos.coords.longitude);
-      },
-      () => {
-        setLocating(false);
-        loadNearby(45.4042, -71.8929);
-        loadOfficialLayer(45.4042, -71.8929);
-      },
+      (pos) => { setLocating(false); apply(pos.coords.latitude, pos.coords.longitude); },
+      () => { setLocating(false); apply(45.4042, -71.8929); },
     );
   }
 
@@ -128,13 +132,23 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   if (showAdmin) return <AdminPage onClose={() => setShowAdmin(false)} />;
 
+  function openReport(r: Report) {
+    setSelection({ type: 'report', id: r.id });
+    setMapCamera({ lat: r.latitude, lng: r.longitude });
+  }
+
+  function openExternal(inc: ExternalIncident) {
+    setSelection({ type: 'external', id: inc.id });
+    setMapCamera({ lat: inc.latitude, lng: inc.longitude });
+  }
+
   const reportPins: MapPin[] = reports.map((r) => ({
     id: r.id,
     latitude: r.latitude,
     longitude: r.longitude,
     icon: r.problemTypeIcon ?? '📍',
     colorVar: r.status === 'published_resolved' ? 'resolved' : 'unresolved',
-    onClick: () => setSelectedReportId(r.id),
+    onClick: () => openReport(r),
   }));
 
   const visibleExternalIncidents = externalIncidents.filter((inc) =>
@@ -146,14 +160,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     id: inc.id,
     latitude: inc.latitude,
     longitude: inc.longitude,
-    icon: '🏛️',
+    icon: inc.feedKey === 'mtmd_travaux_routiers' ? '🚧' : '❄️',
     colorVar: 'official',
+    onClick: () => openExternal(inc),
   }));
 
   return (
     <div className="app-full">
       <div className="map-background">
-        <MapView center={center} pins={[...reportPins, ...officialPins]} fullBleed theme={theme} />
+        <MapView center={mapCamera} pins={[...reportPins, ...officialPins]} fullBleed theme={theme} />
       </div>
 
       <header className="topbar-float">
@@ -183,20 +198,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       </header>
 
-      <aside className={`filters-panel-float ${selectedReportId ? 'mobile-hidden' : ''}`}>
+      <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''}`}>
         <h2>Près de vous</h2>
 
         <div className="layer-toggle" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11.5 }}>🚧 Travaux routiers</span>
-          <button className="btn-ghost" onClick={() => toggleLayer('travaux_routiers')}>
-            {layerPrefs.travaux_routiers ? 'Activée' : 'Désactivée'}
-          </button>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 Travaux routiers</span>
+          <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
         </div>
         <div className="layer-toggle" style={{ marginBottom: 14 }}>
-          <span style={{ fontSize: 11.5 }}>❄️ Conditions routières</span>
-          <button className="btn-ghost" onClick={() => toggleLayer('conditions_hivernales')}>
-            {layerPrefs.conditions_hivernales ? 'Activée' : 'Désactivée'}
-          </button>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>❄️ Conditions routières</span>
+          <ToggleSwitch on={layerPrefs.conditions_hivernales} onToggle={() => toggleLayer('conditions_hivernales')} />
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -208,8 +219,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           )}
 
           {visibleExternalIncidents.map((inc) => (
-            <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
-              <div className="rc-icon-hex official">🏛️</div>
+            <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+              <div className="rc-icon-hex official">{inc.feedKey === 'mtmd_travaux_routiers' ? '🚧' : '❄️'}</div>
               <div className="rc-body">
                 <div className="rc-title">{inc.title ?? inc.sourceName}</div>
                 <div className="rc-meta">Source officielle</div>
@@ -219,7 +230,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           ))}
 
           {reports.map((r) => (
-            <div key={r.id} className="report-card" onClick={() => setSelectedReportId(r.id)}>
+            <div key={r.id} className="report-card" onClick={() => openReport(r)}>
               <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
                 {r.problemTypeIcon ?? '📍'}
               </div>
@@ -235,14 +246,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       </aside>
 
-      {selectedReportId && (
+      {selection?.type === 'report' && (
         <DetailPanel
-          reportId={selectedReportId}
-          onClose={() => setSelectedReportId(null)}
-          onChanged={() => center && loadNearby(center.lat, center.lng)}
+          reportId={selection.id}
+          onClose={() => setSelection(null)}
+          onChanged={() => queryCenter && loadNearby(queryCenter.lat, queryCenter.lng)}
           authenticated={authenticated}
           onRequireAuth={onRequireAuth}
         />
+      )}
+      {selection?.type === 'external' && (
+        <ExternalIncidentPanel incidentId={selection.id} onClose={() => setSelection(null)} />
       )}
 
       <button className="locate-btn-float" onClick={locateAndLoad} disabled={locating} title="Centrer sur ma position">
@@ -265,7 +279,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onClose={() => setShowCreateModal(false)}
           onCreated={() => {
             setShowCreateModal(false);
-            if (center) loadNearby(center.lat, center.lng);
+            if (queryCenter) loadNearby(queryCenter.lat, queryCenter.lng);
           }}
         />
       )}

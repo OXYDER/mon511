@@ -17,6 +17,11 @@ export class ExternalDataController {
     return this.service.findNearby(Number(lat), Number(lng), Number(radius));
   }
 
+  @Get('incidents/:id')
+  findIncidentById(@Param('id') id: string) {
+    return this.service.findIncidentById(id);
+  }
+
   @Get('sources')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')

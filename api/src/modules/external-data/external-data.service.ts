@@ -41,6 +41,20 @@ export class ExternalDataService {
     return this.db.selectFrom('external_data_sources').selectAll().execute();
   }
 
+  async findIncidentById(id: string) {
+    return this.db
+      .selectFrom('external_incidents')
+      .innerJoin('external_data_sources', 'external_data_sources.id', 'external_incidents.source_id')
+      .select([
+        'external_incidents.id', 'external_incidents.title', 'external_incidents.description',
+        'external_incidents.category', 'external_incidents.raw_data', 'external_incidents.last_seen_at',
+        'external_data_sources.name as sourceName', 'external_data_sources.provider',
+        'external_data_sources.license_note as licenseNote',
+      ])
+      .where('external_incidents.id', '=', id)
+      .executeTakeFirst();
+  }
+
   /**
    * Synchronise une source GeoJSON. Simplification assumée pour ce premier
    * déploiement (voir README) : déclenché manuellement via l'endpoint admin
