@@ -1,3 +1,8 @@
+# Nom de projet fixe : évite que Docker Compose crée de nouveaux volumes
+# (donc une base de données vide) chaque fois que le dossier de déploiement
+# change de nom ou d'emplacement.
+name: mon511
+
 # Tous les ports exposés à l'hôte sont configurables via .env (voir .env.example).
 # Le port interne au conteneur reste fixe (à droite du ":") — seul le port
 # côté hôte (à gauche) change, ce qui évite les conflits avec tes autres
