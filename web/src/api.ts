@@ -13,6 +13,20 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+/** Décode le rôle depuis le payload JWT — usage UI uniquement (affichage
+ * conditionnel des liens admin), jamais pour la sécurité réelle : le backend
+ * applique ses propres gardes de rôle indépendamment de ce que le client affiche. */
+export function getUserRole(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {

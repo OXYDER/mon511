@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, getUserRole } from '../api';
 import MapView, { MapPin } from '../components/MapView';
+import CreateReportModal from '../components/CreateReportModal';
+import DetailPanel from '../components/DetailPanel';
+import ProfileModal from '../components/ProfileModal';
+import AdminPage from './AdminPage';
 
 interface Report {
   id: string;
@@ -23,10 +27,14 @@ interface ExternalIncident {
 }
 
 interface Props {
-  onOpenReport: (id: string) => void;
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
+  onLogout: () => void;
 }
 
-export default function MapPage({ onOpenReport }: Props) {
+const MODERATOR_ROLES = ['moderator', 'admin', 'super_admin'];
+
+export default function MapPage({ theme, onToggleTheme, onLogout }: Props) {
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
   const [showOfficialLayer, setShowOfficialLayer] = useState(false);
@@ -34,6 +42,14 @@ export default function MapPage({ onOpenReport }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
   const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+
+  const role = getUserRole();
+  const isModerator = role !== null && MODERATOR_ROLES.includes(role);
 
   async function loadNearby(lat: number, lng: number) {
     setLoading(true);
@@ -90,13 +106,15 @@ export default function MapPage({ onOpenReport }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (showAdmin) return <AdminPage onClose={() => setShowAdmin(false)} />;
+
   const reportPins: MapPin[] = reports.map((r) => ({
     id: r.id,
     latitude: r.latitude,
     longitude: r.longitude,
     icon: r.problemTypeIcon ?? '📍',
     colorVar: r.status === 'published_resolved' ? 'resolved' : 'unresolved',
-    onClick: () => onOpenReport(r.id),
+    onClick: () => setSelectedReportId(r.id),
   }));
 
   const officialPins: MapPin[] = showOfficialLayer
@@ -110,59 +128,110 @@ export default function MapPage({ onOpenReport }: Props) {
     : [];
 
   return (
-    <div className="content" style={{ padding: '18px 0 90px' }}>
-      <div style={{ padding: '0 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>Près de vous</span>
-        <button className="btn-ghost" onClick={locateAndLoad} disabled={locating}>
-          {locating ? '⏳' : '🎯'} Localiser
-        </button>
+    <div className="app-full">
+      <div className="map-background">
+        <MapView center={center} pins={[...reportPins, ...officialPins]} fullBleed />
       </div>
 
-      <div style={{ padding: '0 20px' }}>
-        <MapView center={center} pins={[...reportPins, ...officialPins]} />
-      </div>
+      <header className="topbar-float">
+        <div className="brand-row">
+          <span className="brand-mark">511</span>
+          <span className="brand-name">mon511.ca</span>
+        </div>
+        <div className="topbar-actions">
+          {isModerator && (
+            <button className="icon-btn" title="Administration" onClick={() => setShowAdmin(true)}>🛡️</button>
+          )}
+          <button className="icon-btn" title="Mon profil" onClick={() => setShowProfileModal(true)}>👤</button>
+          <button className="icon-btn" title="Changer de thème" onClick={onToggleTheme}>
+            {theme === 'dark' ? '🌙' : '☀️'}
+          </button>
+        </div>
+      </header>
 
-      <div style={{ padding: '0 20px' }}>
-        <div className="layer-toggle" style={{ marginTop: 14 }}>
-          <span>🏛️ Couche officielle MTMD</span>
+      <aside className={`filters-panel-float ${selectedReportId ? 'mobile-hidden' : ''}`}>
+        <h2>Près de vous</h2>
+
+        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5 }}>🏛️ Couche officielle MTMD</span>
           <button className="btn-ghost" onClick={toggleOfficialLayer}>
             {showOfficialLayer ? 'Activée' : 'Désactivée'}
           </button>
         </div>
 
         {error && <div className="error-banner">{error}</div>}
-        {loading && <div className="center-msg">Chargement des signalements...</div>}
-        {!loading && reports.length === 0 && (!showOfficialLayer || externalIncidents.length === 0) && !error && (
-          <div className="center-msg">Aucun signalement à proximité pour l'instant.<br />Sois le premier à en ajouter un !</div>
-        )}
 
-        {showOfficialLayer &&
-          externalIncidents.map((inc) => (
-            <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
-              <div className="rc-icon-hex official">🏛️</div>
-              <div className="rc-body">
-                <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                <div className="rc-meta">Source officielle · {inc.provider}</div>
+        <div className="report-list-scroll">
+          {loading && <div className="center-msg">Chargement...</div>}
+          {!loading && reports.length === 0 && (!showOfficialLayer || externalIncidents.length === 0) && !error && (
+            <div className="center-msg">Aucun signalement à proximité.<br />Sois le premier à en ajouter un !</div>
+          )}
+
+          {showOfficialLayer &&
+            externalIncidents.map((inc) => (
+              <div key={inc.id} className="report-card" style={{ cursor: 'default' }}>
+                <div className="rc-icon-hex official">🏛️</div>
+                <div className="rc-body">
+                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">Source officielle</div>
+                </div>
+                <span className="pill official">Officiel</span>
               </div>
-              <span className="pill official">Officiel</span>
+            ))}
+
+          {reports.map((r) => (
+            <div key={r.id} className="report-card" onClick={() => setSelectedReportId(r.id)}>
+              <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                {r.problemTypeIcon ?? '📍'}
+              </div>
+              <div className="rc-body">
+                <div className="rc-title">{r.problemTypeNameFr}</div>
+                <div className="rc-meta">{r.addressText ?? 'Localisation GPS'}</div>
+              </div>
+              <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
+                {r.status === 'published_resolved' ? 'Résolu' : 'Non résolu'}
+              </span>
             </div>
           ))}
+        </div>
+      </aside>
 
-        {reports.map((r) => (
-          <div key={r.id} className="report-card" onClick={() => onOpenReport(r.id)}>
-            <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-              {r.problemTypeIcon ?? '📍'}
-            </div>
-            <div className="rc-body">
-              <div className="rc-title">{r.problemTypeNameFr}</div>
-              <div className="rc-meta">{r.addressText ?? 'Localisation GPS'}</div>
-            </div>
-            <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
-              {r.status === 'published_resolved' ? 'Résolu' : 'Non résolu'}
-            </span>
-          </div>
-        ))}
+      {selectedReportId && (
+        <DetailPanel
+          reportId={selectedReportId}
+          onClose={() => setSelectedReportId(null)}
+          onChanged={() => center && loadNearby(center.lat, center.lng)}
+        />
+      )}
+
+      <button className="locate-btn-float" onClick={locateAndLoad} disabled={locating} title="Centrer sur ma position">
+        {locating ? '⏳' : '🎯'}
+      </button>
+
+      <button className="fab" onClick={() => setShowCreateModal(true)}>
+        <span style={{ fontSize: 18 }}>➕</span>
+        <span>Signaler</span>
+      </button>
+
+      <div className="stats-badge-float">
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-resolved)' }} />
+        <strong>{reports.length}</strong>
+        <span>signalement{reports.length !== 1 ? 's' : ''} actif{reports.length !== 1 ? 's' : ''}</span>
       </div>
+
+      {showCreateModal && (
+        <CreateReportModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => {
+            setShowCreateModal(false);
+            if (center) loadNearby(center.lat, center.lng);
+          }}
+        />
+      )}
+
+      {showProfileModal && (
+        <ProfileModal onClose={() => setShowProfileModal(false)} onLogout={onLogout} />
+      )}
     </div>
   );
 }

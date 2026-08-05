@@ -3,10 +3,11 @@ import { api } from '../api';
 
 interface Props {
   reportId: string;
-  onBack: () => void;
+  onClose: () => void;
+  onChanged: () => void;
 }
 
-export default function ReportDetailPage({ reportId, onBack }: Props) {
+export default function DetailPanel({ reportId, onClose, onChanged }: Props) {
   const [report, setReport] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -49,6 +50,7 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
           : "Suggestion envoyée à la modération et à l'auteur.",
       );
       load();
+      onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action impossible.');
     }
@@ -77,45 +79,53 @@ export default function ReportDetailPage({ reportId, onBack }: Props) {
     }
   }
 
-  if (error) return <div className="content"><div className="error-banner">{error}</div></div>;
-  if (!report) return <div className="content"><div className="center-msg">Chargement...</div></div>;
-
   return (
-    <div className="content">
-      <button className="btn-ghost" onClick={onBack} style={{ marginBottom: 16 }}>← Retour</button>
-
-      <div className="detail-title">{report.description || 'Signalement'}</div>
-      <div className="detail-meta-row">
-        <span>📍 {report.address_text ?? 'Position GPS'}</span>
-        <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
-        <span>👍 {report.confirmationsCount} confirmations</span>
+    <div className="detail-panel-float mobile-visible">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+        <div className="detail-title" style={{ fontSize: 17 }}>{report?.description || 'Signalement'}</div>
+        <button className="detail-panel-close" onClick={onClose}>✕</button>
       </div>
 
-      {feedback && <div className="success-banner" style={{ marginTop: 16 }}>{feedback}</div>}
+      {error && <div className="error-banner">{error}</div>}
+      {!report && !error && <div className="center-msg" style={{ padding: 20 }}>Chargement...</div>}
 
-      <div className="action-row">
-        <button className="btn-ghost" onClick={confirm}>👍 Confirmer</button>
-        <button className="btn-ghost" onClick={suggestResolved}>✔ Marquer résolu</button>
-        <button className="btn-ghost btn-danger" onClick={flag}>🚩 Signaler</button>
-      </div>
+      {report && (
+        <>
+          <div className="detail-meta-row" style={{ marginBottom: 14 }}>
+            <span>📍 {report.address_text ?? 'Position GPS'}</span>
+            <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+            👍 {report.confirmationsCount} confirmations
+          </div>
 
-      <div className="section-label">Commentaires ({comments.length})</div>
-      {comments.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun commentaire pour l'instant.</div>}
-      {comments.map((c) => (
-        <div key={c.id} className="comment">
-          <div className="comment-author">{c.authorEmail?.split('@')[0]}</div>
-          {c.message}
-        </div>
-      ))}
-      <form onSubmit={submitComment} className="comment-row">
-        <input
-          className="text-input"
-          placeholder="Ajouter un commentaire..."
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-        />
-        <button className="btn-ghost" type="submit">Envoyer</button>
-      </form>
+          {feedback && <div className="success-banner">{feedback}</div>}
+
+          <div className="action-row" style={{ margin: '14px 0' }}>
+            <button className="btn-ghost" onClick={confirm}>👍 Confirmer</button>
+            <button className="btn-ghost" onClick={suggestResolved}>✔ Résolu</button>
+            <button className="btn-ghost btn-danger" onClick={flag}>🚩</button>
+          </div>
+
+          <div className="section-label" style={{ fontSize: 13 }}>Commentaires ({comments.length})</div>
+          {comments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucun commentaire.</div>}
+          {comments.map((c) => (
+            <div key={c.id} className="comment">
+              <div className="comment-author">{c.authorEmail?.split('@')[0]}</div>
+              {c.message}
+            </div>
+          ))}
+          <form onSubmit={submitComment} className="comment-row">
+            <input
+              className="text-input"
+              placeholder="Commenter..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+            />
+            <button className="btn-ghost" type="submit">↵</button>
+          </form>
+        </>
+      )}
     </div>
   );
 }

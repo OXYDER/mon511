@@ -14,7 +14,8 @@ export interface MapPin {
 interface Props {
   center: { lat: number; lng: number } | null;
   pins: MapPin[];
-  height?: number;
+  height?: number | string;
+  fullBleed?: boolean;
 }
 
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
@@ -25,7 +26,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, height = 320 }: Props) {
+export default function MapView({ center, pins, height = 320, fullBleed = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -94,7 +95,11 @@ export default function MapView({ center, pins, height = 320 }: Props) {
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--panel-border)' }}
+      style={
+        fullBleed
+          ? { width: '100%', height: '100%' }
+          : { width: '100%', height, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--panel-border)' }
+      }
     />
   );
 }
