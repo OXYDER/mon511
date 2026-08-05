@@ -45,6 +45,25 @@ const CONDITIONS_FIELDS: [string, string, ((v: any) => string)?][] = [
   ['EnVigueurDepuis', 'En vigueur depuis', formatDateTime],
 ];
 
+const AVERTISSEMENTS_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['municipalite', 'Municipalité'],
+  ['localisation', 'Localisation'],
+  ['direction', 'Direction'],
+  ['entrave', 'Entrave'],
+  ['cause', 'Cause'],
+  ['duree', 'Durée prévue'],
+  ['detour', 'Détour'],
+  ['consequence', 'Conséquence'],
+  ['enVigueurDepuis', 'En vigueur depuis', formatDateTime],
+];
+
+const CIRCULATION_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['des_debut_sous_route', 'De'],
+  ['des_fin_sous_route', 'À'],
+  ['annee_en_cours', "Données de l'année en cours"],
+  ['val_djma_annee_1', 'Débit journalier moyen annuel (véh/jour)'],
+];
+
 export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const [incident, setIncident] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,8 +76,26 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
       .catch((err) => setError(err instanceof Error ? err.message : 'Détail introuvable.'));
   }, [incidentId]);
 
-  const isTravaux = incident?.category === 'mtmd_travaux_routiers';
-  const fieldDefs = isTravaux ? TRAVAUX_FIELDS : CONDITIONS_FIELDS;
+  const category = incident?.category as string | undefined;
+  const isTravaux = category === 'mtmd_travaux_routiers';
+  const isAvertissement = category === 'mtmd_avertissements';
+  const isCirculation = category === 'mtmd_debit_circulation';
+  const fieldDefs = isTravaux
+    ? TRAVAUX_FIELDS
+    : isAvertissement
+      ? AVERTISSEMENTS_FIELDS
+      : isCirculation
+        ? CIRCULATION_FIELDS
+        : CONDITIONS_FIELDS;
+
+  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : '❄️';
+  const panelTitle = isTravaux
+    ? 'Travaux routiers'
+    : isAvertissement
+      ? 'Avertissement routier'
+      : isCirculation
+        ? 'Débit de circulation'
+        : 'Conditions routières';
 
   const rows = incident
     ? fieldDefs
@@ -74,8 +111,8 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
     <div className="detail-panel-float mobile-visible">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div className="detail-title" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>{isTravaux ? '🚧' : '❄️'}</span>
-          <span>{isTravaux ? 'Travaux routiers' : 'Conditions routières'}</span>
+          <span>{panelIcon}</span>
+          <span>{panelTitle}</span>
         </div>
         <button className="detail-panel-close" onClick={onClose}>✕</button>
       </div>

@@ -18,9 +18,16 @@ const LAYER_PREFS_KEY = 'mon511_layer_prefs';
 export interface LayerPrefs {
   travaux_routiers: boolean;
   conditions_hivernales: boolean;
+  avertissements: boolean;
+  debit_circulation: boolean;
 }
 
-const DEFAULT_LAYER_PREFS: LayerPrefs = { travaux_routiers: false, conditions_hivernales: false };
+const DEFAULT_LAYER_PREFS: LayerPrefs = {
+  travaux_routiers: false,
+  conditions_hivernales: false,
+  avertissements: false,
+  debit_circulation: false,
+};
 
 /** Repli localStorage pour les usagers non connectés — les usagers connectés
  * ont leurs préférences persistées côté serveur (users.map_layer_preferences). */

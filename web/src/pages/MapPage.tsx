@@ -35,6 +35,24 @@ interface ExternalIncident {
   roadConditionColorCode: string | null;
   roadConditionLabel: string | null;
   raw_geometry: any;
+  municipalite: string | null;
+  enVigueurDepuis: string | null;
+  duree: string | null;
+  djma: string | null;
+  routeDebut: string | null;
+  routeFin: string | null;
+}
+
+/** Échelle de couleur maison (pas de code officiel fourni par le MTQ pour
+ * le débit de circulation, contrairement aux conditions hivernales) —
+ * verte (faible) à rouge (élevé), sur une échelle de 0 à 60 000 véh/jour. */
+function trafficColor(djma: string | null): string {
+  const value = djma ? parseFloat(djma) : 0;
+  if (!value) return '#6B7280';
+  if (value < 5000) return '#2FBF71';
+  if (value < 15000) return '#F5B301';
+  if (value < 35000) return '#FF8A3B';
+  return '#FF4D5E';
 }
 
 interface ProblemType {
@@ -81,7 +99,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
-  const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({ travaux_routiers: false, conditions_hivernales: false });
+  const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
+    travaux_routiers: false,
+    conditions_hivernales: false,
+    avertissements: false,
+    debit_circulation: false,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
@@ -275,6 +298,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => inc.feedKey === 'mtmd_conditions_hivernales' && layerPrefs.conditions_hivernales,
   );
 
+  const visibleAvertissementsAll = externalIncidents.filter(
+    (inc) => inc.feedKey === 'mtmd_avertissements' && layerPrefs.avertissements,
+  );
+  const visibleAvertissements = searchLower
+    ? visibleAvertissementsAll.filter((inc) => `${inc.title ?? ''} ${inc.municipalite ?? ''}`.toLowerCase().includes(searchLower))
+    : visibleAvertissementsAll;
+
+  const visibleCirculation = externalIncidents.filter(
+    (inc) => inc.feedKey === 'mtmd_debit_circulation' && layerPrefs.debit_circulation,
+  );
+
   const reportPins: MapPin[] = filteredReports.map((r) => ({
     id: r.id,
     latitude: r.latitude,
@@ -284,14 +318,25 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     onClick: () => openReport(r),
   }));
 
-  const officialPins: MapPin[] = visibleTravaux.map((inc) => ({
-    id: inc.id,
-    latitude: inc.latitude,
-    longitude: inc.longitude,
-    icon: '🚧',
-    colorVar: 'official',
-    onClick: () => openExternal(inc),
-  }));
+  const officialPins: MapPin[] = [
+    ...visibleTravaux.map((inc) => ({
+      id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
+      icon: '🚧', colorVar: 'official' as const, onClick: () => openExternal(inc),
+    })),
+    ...visibleAvertissements.map((inc) => ({
+      id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
+      icon: '⚠️', colorVar: 'official' as const, onClick: () => openExternal(inc),
+    })),
+  ];
+
+  const circulationLines: RoadLineFeature[] = visibleCirculation
+    .filter((inc) => inc.raw_geometry)
+    .map((inc) => ({
+      id: inc.id,
+      geometry: inc.raw_geometry,
+      color: trafficColor(inc.djma),
+      onClick: () => openExternal(inc),
+    }));
 
   const conditionLines: RoadLineFeature[] = visibleConditions
     .filter((inc) => inc.raw_geometry)
@@ -318,7 +363,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <MapView
           center={mapCamera}
           pins={[...reportPins, ...officialPins]}
-          lines={conditionLines}
+          lines={[...conditionLines, ...circulationLines]}
           userLocation={userLocation}
           fullBleed
           theme={theme}
@@ -422,8 +467,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             className="panel-icon-btn"
             title={lang === 'fr' ? 'Alertes MTQ dans la zone visible — clic pour tout activer/désactiver' : 'MTQ alerts in the visible area — click to toggle all'}
             onClick={() => {
-              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales;
-              const next = { travaux_routiers: anyOff, conditions_hivernales: anyOff };
+              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales
+                || !layerPrefs.avertissements || !layerPrefs.debit_circulation;
+              const next: LayerPrefs = {
+                travaux_routiers: anyOff,
+                conditions_hivernales: anyOff,
+                avertissements: anyOff,
+                debit_circulation: anyOff,
+              };
               setLayerPrefs(next);
               if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
               else setLocalLayerPrefs(next);
@@ -440,9 +491,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
           <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
         </div>
-        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+        <div className="layer-toggle" style={{ marginBottom: 8 }}>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>⚠️ {lang === 'fr' ? 'Avertissements' : 'Advisories'}</span>
+          <ToggleSwitch on={layerPrefs.avertissements} onToggle={() => toggleLayer('avertissements')} />
+        </div>
+        <div className="layer-toggle" style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>❄️ {t('conditionsRoutieres', lang)}</span>
           <ToggleSwitch on={layerPrefs.conditions_hivernales} onToggle={() => toggleLayer('conditions_hivernales')} />
+        </div>
+        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚗 {lang === 'fr' ? 'Débit de circulation' : 'Traffic volume'}</span>
+          <ToggleSwitch on={layerPrefs.debit_circulation} onToggle={() => toggleLayer('debit_circulation')} />
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -462,6 +521,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               <div className="legend-section-title">{t('travauxRoutiers', lang)}</div>
               <div className="legend-row"><div className="legend-icon-box">🚧</div><span>{lang === 'fr' ? 'Travaux en cours ou prévus' : 'Ongoing or planned roadworks'}</span></div>
             </div>
+            <div className="legend-section">
+              <div className="legend-section-title">{lang === 'fr' ? 'Avertissements' : 'Advisories'}</div>
+              <div className="legend-row"><div className="legend-icon-box">⚠️</div><span>{lang === 'fr' ? 'Fermeture, incident, obstacle' : 'Closure, incident, obstacle'}</span></div>
+            </div>
             {layerPrefs.conditions_hivernales && (
               <div className="legend-section">
                 <div className="legend-section-title">{t('conditionsRoutieres', lang)}</div>
@@ -476,6 +539,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     <span>{label}</span>
                   </div>
                 ))}
+              </div>
+            )}
+            {layerPrefs.debit_circulation && (
+              <div className="legend-section">
+                <div className="legend-section-title">{lang === 'fr' ? 'Débit de circulation (échelle non officielle)' : 'Traffic volume (unofficial scale)'}</div>
+                <div className="legend-row"><div className="legend-swatch" style={{ background: '#2FBF71' }} /><span>{lang === 'fr' ? '< 5 000 véh/jour' : '< 5,000 veh/day'}</span></div>
+                <div className="legend-row"><div className="legend-swatch" style={{ background: '#F5B301' }} /><span>5 000 – 15 000</span></div>
+                <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF8A3B' }} /><span>15 000 – 35 000</span></div>
+                <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF4D5E' }} /><span>{lang === 'fr' ? '> 35 000 véh/jour' : '> 35,000 veh/day'}</span></div>
               </div>
             )}
           </div>
@@ -511,9 +583,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {panelView === 'list' && (
           <div className="report-list-scroll">
             {loading && <div className="center-msg">{t('chargement', lang)}</div>}
-            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && !error && (
+            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && !error && (
               <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
             )}
+
+            {visibleAvertissements.map((inc) => (
+              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                <div className="rc-icon-hex official">⚠️</div>
+                <div className="rc-body">
+                  <div className="rc-title">{inc.municipalite ?? inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">{inc.title ?? ''}</div>
+                </div>
+                <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--official-blue)' }}>
+                  {lang === 'fr' ? 'Actif' : 'Active'}
+                </span>
+              </div>
+            ))}
 
             {visibleTravaux.map((inc) => {
               const status = travauxStatus(inc.debut, inc.fin, lang);

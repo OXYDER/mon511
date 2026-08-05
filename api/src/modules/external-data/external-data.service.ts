@@ -30,6 +30,12 @@ export class ExternalDataService {
         sql<string | null>`external_incidents.raw_data->>'fin'`.as('fin'),
         sql<string | null>`external_incidents.raw_data->>'CodeCouleurEtatChaussee'`.as('roadConditionColorCode'),
         sql<string | null>`external_incidents.raw_data->>'DescriptionEtatChausseeFR'`.as('roadConditionLabel'),
+        sql<string | null>`external_incidents.raw_data->>'municipalite'`.as('municipalite'),
+        sql<string | null>`external_incidents.raw_data->>'enVigueurDepuis'`.as('enVigueurDepuis'),
+        sql<string | null>`external_incidents.raw_data->>'duree'`.as('duree'),
+        sql<string | null>`external_incidents.raw_data->>'val_djma_annee_1'`.as('djma'),
+        sql<string | null>`external_incidents.raw_data->>'des_debut_sous_route'`.as('routeDebut'),
+        sql<string | null>`external_incidents.raw_data->>'des_fin_sous_route'`.as('routeFin'),
       ])
       .where('external_incidents.is_stale', '=', false)
       .where('external_incidents.location', 'is not', null)
