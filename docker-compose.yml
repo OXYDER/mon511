@@ -102,7 +102,7 @@ services:
     container_name: mon511-web
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:${API_HOST_PORT:-3000}
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     ports:
       - "${WEB_HOST_PORT:-5173}:5173"
     volumes:
