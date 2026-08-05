@@ -35,8 +35,8 @@ INSERT INTO regions (type, name_fr, name_en, deployment_status) VALUES
   ('province', 'Alberta', 'Alberta', 'inactive');
 
 INSERT INTO regions (parent_id, type, name_fr, name_en, deployment_status)
-SELECT id, 'municipality', 'Sherbrooke', 'Sherbrooke', 'active' FROM regions WHERE name_fr = 'Québec'
+SELECT id, 'municipality'::region_type, 'Sherbrooke', 'Sherbrooke', 'active'::deployment_status FROM regions WHERE name_fr = 'Québec'
 UNION ALL
-SELECT id, 'municipality', 'Montréal', 'Montreal', 'active' FROM regions WHERE name_fr = 'Québec'
+SELECT id, 'municipality'::region_type, 'Montréal', 'Montreal', 'active'::deployment_status FROM regions WHERE name_fr = 'Québec'
 UNION ALL
-SELECT id, 'municipality', 'Québec', 'Quebec City', 'active' FROM regions WHERE name_fr = 'Québec';
+SELECT id, 'municipality'::region_type, 'Québec', 'Quebec City', 'active'::deployment_status FROM regions WHERE name_fr = 'Québec';
