@@ -108,6 +108,7 @@ services:
     restart: unless-stopped
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+      VITE_MAPTILER_API_KEY: ${MAPTILER_API_KEY:-}
     ports:
       - "${WEB_HOST_PORT:-5173}:5173"
     volumes:
