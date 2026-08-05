@@ -120,8 +120,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       if (!mapRef.current || !onViewportChange) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        const c = mapRef.current!.getCenter();
-        const bounds = mapRef.current!.getBounds();
+        if (!mapRef.current) return;
+        const c = mapRef.current.getCenter();
+        const bounds = mapRef.current.getBounds();
         const centerPoint = { lat: c.lat, lng: c.lng };
         const radius = haversineDistance(centerPoint, { lat: bounds.getNorth(), lng: bounds.getEast() });
         onViewportChange(centerPoint, Math.max(radius, 500));
@@ -129,6 +130,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     });
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       mapRef.current?.remove();
       mapRef.current = null;
     };

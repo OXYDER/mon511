@@ -198,8 +198,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (showAdmin) return <AdminPage onClose={() => setShowAdmin(false)} />;
-
   function openReport(r: Report) {
     setSelection({ type: 'report', id: r.id });
     setMapCamera({ lat: r.latitude, lng: r.longitude });
@@ -280,6 +278,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   return (
     <div className="app-full">
+      {showAdmin && <AdminPage onClose={() => setShowAdmin(false)} />}
+      {!showAdmin && <>
       <div className="map-background">
         <MapView
           center={mapCamera}
@@ -316,6 +316,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <button className="icon-btn" title="FR / EN" onClick={toggleLang} style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
             {lang === 'fr' ? 'EN' : 'FR'}
           </button>
+          <button
+            className="icon-btn"
+            title={lang === 'fr' ? 'Alertes MTQ dans la zone visible' : 'MTQ alerts in the visible area'}
+            onClick={() => {
+              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales;
+              const next = { travaux_routiers: anyOff, conditions_hivernales: anyOff };
+              setLayerPrefs(next);
+              if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
+              else setLocalLayerPrefs(next);
+            }}
+          >
+            🔔
+            {externalIncidents.length > 0 && (
+              <span className="badge-dot">{externalIncidents.length}</span>
+            )}
+          </button>
           <button className="icon-btn" title={t('changerTheme', lang)} onClick={onToggleTheme}>
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
@@ -348,7 +364,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             onClick={() => setPanelView('filters')}
           >
             🎚️
-            {activeFilterCount > 0 && <span className="badge-dot" />}
+            {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
           </button>
           <button
             className={`panel-icon-btn ${panelView === 'legend' ? 'active' : ''}`}
@@ -513,6 +529,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showProfileModal && (
         <ProfileModal onClose={() => setShowProfileModal(false)} onLogout={onLogout} />
       )}
+      </>}
     </div>
   );
 }
