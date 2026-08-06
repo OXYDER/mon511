@@ -64,6 +64,22 @@ const CIRCULATION_FIELDS: [string, string, ((v: any) => string)?][] = [
   ['val_djma_annee_1', 'Débit journalier moyen annuel (véh/jour)'],
 ];
 
+const FEU_CONDITION_LABELS: Record<string, string> = {
+  '0': 'Recensé', '1': 'Nouveau', '2': 'Sous observation',
+  '3': 'Hors contrôle', '4': 'Contenu', '5': 'Maîtrisé', '6': 'Éteint',
+};
+
+const FEUX_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['Municipalite', 'Municipalité'],
+  ['RegionAdministrative', 'Région administrative'],
+  ['Mrc', 'MRC'],
+  ['Condition', 'État', (v) => FEU_CONDITION_LABELS[String(v)] ?? String(v)],
+  ['SuperficieHa', 'Superficie', (v) => `${v} ha`],
+  ['Cause', 'Cause'],
+  ['DateDeDebut', 'Début', formatDateTime],
+  ['DateDerniereModification', 'Dernière mise à jour', formatDateTime],
+];
+
 export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const [incident, setIncident] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +97,8 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const isAvertissement = category === 'mtmd_avertissements';
   const isCirculation = category === 'mtmd_debit_circulation';
   const isConditions = category === 'mtmd_conditions_hivernales';
-  const isKnownCategory = isTravaux || isAvertissement || isCirculation || isConditions;
+  const isFeux = category === 'sopfeu_feux_actifs';
+  const isKnownCategory = isTravaux || isAvertissement || isCirculation || isConditions || isFeux;
   const fieldDefs = isTravaux
     ? TRAVAUX_FIELDS
     : isAvertissement
@@ -90,9 +107,11 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
         ? CIRCULATION_FIELDS
         : isConditions
           ? CONDITIONS_FIELDS
-          : []; // catégorie inconnue (ex. feux de forêt tant que les champs ne sont pas confirmés) → repli générique plus bas
+          : isFeux
+            ? FEUX_FIELDS
+            : []; // catégorie inconnue → repli générique plus bas
 
-  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : isConditions ? '❄️' : '🏛️';
+  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : isConditions ? '❄️' : isFeux ? '🔥' : '🏛️';
   const panelTitle = isTravaux
     ? 'Travaux routiers'
     : isAvertissement
@@ -101,7 +120,9 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
         ? 'Débit de circulation'
         : isConditions
           ? 'Conditions routières'
-          : (incident?.sourceName ?? 'Information officielle');
+          : isFeux
+            ? 'Feu de forêt'
+            : (incident?.sourceName ?? 'Information officielle');
 
   const rows = incident
     ? isKnownCategory

@@ -41,7 +41,15 @@ interface ExternalIncident {
   djma: string | null;
   routeDebut: string | null;
   routeFin: string | null;
+  superficieHa: string | null;
+  feuCondition: string | null;
+  feuMunicipalite: string | null;
 }
+
+const FEU_CONDITION_LABELS: Record<string, string> = {
+  '0': 'Recensé', '1': 'Nouveau', '2': 'Sous observation',
+  '3': 'Hors contrôle', '4': 'Contenu', '5': 'Maîtrisé', '6': 'Éteint',
+};
 
 /** Échelle de couleur maison (pas de code officiel fourni par le MTQ pour
  * le débit de circulation, contrairement aux conditions hivernales) —
@@ -624,11 +632,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
                 <div className="rc-icon-hex official">🔥</div>
                 <div className="rc-body">
-                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                  <div className="rc-meta">SOPFEU</div>
+                  <div className="rc-title">{inc.feuMunicipalite ?? inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">{inc.superficieHa ? `${inc.superficieHa} ha` : 'SOPFEU'}</div>
                 </div>
                 <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--status-danger)' }}>
-                  {lang === 'fr' ? 'Actif' : 'Active'}
+                  {FEU_CONDITION_LABELS[inc.feuCondition ?? ''] ?? (lang === 'fr' ? 'Actif' : 'Active')}
                 </span>
               </div>
             ))}

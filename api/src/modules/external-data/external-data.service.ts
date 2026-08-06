@@ -36,6 +36,9 @@ export class ExternalDataService {
         sql<string | null>`external_incidents.raw_data->>'val_djma_annee_1'`.as('djma'),
         sql<string | null>`external_incidents.raw_data->>'des_debut_sous_route'`.as('routeDebut'),
         sql<string | null>`external_incidents.raw_data->>'des_fin_sous_route'`.as('routeFin'),
+        sql<string | null>`external_incidents.raw_data->>'SuperficieHa'`.as('superficieHa'),
+        sql<string | null>`external_incidents.raw_data->>'Condition'`.as('feuCondition'),
+        sql<string | null>`external_incidents.raw_data->>'Municipalite'`.as('feuMunicipalite'),
       ])
       .where('external_incidents.is_stale', '=', false)
       .where('external_incidents.location', 'is not', null)
@@ -169,7 +172,7 @@ export class ExternalDataService {
         const lng = lngKey ? parseFloat(item[lngKey]) : null;
         const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
 
-        const title = item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
+        const title = item.Designation ?? item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
 
         await this.db
           .insertInto('external_incidents')
