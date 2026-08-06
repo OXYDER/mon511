@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl, { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -65,6 +65,8 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   const userMarkerRef = useRef<Marker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const linesClickMapRef = useRef<Record<string, () => void>>({});
+  const [clusterVersion, setClusterVersion] = useState(0);
+  const [spiderfiedClusterId, setSpiderfiedClusterId] = useState<string | null>(null);
 
   // Ref toujours à jour pour éviter les fermetures obsolètes dans les
   // gestionnaires d'événements enregistrés une seule fois.
@@ -107,6 +109,25 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     }
   }
 
+  const spiderfyLegsRef = useRef<any[]>([]);
+
+  function ensureSpiderfyLinesLayer() {
+    const map = mapRef.current;
+    if (!map) return;
+    const data = { type: 'FeatureCollection' as const, features: spiderfyLegsRef.current };
+    if (!map.getSource('spiderfy-legs')) {
+      map.addSource('spiderfy-legs', { type: 'geojson', data: data as any });
+      map.addLayer({
+        id: 'spiderfy-legs-layer',
+        type: 'line',
+        source: 'spiderfy-legs',
+        paint: { 'line-color': 'rgba(255,255,255,0.35)', 'line-width': 1.5, 'line-dasharray': [2, 2] },
+      });
+    } else {
+      (map.getSource('spiderfy-legs') as any)?.setData(data);
+    }
+  }
+
   function styleUrlFor(t: 'dark' | 'light', type: MapType) {
     if (!MAPTILER_KEY) return 'https://demotiles.maplibre.org/style.json';
     if (type === 'satellite') return `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`;
@@ -126,6 +147,15 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     });
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
+    mapRef.current.on('style.load', ensureSpiderfyLinesLayer);
+
+    // Les distances en pixels entre pins changent avec le zoom — il faut
+    // recalculer les groupes. Le déplacement (pan) seul ne change pas ces
+    // distances relatives, donc pas besoin de recalculer pour ça.
+    mapRef.current.on('zoomend', () => setClusterVersion((v) => v + 1));
+    // Replie le déploiement en éventail dès qu'on bouge la carte, pour
+    // éviter des pins "fantômes" mal positionnés après un déplacement.
+    mapRef.current.on('movestart', () => setSpiderfiedClusterId(null));
 
     function triggerMapClickIfAllowed(lat: number, lng: number, point: { x: number; y: number }) {
       if (!onMapClick) return;
@@ -213,41 +243,150 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   }, [center]);
 
   // Redessiner les pins à chaque changement de liste
+  /** Regroupe les pins proches à l'écran (pas en distance réelle — la
+   * proximité visuelle dépend du zoom). Algorithme glouton simple, largement
+   * suffisant pour les volumes affichés ici (quelques centaines de pins
+   * visibles au maximum, grâce au filtrage déjà fait sur le cadre visible). */
+  function clusterPins(inputPins: MapPin[], map: MapLibreMap, pixelRadius = 42) {
+    const points = inputPins.map((pin) => ({ pin, screen: map.project([pin.longitude, pin.latitude]) }));
+    const used = new Array(points.length).fill(false);
+    const clusters: { id: string; lat: number; lng: number; pins: MapPin[] }[] = [];
+
+    for (let i = 0; i < points.length; i++) {
+      if (used[i]) continue;
+      const group = [points[i]];
+      used[i] = true;
+      for (let j = i + 1; j < points.length; j++) {
+        if (used[j]) continue;
+        const dx = points[i].screen.x - points[j].screen.x;
+        const dy = points[i].screen.y - points[j].screen.y;
+        if (Math.sqrt(dx * dx + dy * dy) < pixelRadius) {
+          group.push(points[j]);
+          used[j] = true;
+        }
+      }
+      const cx = group.reduce((s, p) => s + p.screen.x, 0) / group.length;
+      const cy = group.reduce((s, p) => s + p.screen.y, 0) / group.length;
+      const center = map.unproject([cx, cy]);
+      clusters.push({
+        id: group.map((g) => g.pin.id).sort().join('|'),
+        lat: center.lat,
+        lng: center.lng,
+        pins: group.map((g) => g.pin),
+      });
+    }
+    return clusters;
+  }
+
+  function buildPinElement(pin: MapPin) {
+    const el = document.createElement('div');
+    el.style.width = '32px';
+    el.style.height = '32px';
+    el.style.cursor = pin.onClick ? 'pointer' : 'default';
+    el.style.borderRadius = '50%';
+    el.style.background = '#1B1E25';
+    el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
+    el.style.border = `2.5px solid ${PIN_COLORS[pin.colorVar]}`;
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
+    el.style.fontSize = '14px';
+    el.textContent = pin.icon;
+    if (pin.onClick) el.addEventListener('click', pin.onClick);
+
+    if (pin.photoUrl) {
+      const popup = new maplibregl.Popup({ offset: 20, closeButton: false, closeOnClick: false, className: 'pin-thumb-popup' })
+        .setHTML(`<img src="${pin.photoUrl}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`);
+      el.addEventListener('mouseenter', () => popup.setLngLat([pin.longitude, pin.latitude]).addTo(mapRef.current!));
+      el.addEventListener('mouseleave', () => popup.remove());
+    }
+    return el;
+  }
+
   useEffect(() => {
     if (!mapRef.current) return;
+    const map = mapRef.current;
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    spiderfyLegsRef.current = [];
 
-    for (const pin of pins) {
+    const clusters = clusterPins(pins, map);
+
+    for (const cluster of clusters) {
+      if (cluster.pins.length === 1) {
+        // Pin isolé — comportement normal, position réelle.
+        const pin = cluster.pins[0];
+        const marker = new maplibregl.Marker({ element: buildPinElement(pin) })
+          .setLngLat([pin.longitude, pin.latitude])
+          .addTo(map);
+        markersRef.current.push(marker);
+        continue;
+      }
+
+      if (cluster.id === spiderfiedClusterId) {
+        // Déployé en éventail : chaque pin à une position calculée en
+        // cercle autour du centre du groupe, avec un fil de connexion.
+        const centerScreen = map.project([cluster.lng, cluster.lat]);
+        const radius = 42 + cluster.pins.length * 6;
+        cluster.pins.forEach((pin, idx) => {
+          const angle = (idx / cluster.pins.length) * Math.PI * 2 - Math.PI / 2;
+          const targetScreen = { x: centerScreen.x + Math.cos(angle) * radius, y: centerScreen.y + Math.sin(angle) * radius };
+          const targetLngLat = map.unproject([targetScreen.x, targetScreen.y]);
+
+          spiderfyLegsRef.current.push({
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: [[cluster.lng, cluster.lat], [targetLngLat.lng, targetLngLat.lat]] },
+            properties: {},
+          });
+
+          const marker = new maplibregl.Marker({ element: buildPinElement(pin) })
+            .setLngLat([targetLngLat.lng, targetLngLat.lat])
+            .addTo(map);
+          markersRef.current.push(marker);
+        });
+
+        // Petit point au centre pour replier le déploiement.
+        const collapseEl = document.createElement('div');
+        collapseEl.style.width = '14px';
+        collapseEl.style.height = '14px';
+        collapseEl.style.borderRadius = '50%';
+        collapseEl.style.background = 'var(--accent-signal, #FF5A1F)';
+        collapseEl.style.border = '2px solid #14161B';
+        collapseEl.style.cursor = 'pointer';
+        collapseEl.addEventListener('click', () => setSpiderfiedClusterId(null));
+        const collapseMarker = new maplibregl.Marker({ element: collapseEl })
+          .setLngLat([cluster.lng, cluster.lat])
+          .addTo(map);
+        markersRef.current.push(collapseMarker);
+        continue;
+      }
+
+      // Groupe non déployé — un seul pin avec le nombre d'éléments regroupés.
       const el = document.createElement('div');
-      el.style.width = '32px';
-      el.style.height = '32px';
-      el.style.cursor = pin.onClick ? 'pointer' : 'default';
+      el.style.width = '36px';
+      el.style.height = '36px';
       el.style.borderRadius = '50%';
-      el.style.background = '#1B1E25';
-      el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
-      el.style.border = `2.5px solid ${PIN_COLORS[pin.colorVar]}`;
+      el.style.background = 'var(--accent-signal, #FF5A1F)';
+      el.style.border = '3px solid #14161B';
+      el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
-      el.style.fontSize = '14px';
-      el.textContent = pin.icon;
-      if (pin.onClick) el.addEventListener('click', pin.onClick);
+      el.style.fontFamily = 'var(--font-display, sans-serif)';
+      el.style.fontWeight = '700';
+      el.style.fontSize = '13px';
+      el.style.color = '#14161B';
+      el.style.cursor = 'pointer';
+      el.textContent = String(cluster.pins.length);
+      el.addEventListener('click', () => setSpiderfiedClusterId(cluster.id));
 
-      if (pin.photoUrl) {
-        const popup = new maplibregl.Popup({ offset: 20, closeButton: false, closeOnClick: false, className: 'pin-thumb-popup' })
-          .setHTML(`<img src="${pin.photoUrl}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`);
-        el.addEventListener('mouseenter', () => popup.setLngLat([pin.longitude, pin.latitude]).addTo(mapRef.current!));
-        el.addEventListener('mouseleave', () => popup.remove());
-      }
-
-      const marker = new maplibregl.Marker({ element: el })
-        .setLngLat([pin.longitude, pin.latitude])
-        .addTo(mapRef.current);
+      const marker = new maplibregl.Marker({ element: el }).setLngLat([cluster.lng, cluster.lat]).addTo(map);
       markersRef.current.push(marker);
     }
-  }, [pins]);
+
+    if (map.isStyleLoaded()) ensureSpiderfyLinesLayer();
+  }, [pins, clusterVersion, spiderfiedClusterId]);
 
   // Point "vous êtes ici" — marqueur dédié, distinct des pins de signalement
   useEffect(() => {
