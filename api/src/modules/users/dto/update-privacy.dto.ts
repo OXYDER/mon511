@@ -18,6 +18,10 @@ export class UpdatePrivacyDto {
   showRealName?: boolean;
 
   @IsOptional()
+  @IsIn(['full', 'initial', 'hidden'])
+  lastNameDisplay?: 'full' | 'initial' | 'hidden';
+
+  @IsOptional()
   @IsIn(['everyone', 'shared_reports_only'])
   dmPermission?: 'everyone' | 'shared_reports_only';
 }

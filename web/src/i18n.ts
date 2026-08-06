@@ -7,7 +7,7 @@ const dict = {
   monProfil: { fr: 'Mon profil', en: 'My profile' },
   administration: { fr: 'Administration', en: 'Administration' },
   changerTheme: { fr: 'Changer de thème', en: 'Toggle theme' },
-  surLaCarte: { fr: 'Sur la carte', en: 'On the map' },
+  surLaCarte: { fr: 'Recherche & résultats', en: 'Search & results' },
   legende: { fr: 'Légende', en: 'Legend' },
   filtres: { fr: 'Filtres', en: 'Filters' },
   rechercher: { fr: 'Chercher une ville ou un signalement...', en: 'Search a city or a report...' },

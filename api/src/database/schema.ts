@@ -40,6 +40,7 @@ export interface UsersTable {
     show_report_history: boolean;
     show_region: boolean;
     show_real_name: boolean;
+    last_name_display: 'full' | 'initial' | 'hidden';
     dm_permission: 'everyone' | 'shared_reports_only';
   }>;
   map_layer_preferences: Generated<{

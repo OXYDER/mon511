@@ -1,12 +1,52 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { Kysely } from 'kysely';
+import * as bcrypt from 'bcrypt';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { UpdatePrivacyDto } from './dto/update-privacy.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class UsersService {
   constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    await this.db
+      .updateTable('users')
+      .set({
+        ...(dto.firstName !== undefined && { first_name: dto.firstName }),
+        ...(dto.lastName !== undefined && { last_name: dto.lastName }),
+        updated_at: new Date() as any,
+      })
+      .where('id', '=', userId)
+      .execute();
+    return this.findById(userId);
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.db
+      .selectFrom('users')
+      .select(['password_hash'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+
+    if (!user?.password_hash) {
+      throw new BadRequestException("Ce compte n'a pas de mot de passe local (connexion externe).");
+    }
+
+    const valid = await bcrypt.compare(dto.currentPassword, user.password_hash);
+    if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect.');
+
+    const newHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.db
+      .updateTable('users')
+      .set({ password_hash: newHash, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .execute();
+
+    return { changed: true };
+  }
 
   async findById(id: string) {
     const user = await this.db
@@ -60,6 +100,7 @@ export class UsersService {
       ...(dto.showReportHistory !== undefined && { show_report_history: dto.showReportHistory }),
       ...(dto.showRegion !== undefined && { show_region: dto.showRegion }),
       ...(dto.showRealName !== undefined && { show_real_name: dto.showRealName }),
+      ...(dto.lastNameDisplay !== undefined && { last_name_display: dto.lastNameDisplay }),
       ...(dto.dmPermission !== undefined && { dm_permission: dto.dmPermission }),
     };
 

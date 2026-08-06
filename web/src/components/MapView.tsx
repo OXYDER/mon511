@@ -153,9 +153,6 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // recalculer les groupes. Le déplacement (pan) seul ne change pas ces
     // distances relatives, donc pas besoin de recalculer pour ça.
     mapRef.current.on('zoomend', () => setClusterVersion((v) => v + 1));
-    // Replie le déploiement en éventail dès qu'on bouge la carte, pour
-    // éviter des pins "fantômes" mal positionnés après un déplacement.
-    mapRef.current.on('movestart', () => setSpiderfiedClusterId(null));
 
     function triggerMapClickIfAllowed(lat: number, lng: number, point: { x: number; y: number }) {
       if (!onMapClick) return;

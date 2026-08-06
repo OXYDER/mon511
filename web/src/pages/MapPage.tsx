@@ -679,7 +679,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <button
         className={`map-menu-btn ${showFiltersLegend ? 'active' : ''}`}
-        style={{ bottom: 208 }}
+        style={{ bottom: 264 }}
         onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); }}
         title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
       >
@@ -687,7 +687,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
       </button>
       {showFiltersLegend && (
-        <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: '60vh', overflowY: 'auto' }}>
+        <div className="map-menu-panel" style={{ bottom: 264, width: 280, maxHeight: '60vh', overflowY: 'auto' }}>
           <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
 
           <div className="legend-section">
@@ -768,14 +768,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <button
         className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
-        style={{ bottom: 264 }}
+        style={{ bottom: 208 }}
         onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); }}
         title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
       >
         🗂️
       </button>
       {showMapDetailsMenu && (
-        <div className="map-menu-panel" style={{ bottom: 264 }}>
+        <div className="map-menu-panel" style={{ bottom: 208 }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>

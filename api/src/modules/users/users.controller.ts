@@ -1,6 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdatePrivacyDto } from './dto/update-privacy.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
@@ -26,6 +28,18 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   updatePrivacy(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdatePrivacyDto) {
     return this.usersService.updatePrivacySettings(user.userId, dto);
+  }
+
+  @Patch('me/profile')
+  @UseGuards(JwtAuthGuard)
+  updateProfile(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateProfileDto) {
+    return this.usersService.updateProfile(user.userId, dto);
+  }
+
+  @Patch('me/password')
+  @UseGuards(JwtAuthGuard)
+  changePassword(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChangePasswordDto) {
+    return this.usersService.changePassword(user.userId, dto);
   }
 
   @Patch('me/map-layers')
