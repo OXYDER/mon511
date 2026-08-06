@@ -768,14 +768,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <button
         className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
-        style={{ bottom: 152 }}
+        style={{ bottom: 208 }}
         onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); }}
         title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
       >
         🗂️
       </button>
       {showMapDetailsMenu && (
-        <div className="map-menu-panel" style={{ bottom: 152 }}>
+        <div className="map-menu-panel" style={{ bottom: 208 }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
@@ -806,14 +806,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <button
         className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
-        style={{ bottom: 208 }}
+        style={{ bottom: 152 }}
         onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); }}
         title={lang === 'fr' ? 'Type de carte' : 'Map type'}
       >
         🗺️
       </button>
       {showMapTypeMenu && (
-        <div className="map-menu-panel" style={{ bottom: 208 }}>
+        <div className="map-menu-panel" style={{ bottom: 152 }}>
           <h3>{lang === 'fr' ? 'Type de carte' : 'Map type'}</h3>
           <div className="map-type-grid">
             <div className={`map-type-option ${mapType === 'default' ? 'active' : ''}`} onClick={() => setMapType('default')}>

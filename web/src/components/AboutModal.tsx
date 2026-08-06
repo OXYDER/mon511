@@ -1,9 +1,9 @@
+import { APP_VERSION, BUILD_DATE } from '../version';
+
 interface Props {
   onClose: () => void;
   lang: 'fr' | 'en';
 }
-
-const BUILD_DATE = new Date().toISOString().slice(0, 10);
 
 export default function AboutModal({ onClose, lang }: Props) {
   return (
@@ -49,10 +49,8 @@ export default function AboutModal({ onClose, lang }: Props) {
 
           <div className="section-label">{lang === 'fr' ? 'Technique' : 'Technical'}</div>
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-            {lang === 'fr' ? 'Version compilée le' : 'Build date'} : {BUILD_DATE}<br />
-            <a href="https://github.com/OXYDER/mon511" target="_blank" rel="noreferrer" style={{ color: 'var(--accent-signal)' }}>
-              github.com/OXYDER/mon511
-            </a>
+            {lang === 'fr' ? 'Version' : 'Version'} : {APP_VERSION}<br />
+            {lang === 'fr' ? 'Compilé le' : 'Built on'} : {BUILD_DATE}
           </div>
         </div>
       </div>
