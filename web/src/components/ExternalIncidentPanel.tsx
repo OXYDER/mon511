@@ -17,6 +17,13 @@ function formatDateTime(value: string | null | undefined): string {
   return d ? d.toLocaleString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 }
 
+/** Accès par chemin pointé (ex. "Adresses.0.Municipalite") — nécessaire pour
+ * les flux à structure imbriquée comme SIT Québec, contrairement aux flux
+ * MTMD/SOPFEU qui sont plats. */
+function getByPath(obj: any, path: string): any {
+  return path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
+}
+
 // Champs à afficher, dans l'ordre, avec un libellé humain et un formateur
 // optionnel — plutôt que de tout déverser en vrac, on choisit ce qui compte
 // vraiment pour chaque type de flux (noms de champs confirmés depuis un
@@ -80,6 +87,15 @@ const FEUX_FIELDS: [string, string, ((v: any) => string)?][] = [
   ['DateDerniereModification', 'Dernière mise à jour', formatDateTime],
 ];
 
+const SUCRE_FIELDS: [string, string, ((v: any) => string)?][] = [
+  ['Adresses.0.Numerovoie', 'Adresse'],
+  ['Adresses.0.Municipalite', 'Municipalité'],
+  ['Adresses.0.CodePostal', 'Code postal'],
+  ['TelephonePrincipals.0.Coordonnees', 'Téléphone'],
+  ['SiteInternets.0.Coordonnees', 'Site web'],
+  ['Courriels.0.Coordonnees', 'Courriel'],
+];
+
 export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const [incident, setIncident] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +114,8 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
   const isCirculation = category === 'mtmd_debit_circulation';
   const isConditions = category === 'mtmd_conditions_hivernales';
   const isFeux = category === 'sopfeu_feux_actifs';
-  const isKnownCategory = isTravaux || isAvertissement || isCirculation || isConditions || isFeux;
+  const isSucre = category === 'sit_agrotourisme';
+  const isKnownCategory = isTravaux || isAvertissement || isCirculation || isConditions || isFeux || isSucre;
   const fieldDefs = isTravaux
     ? TRAVAUX_FIELDS
     : isAvertissement
@@ -109,9 +126,11 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
           ? CONDITIONS_FIELDS
           : isFeux
             ? FEUX_FIELDS
-            : []; // catégorie inconnue → repli générique plus bas
+            : isSucre
+              ? SUCRE_FIELDS
+              : []; // catégorie inconnue → repli générique plus bas
 
-  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : isConditions ? '❄️' : isFeux ? '🔥' : '🏛️';
+  const panelIcon = isTravaux ? '🚧' : isAvertissement ? '⚠️' : isCirculation ? '🚗' : isConditions ? '❄️' : isFeux ? '🔥' : isSucre ? '🍁' : '🏛️';
   const panelTitle = isTravaux
     ? 'Travaux routiers'
     : isAvertissement
@@ -122,13 +141,15 @@ export default function ExternalIncidentPanel({ incidentId, onClose }: Props) {
           ? 'Conditions routières'
           : isFeux
             ? 'Feu de forêt'
-            : (incident?.sourceName ?? 'Information officielle');
+            : isSucre
+              ? 'Cabane à sucre'
+              : (incident?.sourceName ?? 'Information officielle');
 
   const rows = incident
     ? isKnownCategory
       ? (fieldDefs
           .map(([key, label, formatter]) => {
-            const raw = incident.raw_data?.[key];
+            const raw = getByPath(incident.raw_data, key);
             if (raw === null || raw === undefined || raw === '') return null;
             return { label, value: formatter ? formatter(raw) : String(raw) };
           })

@@ -39,6 +39,9 @@ export class ExternalDataService {
         sql<string | null>`external_incidents.raw_data->>'SuperficieHa'`.as('superficieHa'),
         sql<string | null>`external_incidents.raw_data->>'Condition'`.as('feuCondition'),
         sql<string | null>`external_incidents.raw_data->>'Municipalite'`.as('feuMunicipalite'),
+        sql<string | null>`external_incidents.raw_data#>>'{Adresses,0,Municipalite}'`.as('sucreMunicipalite'),
+        sql<string | null>`external_incidents.raw_data#>>'{Adresses,0,Numerovoie}'`.as('sucreAdresse'),
+        sql<string | null>`external_incidents.raw_data#>>'{SiteInternets,0,Coordonnees}'`.as('sucreSiteWeb'),
       ])
       .where('external_incidents.is_stale', '=', false)
       .where('external_incidents.location', 'is not', null)
@@ -156,23 +159,45 @@ export class ExternalDataService {
       const res = await fetch(source.feed_url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const items: any[] = Array.isArray(data) ? data : (data.items ?? data.data ?? data.results ?? []);
+      const items: any[] = Array.isArray(data) ? data : (data.value ?? data.items ?? data.data ?? data.results ?? []);
 
       const seenExternalIds: string[] = [];
       const LAT_KEYS = ['lat', 'Lat', 'latitude', 'Latitude', 'LAT', 'y', 'Y'];
       const LNG_KEYS = ['lon', 'Lon', 'lng', 'Lng', 'longitude', 'Longitude', 'LON', 'x', 'X'];
 
-      for (const item of items) {
-        const externalId = String(item.id ?? item.noFeu ?? item.NoFeu ?? item.numero ?? JSON.stringify(item));
+      for (const rawItem of items) {
+        // Cas spécial SIT Québec (agrotourisme) : le flux mélange plusieurs
+        // types de commerces (vignobles, fromageries, cabanes à sucre...).
+        // On ne garde que les cabanes à sucre plutôt que tout stocker sous
+        // un nom de couche qui laisserait croire que c'est filtré.
+        if (source.feed_key === 'sit_agrotourisme') {
+          const typeLabel = rawItem.Identifications?.[0]?.Typedetablissementoudequipement?.ThesLibelle;
+          if (typeLabel !== 'Cabane à sucre') continue;
+        }
+        const item = rawItem;
+
+        const externalId = String(
+          item.id ?? item.noFeu ?? item.NoFeu ?? item.numero ?? item.SyndicObjectID ?? JSON.stringify(item).slice(0, 100),
+        );
         seenExternalIds.push(externalId);
 
-        const latKey = LAT_KEYS.find((k) => item[k] !== undefined);
-        const lngKey = LNG_KEYS.find((k) => item[k] !== undefined);
-        const lat = latKey ? parseFloat(item[latKey]) : null;
-        const lng = lngKey ? parseFloat(item[lngKey]) : null;
+        let latKey = LAT_KEYS.find((k) => item[k] !== undefined);
+        let lngKey = LNG_KEYS.find((k) => item[k] !== undefined);
+        let lat = latKey ? parseFloat(item[latKey]) : null;
+        let lng = lngKey ? parseFloat(item[lngKey]) : null;
+
+        // Repli pour les structures imbriquées type Tourinsoft/SIT Québec
+        // (coordonnées sous item.Geolocalisations[0].Latitude/.Longitude).
+        if ((lat === null || isNaN(lat)) && Array.isArray(item.Geolocalisations) && item.Geolocalisations[0]) {
+          lat = parseFloat(item.Geolocalisations[0].Latitude);
+          lng = parseFloat(item.Geolocalisations[0].Longitude);
+        }
+
         const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
 
-        const title = item.Designation ?? item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
+        const title =
+          item.Designation ?? item.SyndicObjectName ?? item.Identifications?.[0]?.Nomdefiche ??
+          item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
 
         await this.db
           .insertInto('external_incidents')

@@ -44,6 +44,9 @@ interface ExternalIncident {
   superficieHa: string | null;
   feuCondition: string | null;
   feuMunicipalite: string | null;
+  sucreMunicipalite: string | null;
+  sucreAdresse: string | null;
+  sucreSiteWeb: string | null;
 }
 
 const FEU_CONDITION_LABELS: Record<string, string> = {
@@ -113,6 +116,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     avertissements: false,
     debit_circulation: false,
     feux_foret: false,
+    cabanes_a_sucre: false,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -333,6 +337,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret,
   );
 
+  const visibleCabanes = externalIncidents.filter(
+    (inc) => inc.feedKey === 'sit_agrotourisme' && layerPrefs.cabanes_a_sucre,
+  );
+
   const reportPins: MapPin[] = filteredReports.map((r) => ({
     id: r.id,
     latitude: r.latitude,
@@ -354,6 +362,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     ...visibleFeux.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '🔥', colorVar: 'official' as const, onClick: () => openExternal(inc),
+    })),
+    ...visibleCabanes.map((inc) => ({
+      id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
+      icon: '🍁', colorVar: 'official' as const, onClick: () => openExternal(inc),
     })),
   ];
 
@@ -526,9 +538,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚗 {lang === 'fr' ? 'Débit de circulation' : 'Traffic volume'}</span>
           <ToggleSwitch on={layerPrefs.debit_circulation} onToggle={() => toggleLayer('debit_circulation')} />
         </div>
-        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+        <div className="layer-toggle" style={{ marginBottom: 8 }}>
           <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔥 {lang === 'fr' ? 'Feux de forêt (SOPFEU)' : 'Forest fires (SOPFEU)'}</span>
           <ToggleSwitch on={layerPrefs.feux_foret} onToggle={() => toggleLayer('feux_foret')} />
+        </div>
+        <div className="layer-toggle" style={{ marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🍁 {lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</span>
+          <ToggleSwitch on={layerPrefs.cabanes_a_sucre} onToggle={() => toggleLayer('cabanes_a_sucre')} />
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -555,6 +571,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             <div className="legend-section">
               <div className="legend-section-title">{lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</div>
               <div className="legend-row"><div className="legend-icon-box">🔥</div><span>{lang === 'fr' ? 'Incendie de forêt actif (SOPFEU)' : 'Active forest fire (SOPFEU)'}</span></div>
+            </div>
+            <div className="legend-section">
+              <div className="legend-section-title">{lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</div>
+              <div className="legend-row"><div className="legend-icon-box">🍁</div><span>{lang === 'fr' ? 'Cabane à sucre (SIT Québec)' : 'Sugar shack (SIT Québec)'}</span></div>
             </div>
             {layerPrefs.conditions_hivernales && (
               <div className="legend-section">
@@ -614,9 +634,19 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {panelView === 'list' && (
           <div className="report-list-scroll">
             {loading && <div className="center-msg">{t('chargement', lang)}</div>}
-            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && !error && (
+            {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && visibleCabanes.length === 0 && !error && (
               <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
             )}
+
+            {visibleCabanes.map((inc) => (
+              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                <div className="rc-icon-hex official">🍁</div>
+                <div className="rc-body">
+                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                  <div className="rc-meta">{inc.sucreMunicipalite ?? 'Cabane à sucre'}</div>
+                </div>
+              </div>
+            ))}
 
             {visibleFeux.map((inc) => (
               <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>

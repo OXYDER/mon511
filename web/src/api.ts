@@ -21,6 +21,7 @@ export interface LayerPrefs {
   avertissements: boolean;
   debit_circulation: boolean;
   feux_foret: boolean;
+  cabanes_a_sucre: boolean;
 }
 
 const DEFAULT_LAYER_PREFS: LayerPrefs = {
@@ -29,6 +30,7 @@ const DEFAULT_LAYER_PREFS: LayerPrefs = {
   avertissements: false,
   debit_circulation: false,
   feux_foret: false,
+  cabanes_a_sucre: false,
 };
 
 /** Repli localStorage pour les usagers non connectés — les usagers connectés
