@@ -17,6 +17,40 @@ export class ModerationController {
     return this.moderationService.findQueue(regionId);
   }
 
+  @Get('flags')
+  flags() {
+    return this.moderationService.findFlaggedReports();
+  }
+
+  @Patch('flags/:reportId/dismiss')
+  dismissFlags(@Param('reportId') reportId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.moderationService.dismissFlags(reportId, user.userId);
+  }
+
+  @Patch('flags/:reportId/remove')
+  removeForAbuse(
+    @Param('reportId') reportId: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('reason') reason: string,
+  ) {
+    return this.moderationService.removeReportForAbuse(reportId, user.userId, reason);
+  }
+
+  @Get('resolution-suggestions')
+  resolutionSuggestions() {
+    return this.moderationService.findPendingResolutionSuggestions();
+  }
+
+  @Patch('resolution-suggestions/:reportId/accept')
+  acceptResolution(@Param('reportId') reportId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.moderationService.acceptResolution(reportId, user.userId);
+  }
+
+  @Patch('resolution-suggestions/:reportId/dismiss')
+  dismissResolution(@Param('reportId') reportId: string) {
+    return this.moderationService.dismissResolution(reportId);
+  }
+
   @Get(':id')
   detail(@Param('id') id: string) {
     return this.moderationService.findDetail(id);

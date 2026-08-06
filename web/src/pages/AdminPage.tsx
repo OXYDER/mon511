@@ -113,71 +113,176 @@ function ModerationQueue() {
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
-    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-      <div style={{ flex: '1 1 280px', minWidth: 260 }}>
-        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-          En attente ({queue.length})
-        </div>
-        {queue.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement en attente.</div>}
-        {queue.map((r) => (
-          <div
-            key={r.id}
-            className="report-card"
-            style={{ borderColor: selectedId === r.id ? 'var(--accent-signal)' : undefined }}
-            onClick={() => setSelectedId(r.id)}
-          >
-            <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
-            <div className="rc-body">
-              <div className="rc-title">{r.problemTypeNameFr}</div>
-              <div className="rc-meta">{r.address_text ?? 'Position GPS'}</div>
-            </div>
+    <div>
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
+        <div style={{ flex: '1 1 280px', minWidth: 260 }}>
+          <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+            En attente d'approbation ({queue.length})
           </div>
-        ))}
+          {queue.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement en attente.</div>}
+          {queue.map((r) => (
+            <div
+              key={r.id}
+              className="report-card"
+              style={{ borderColor: selectedId === r.id ? 'var(--accent-signal)' : undefined }}
+              onClick={() => setSelectedId(r.id)}
+            >
+              <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+              <div className="rc-body">
+                <div className="rc-title">{r.problemTypeNameFr}</div>
+                <div className="rc-meta">{r.address_text ?? 'Position GPS'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
+          {!detail && <div className="center-msg">Sélectionne un signalement à gauche.</div>}
+          {detail && (
+            <>
+              {feedback && <div className="success-banner">{feedback}</div>}
+              <div className="detail-title" style={{ fontSize: 17 }}>{detail.report.description || 'Signalement'}</div>
+              <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
+                <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
+                <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
+              </div>
+
+              {detail.flags?.length > 0 && (
+                <div className="error-banner">
+                  {detail.flags.length} signalement(s) d'abus — motif : {detail.flags[0].reason}
+                </div>
+              )}
+
+              <div className="section-label" style={{ fontSize: 13 }}>Échange avec l'usager</div>
+              {detail.messages.map((m: any) => (
+                <div key={m.id} className="comment">
+                  <div className="comment-author">{m.author_role === 'moderator' ? 'Modération' : m.authorEmail?.split('@')[0]}</div>
+                  {m.message}
+                </div>
+              ))}
+              <div className="comment-row">
+                <input className="text-input" placeholder="Répondre à l'usager..." value={reply} onChange={(e) => setReply(e.target.value)} />
+                <button className="btn-ghost" onClick={sendReply}>Envoyer</button>
+              </div>
+
+              <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
+              <div className="field-group">
+                <label className="field-label">Motif (obligatoire pour un refus)</label>
+                <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+              <div className="action-row">
+                <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
+                  ✔ Approuver
+                </button>
+                <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
-        {!detail && <div className="center-msg">Sélectionne un signalement à gauche.</div>}
-        {detail && (
-          <>
-            {feedback && <div className="success-banner">{feedback}</div>}
-            <div className="detail-title" style={{ fontSize: 17 }}>{detail.report.description || 'Signalement'}</div>
-            <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
-              <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
-              <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
-            </div>
+      <FlaggedReportsAdmin />
+      <ResolutionSuggestionsAdmin />
+    </div>
+  );
+}
 
-            {detail.flags?.length > 0 && (
-              <div className="error-banner">
-                {detail.flags.length} signalement(s) d'abus — motif : {detail.flags[0].reason}
-              </div>
-            )}
+function FlaggedReportsAdmin() {
+  const [flagged, setFlagged] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-            <div className="section-label" style={{ fontSize: 13 }}>Échange avec l'usager</div>
-            {detail.messages.map((m: any) => (
-              <div key={m.id} className="comment">
-                <div className="comment-author">{m.author_role === 'moderator' ? 'Modération' : m.authorEmail?.split('@')[0]}</div>
-                {m.message}
-              </div>
-            ))}
-            <div className="comment-row">
-              <input className="text-input" placeholder="Répondre à l'usager..." value={reply} onChange={(e) => setReply(e.target.value)} />
-              <button className="btn-ghost" onClick={sendReply}>Envoyer</button>
-            </div>
+  async function load() {
+    try {
+      setFlagged(await api.get<any[]>('/moderation/flags'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de charger les signalements d\'abus.');
+    }
+  }
 
-            <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
-            <div className="field-group">
-              <label className="field-label">Motif (obligatoire pour un refus)</label>
-              <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-            <div className="action-row">
-              <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
-                ✔ Approuver
-              </button>
-              <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
-            </div>
-          </>
-        )}
+  useEffect(() => { load(); }, []);
+
+  async function dismiss(reportId: string) {
+    await api.patch(`/moderation/flags/${reportId}/dismiss`, {});
+    load();
+  }
+
+  async function remove(reportId: string) {
+    const reason = window.prompt('Motif du retrait :', 'Contenu inapproprié signalé par la communauté');
+    if (!reason) return;
+    await api.patch(`/moderation/flags/${reportId}/remove`, { reason });
+    load();
+  }
+
+  if (error) return <div className="error-banner" style={{ marginBottom: 24 }}>{error}</div>;
+  if (flagged.length === 0) return null;
+
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        🚩 Signalements d'abus à traiter ({flagged.length})
       </div>
+      {flagged.map((r) => (
+        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+          <div className="rc-body">
+            <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
+            <div className="rc-meta">{r.flagCount} signalement(s) · motifs : {r.reasons.join(', ')}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn-ghost" onClick={() => dismiss(r.id)}>Ignorer</button>
+            <button className="btn-ghost btn-danger" onClick={() => remove(r.id)}>Retirer</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResolutionSuggestionsAdmin() {
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      setSuggestions(await api.get<any[]>('/moderation/resolution-suggestions'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossible de charger les suggestions.');
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function accept(reportId: string) {
+    await api.patch(`/moderation/resolution-suggestions/${reportId}/accept`, {});
+    load();
+  }
+
+  async function dismiss(reportId: string) {
+    await api.patch(`/moderation/resolution-suggestions/${reportId}/dismiss`, {});
+    load();
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        ✔ Suggestions "résolu" à confirmer ({suggestions.length})
+      </div>
+      {suggestions.map((r) => (
+        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+          <div className="rc-body">
+            <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
+            <div className="rc-meta">{r.suggestionCount} suggestion(s) · poids total {r.totalWeight}</div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn-ghost" style={{ color: 'var(--status-resolved)' }} onClick={() => accept(r.id)}>Confirmer</button>
+            <button className="btn-ghost" onClick={() => dismiss(r.id)}>Rejeter</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -318,6 +423,11 @@ function UsersAdmin() {
     load();
   }
 
+  async function changeRole(id: string, role: string) {
+    await api.patch(`/users/admin/${id}/role`, { role });
+    load();
+  }
+
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
@@ -339,8 +449,14 @@ function UsersAdmin() {
           <div className="rc-icon-hex">{(u.first_name?.[0] ?? u.email[0]).toUpperCase()}</div>
           <div className="rc-body">
             <div className="rc-title">{u.email}</div>
-            <div className="rc-meta">{u.roleName} · réputation {u.reputation_score}</div>
+            <div className="rc-meta">réputation {u.reputation_score}</div>
           </div>
+          <select value={u.roleName} onChange={(e) => changeRole(u.id, e.target.value)} style={{ width: 140, marginRight: 10 }}>
+            <option value="user">user</option>
+            <option value="moderator">moderator</option>
+            <option value="admin">admin</option>
+            <option value="super_admin">super_admin</option>
+          </select>
           <ToggleSwitch
             on={u.status !== 'suspended'}
             onToggle={() => toggleSuspend(u.id, u.status)}
