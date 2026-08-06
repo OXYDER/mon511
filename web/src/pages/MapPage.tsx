@@ -9,6 +9,8 @@ import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
 import ProfileModal from '../components/ProfileModal';
 import ToggleSwitch from '../components/ToggleSwitch';
 import AboutModal from '../components/AboutModal';
+import NotificationsPanel from '../components/NotificationsPanel';
+import MyReportsPage from './MyReportsPage';
 import AdminPage from './AdminPage';
 
 interface Report {
@@ -139,6 +141,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showMyReports, setShowMyReports] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     reports: true, cabanes: true, feux: true, avertissements: true, travaux: true,
   });
@@ -167,6 +172,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   useEffect(() => {
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!authenticated) { setUnreadCount(0); return; }
+    api.get<number>('/notifications/unread-count').then(setUnreadCount).catch(() => {});
+  }, [authenticated, showNotifications]);
 
   useEffect(() => {
     if (authenticated) {
@@ -443,7 +453,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   return (
     <div className="app-full">
       {showAdmin && <AdminPage onClose={() => setShowAdmin(false)} />}
-      {!showAdmin && <>
+      {showMyReports && !showAdmin && <MyReportsPage onClose={() => setShowMyReports(false)} lang={lang} />}
+      {!showAdmin && !showMyReports && <>
       <div className="map-background">
         <MapView
           center={mapCamera}
@@ -469,6 +480,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               {isModerator && (
                 <button className="icon-btn" title={t('administration', lang)} onClick={() => setShowAdmin(true)}>🛡️</button>
               )}
+              <button className="icon-btn" title={lang === 'fr' ? 'Mes signalements' : 'My reports'} onClick={() => setShowMyReports(true)}>📋</button>
+              <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
+                🔔
+                {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
+              </button>
               <button className="icon-btn" title={t('monProfil', lang)} onClick={() => setShowProfileModal(true)}>👤</button>
             </>
           ) : (
@@ -890,6 +906,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
+      {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} />}
       </>}
     </div>
   );

@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -76,6 +76,52 @@ export class ReportsService {
       .executeTakeFirst();
 
     return { ...report, photos, confirmationsCount: confirmationsCount?.count ?? 0 };
+  }
+
+  /** Édition par l'auteur — seuls certains champs sont modifiables, jamais
+   * le type ou la position (pour éviter les abus, un nouveau signalement
+   * s'impose si l'emplacement était vraiment erroné). */
+  async updateOwn(reportId: string, userId: string, changes: { description?: string; addressText?: string; municipalityNotified?: 'yes' | 'no' | 'unknown'; municipalityName?: string }) {
+    const report = await this.db.selectFrom('reports').select(['user_id']).where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+
+    await this.db
+      .updateTable('reports')
+      .set({
+        ...(changes.description !== undefined && { description: changes.description }),
+        ...(changes.addressText !== undefined && { address_text: changes.addressText }),
+        ...(changes.municipalityNotified !== undefined && { municipality_notified: changes.municipalityNotified }),
+        ...(changes.municipalityName !== undefined && { municipality_name: changes.municipalityName }),
+        updated_at: new Date() as any,
+      })
+      .where('id', '=', reportId)
+      .execute();
+
+    return this.findOne(reportId);
+  }
+
+  async withdrawOwn(reportId: string, userId: string) {
+    const report = await this.db.selectFrom('reports').select(['user_id']).where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+
+    await this.db
+      .updateTable('reports')
+      .set({ status: 'withdrawn', updated_at: new Date() as any })
+      .where('id', '=', reportId)
+      .execute();
+
+    return { withdrawn: true };
+  }
+
+  async deleteOwnPhoto(reportId: string, photoId: string, userId: string) {
+    const report = await this.db.selectFrom('reports').select(['user_id']).where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+
+    await this.db.deleteFrom('report_photos').where('id', '=', photoId).where('report_id', '=', reportId).execute();
+    return { deleted: true };
   }
 
   /**

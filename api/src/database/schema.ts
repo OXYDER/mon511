@@ -80,7 +80,7 @@ export interface ReportsTable {
   gps_accuracy_m: number | null;
   address_text: string | null;
   description: string | null;
-  status: Generated<'pending_moderation' | 'published_unresolved' | 'published_resolved' | 'rejected'>;
+  status: Generated<'pending_moderation' | 'published_unresolved' | 'published_resolved' | 'rejected' | 'withdrawn'>;
   municipality_notified: Generated<'yes' | 'no' | 'unknown'>;
   municipality_name: string | null;
   municipality_case_number: string | null;

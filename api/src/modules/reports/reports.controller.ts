@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, Optional } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, Optional } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { SuggestResolutionDto } from './dto/suggest-resolution.dto';
@@ -57,5 +57,27 @@ export class ReportsController {
     @Body('notes') notes?: string,
   ) {
     return this.reportsService.flag(id, user.userId, reason, notes);
+  }
+
+  @Patch(':id')
+  @UseGuards(JwtAuthGuard)
+  updateOwn(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() changes: { description?: string; addressText?: string; municipalityNotified?: 'yes' | 'no' | 'unknown'; municipalityName?: string },
+  ) {
+    return this.reportsService.updateOwn(id, user.userId, changes);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard)
+  withdrawOwn(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.withdrawOwn(id, user.userId);
+  }
+
+  @Delete(':id/photos/:photoId')
+  @UseGuards(JwtAuthGuard)
+  deleteOwnPhoto(@Param('id') id: string, @Param('photoId') photoId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.deleteOwnPhoto(id, photoId, user.userId);
   }
 }
