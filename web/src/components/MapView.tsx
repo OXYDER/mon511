@@ -36,6 +36,7 @@ interface Props {
     zoom: number,
     bounds: { north: number; south: number; east: number; west: number },
   ) => void;
+  onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
 }
 
 /** Distance approximative en mètres entre deux points (formule haversine). */
@@ -57,7 +58,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -125,6 +126,17 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     });
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
+
+    mapRef.current.on('click', (e) => {
+      // Ignore les clics sur nos propres couches (lignes de conditions/débit) —
+      // elles ont déjà leur propre gestionnaire de clic dédié.
+      if (!onMapClick) return;
+      if (mapRef.current!.getLayer('road-conditions-layer')) {
+        const features = mapRef.current!.queryRenderedFeatures(e.point, { layers: ['road-conditions-layer'] });
+        if (features.length > 0) return;
+      }
+      onMapClick(e.lngLat.lat, e.lngLat.lng, e.point.x, e.point.y);
+    });
 
     mapRef.current.on('moveend', () => {
       if (!mapRef.current || !onViewportChange) return;

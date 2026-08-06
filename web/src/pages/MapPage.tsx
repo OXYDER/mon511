@@ -129,6 +129,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
+  const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
@@ -231,6 +233,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   function handleViewportChange(c: { lat: number; lng: number }, radius: number, zoom: number, bounds: Bounds) {
     setQueryCenter(c);
     setViewBounds(bounds);
+    setContextMenu(null);
     loadNearby(c.lat, c.lng, radius);
     loadOfficialLayer(c.lat, c.lng, radius);
     reverseGeocode(c.lat, c.lng, zoom).then((name) => { if (name) setCurrentAreaName(name); });
@@ -446,6 +449,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           theme={theme}
           onViewportChange={handleViewportChange}
           mapType={mapType}
+          onMapClick={(lat, lng, x, y) => setContextMenu({ lat, lng, x, y })}
         />
       </div>
 
@@ -824,7 +828,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button className="fab" onClick={() => (authenticated ? setShowCreateModal(true) : onRequireAuth())}>
+      <button className="fab" onClick={() => (authenticated ? (setCreateModalCoords(null), setShowCreateModal(true)) : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
         <span>{t('signaler', lang)}</span>
       </button>
@@ -837,9 +841,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       {showCreateModal && (
         <CreateReportModal
-          onClose={() => setShowCreateModal(false)}
+          initialCoords={createModalCoords}
+          onClose={() => { setShowCreateModal(false); setCreateModalCoords(null); }}
           onCreated={() => {
             setShowCreateModal(false);
+            setCreateModalCoords(null);
             if (queryCenter) loadNearby(queryCenter.lat, queryCenter.lng);
           }}
         />
@@ -848,6 +854,36 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showProfileModal && (
         <ProfileModal onClose={() => setShowProfileModal(false)} onLogout={onLogout} />
       )}
+      {contextMenu && (
+        <div
+          onClick={() => setContextMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 45 }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute', left: contextMenu.x, top: contextMenu.y, transform: 'translate(-50%, -110%)',
+              background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 10,
+              boxShadow: 'var(--shadow-panel)', padding: 6,
+            }}
+          >
+            <button
+              className="btn-ghost"
+              style={{ whiteSpace: 'nowrap' }}
+              onClick={() => {
+                const { lat, lng } = contextMenu;
+                setContextMenu(null);
+                if (!authenticated) { onRequireAuth(); return; }
+                setCreateModalCoords({ lat, lng });
+                setShowCreateModal(true);
+              }}
+            >
+              📍 {lang === 'fr' ? 'Signaler ici' : 'Report here'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
       </>}
     </div>

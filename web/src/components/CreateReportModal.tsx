@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { reverseGeocodeAddress, snapToRoad } from '../geocoding';
+import { reverseGeocodeAddress, snapToRoad, searchCities, GeocodingResult } from '../geocoding';
 
 interface ProblemType {
   id: string;
@@ -11,9 +11,10 @@ interface ProblemType {
 interface Props {
   onClose: () => void;
   onCreated: () => void;
+  initialCoords?: { lat: number; lng: number } | null;
 }
 
-export default function CreateReportModal({ onClose, onCreated }: Props) {
+export default function CreateReportModal({ onClose, onCreated, initialCoords }: Props) {
   const [types, setTypes] = useState<ProblemType[]>([]);
   const [typeId, setTypeId] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -21,6 +22,8 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
   const [addressAutoFilled, setAddressAutoFilled] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [snappedToRoad, setSnappedToRoad] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
   const [municipalityNotified, setMunicipalityNotified] = useState<'yes' | 'no' | 'unknown'>('unknown');
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
@@ -39,6 +42,43 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
       if (data[0]) setTypeId(data[0].id);
     });
   }, []);
+
+  // Coordonnées venant d'un clic direct sur la carte — collées sur la route
+  // et l'adresse auto-remplie, comme pour la géolocalisation.
+  useEffect(() => {
+    if (!initialCoords) return;
+    (async () => {
+      const { lat, lng, snapped } = await snapToRoad(initialCoords.lat, initialCoords.lng);
+      setCoords({ lat, lng, accuracy: 15 });
+      setSnappedToRoad(snapped);
+      const address = await reverseGeocodeAddress(lat, lng);
+      if (address) { setAddressText(address); setAddressAutoFilled(true); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Suggestions d'adresse pendant la frappe manuelle — n'écrase pas les
+  // coordonnées tant que rien n'est choisi dans la liste.
+  useEffect(() => {
+    if (addressAutoFilled || !addressText.trim() || addressText.trim().length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      searchCities(addressText, 5).then(setAddressSuggestions);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [addressText, addressAutoFilled]);
+
+  async function selectAddressSuggestion(result: GeocodingResult) {
+    const { lat, lng, snapped } = await snapToRoad(result.lat, result.lng);
+    setCoords({ lat, lng, accuracy: 15 });
+    setSnappedToRoad(snapped);
+    setAddressText(result.name);
+    setAddressAutoFilled(true);
+    setShowAddressDropdown(false);
+    setAddressSuggestions([]);
+  }
 
   async function locate() {
     if (!navigator.geolocation) return;
@@ -212,14 +252,16 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
               )}
             </div>
 
-            <div className="field-group">
+            <div className="field-group" style={{ position: 'relative' }}>
               <label className="field-label">Localisation</label>
               <div className="geo-btn-row">
                 <input
                   className="text-input"
                   placeholder="Adresse ou repère"
                   value={addressText}
-                  onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); }}
+                  onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); setShowAddressDropdown(true); }}
+                  onFocus={() => setShowAddressDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
                 />
                 <button
                   type="button"
@@ -232,6 +274,15 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
                   {locating ? '⏳' : '🎯'}
                 </button>
               </div>
+              {showAddressDropdown && addressSuggestions.length > 0 && (
+                <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 44 + 8, zIndex: 10 }}>
+                  {addressSuggestions.map((s) => (
+                    <div key={s.name} className="search-dropdown-item" onClick={() => selectAddressSuggestion(s)}>
+                      <span>📍</span><span>{s.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {coords && (
                 <div className="geo-status ok">
                   Position précise capturée — précision ±{Math.round(coords.accuracy)} m
