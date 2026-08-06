@@ -296,6 +296,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   100% { transform: scale(1.6); opacity: 0; }
 }
 
+/* ---------- BULLE DE VIGNETTE AU SURVOL D'UN PIN ---------- */
+.pin-thumb-popup .maplibregl-popup-content {
+  background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 10px;
+  padding: 4px; box-shadow: var(--shadow-panel);
+}
+.pin-thumb-popup .maplibregl-popup-tip { border-top-color: var(--panel-solid); }
+
 /* ---------- BARRES DE DÉFILEMENT ---------- */
 * { scrollbar-width: thin; scrollbar-color: var(--accent-signal) transparent; }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -343,6 +350,18 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 }
 .filters-panel-float .report-list-scroll {
   overflow-y: auto; flex: 1; margin: 0 -18px 8px; padding: 0 18px 8px; max-height: 420px;
+  min-height: 0;
+}
+
+.list-section { margin-bottom: 4px; }
+.list-section-header {
+  width: 100%; display: flex; justify-content: space-between; align-items: center;
+  background: none; border: none; color: var(--text-primary); cursor: pointer;
+  padding: 8px 2px; font-size: 12px; font-weight: 600; font-family: var(--font-body);
+}
+.list-section-count {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted);
+  background: var(--panel-hover); border-radius: 10px; padding: 1px 8px;
 }
 
 .detail-panel-float {
@@ -409,10 +428,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 /* Panneau flottant responsive : sur petit écran, prend toute la largeur en bas */
 @media (max-width: 760px) {
   .filters-panel-float, .detail-panel-float {
-    left: 12px; right: 12px; width: auto; top: auto; bottom: 90px; max-height: 45vh;
+    left: 12px; right: 12px; width: auto; top: auto; bottom: 90px; max-height: 55vh;
+    display: flex; flex-direction: column;
   }
   .filters-panel-float.collapsed { max-height: 54px; }
+  .filters-panel-float .report-list-scroll { max-height: none; flex: 1 1 auto; min-height: 0; }
   .detail-panel-float { display: none; }
-  .detail-panel-float.mobile-visible { display: block; }
+  .detail-panel-float.mobile-visible { display: flex; }
   .filters-panel-float.mobile-hidden { display: none; }
 }

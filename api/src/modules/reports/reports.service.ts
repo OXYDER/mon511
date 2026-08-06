@@ -33,6 +33,7 @@ export class ReportsService {
         'problem_types.icon as problemTypeIcon',
         sql<number>`ST_X(reports.location::geometry)`.as('longitude'),
         sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
       ])
       .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
       .where(

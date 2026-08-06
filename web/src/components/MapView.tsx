@@ -9,6 +9,7 @@ export interface MapPin {
   icon: string;
   colorVar: 'unresolved' | 'resolved' | 'official';
   onClick?: () => void;
+  photoUrl?: string | null;
 }
 
 export interface RoadLineFeature {
@@ -174,6 +175,13 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       el.style.fontSize = '14px';
       el.textContent = pin.icon;
       if (pin.onClick) el.addEventListener('click', pin.onClick);
+
+      if (pin.photoUrl) {
+        const popup = new maplibregl.Popup({ offset: 20, closeButton: false, closeOnClick: false, className: 'pin-thumb-popup' })
+          .setHTML(`<img src="${pin.photoUrl}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`);
+        el.addEventListener('mouseenter', () => popup.setLngLat([pin.longitude, pin.latitude]).addTo(mapRef.current!));
+        el.addEventListener('mouseleave', () => popup.remove());
+      }
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([pin.longitude, pin.latitude])

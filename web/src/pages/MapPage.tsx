@@ -20,6 +20,7 @@ interface Report {
   problemTypeIcon: string | null;
   latitude: number;
   longitude: number;
+  thumbnailUrl?: string | null;
 }
 
 interface ExternalIncident {
@@ -131,6 +132,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [panelView, setPanelView] = useState<PanelView>('list');
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    reports: true, cabanes: true, feux: true, avertissements: true, travaux: true,
+  });
+  function toggleSection(key: string) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
   const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   const [searchText, setSearchText] = useState('');
@@ -348,6 +355,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     icon: r.problemTypeIcon ?? '📍',
     colorVar: r.status === 'published_resolved' ? 'resolved' : 'unresolved',
     onClick: () => openReport(r),
+    photoUrl: r.thumbnailUrl,
   }));
 
   const officialPins: MapPin[] = [
@@ -638,72 +646,113 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
             )}
 
-            {visibleCabanes.map((inc) => (
-              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
-                <div className="rc-icon-hex official">🍁</div>
-                <div className="rc-body">
-                  <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                  <div className="rc-meta">{inc.sucreMunicipalite ?? 'Cabane à sucre'}</div>
-                </div>
-              </div>
-            ))}
-
-            {visibleFeux.map((inc) => (
-              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
-                <div className="rc-icon-hex official">🔥</div>
-                <div className="rc-body">
-                  <div className="rc-title">{inc.feuMunicipalite ?? inc.title ?? inc.sourceName}</div>
-                  <div className="rc-meta">{inc.superficieHa ? `${inc.superficieHa} ha` : 'SOPFEU'}</div>
-                </div>
-                <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--status-danger)' }}>
-                  {FEU_CONDITION_LABELS[inc.feuCondition ?? ''] ?? (lang === 'fr' ? 'Actif' : 'Active')}
-                </span>
-              </div>
-            ))}
-
-            {visibleAvertissements.map((inc) => (
-              <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
-                <div className="rc-icon-hex official">⚠️</div>
-                <div className="rc-body">
-                  <div className="rc-title">{inc.municipalite ?? inc.title ?? inc.sourceName}</div>
-                  <div className="rc-meta">{inc.title ?? ''}</div>
-                </div>
-                <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--official-blue)' }}>
-                  {lang === 'fr' ? 'Actif' : 'Active'}
-                </span>
-              </div>
-            ))}
-
-            {visibleTravaux.map((inc) => {
-              const status = travauxStatus(inc.debut, inc.fin, lang);
-              return (
-                <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
-                  <div className="rc-icon-hex official">🚧</div>
-                  <div className="rc-body">
-                    <div className="rc-title">{inc.title ?? inc.sourceName}</div>
-                    <div className="rc-meta">{formatMtmdDate(inc.debut, lang)} → {formatMtmdDate(inc.fin, lang)}</div>
+            {/* Signalements communautaires — priorité au but premier de l'app */}
+            {filteredReports.length > 0 && (
+              <div className="list-section">
+                <button className="list-section-header" onClick={() => toggleSection('reports')}>
+                  <span>{openSections.reports ? '▾' : '▸'} {lang === 'fr' ? 'Signalements' : 'Reports'}</span>
+                  <span className="list-section-count">{filteredReports.length}</span>
+                </button>
+                {openSections.reports && filteredReports.map((r) => (
+                  <div key={r.id} className="report-card" onClick={() => openReport(r)}>
+                    <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                      {r.problemTypeIcon ?? '📍'}
+                    </div>
+                    <div className="rc-body">
+                      <div className="rc-title">{r.problemTypeNameFr}</div>
+                      <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
+                    </div>
+                    <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
+                      {r.status === 'published_resolved' ? t('resolu', lang) : t('nonResolu', lang)}
+                    </span>
                   </div>
-                  <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: status.color }}>
-                    {status.label}
-                  </span>
-                </div>
-              );
-            })}
-
-            {filteredReports.map((r) => (
-              <div key={r.id} className="report-card" onClick={() => openReport(r)}>
-                <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                  {r.problemTypeIcon ?? '📍'}
-                </div>
-                <div className="rc-body">
-                  <div className="rc-title">{r.problemTypeNameFr}</div>
-                  <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
-                </div>
-                <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
-                  {r.status === 'published_resolved' ? t('resolu', lang) : t('nonResolu', lang)}
-                </span>
+                ))}
               </div>
-            ))}
+            )}
+
+            {visibleCabanes.length > 0 && (
+              <div className="list-section">
+                <button className="list-section-header" onClick={() => toggleSection('cabanes')}>
+                  <span>{openSections.cabanes ? '▾' : '▸'} 🍁 {lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</span>
+                  <span className="list-section-count">{visibleCabanes.length}</span>
+                </button>
+                {openSections.cabanes && visibleCabanes.map((inc) => (
+                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                    <div className="rc-icon-hex official">🍁</div>
+                    <div className="rc-body">
+                      <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                      <div className="rc-meta">{inc.sucreMunicipalite ?? 'Cabane à sucre'}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {visibleFeux.length > 0 && (
+              <div className="list-section">
+                <button className="list-section-header" onClick={() => toggleSection('feux')}>
+                  <span>{openSections.feux ? '▾' : '▸'} 🔥 {lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</span>
+                  <span className="list-section-count">{visibleFeux.length}</span>
+                </button>
+                {openSections.feux && visibleFeux.map((inc) => (
+                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                    <div className="rc-icon-hex official">🔥</div>
+                    <div className="rc-body">
+                      <div className="rc-title">{inc.feuMunicipalite ?? inc.title ?? inc.sourceName}</div>
+                      <div className="rc-meta">{inc.superficieHa ? `${inc.superficieHa} ha` : 'SOPFEU'}</div>
+                    </div>
+                    <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--status-danger)' }}>
+                      {FEU_CONDITION_LABELS[inc.feuCondition ?? ''] ?? (lang === 'fr' ? 'Actif' : 'Active')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {visibleAvertissements.length > 0 && (
+              <div className="list-section">
+                <button className="list-section-header" onClick={() => toggleSection('avertissements')}>
+                  <span>{openSections.avertissements ? '▾' : '▸'} ⚠️ {lang === 'fr' ? 'Avertissements' : 'Advisories'}</span>
+                  <span className="list-section-count">{visibleAvertissements.length}</span>
+                </button>
+                {openSections.avertissements && visibleAvertissements.map((inc) => (
+                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                    <div className="rc-icon-hex official">⚠️</div>
+                    <div className="rc-body">
+                      <div className="rc-title">{inc.municipalite ?? inc.title ?? inc.sourceName}</div>
+                      <div className="rc-meta">{inc.title ?? ''}</div>
+                    </div>
+                    <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--official-blue)' }}>
+                      {lang === 'fr' ? 'Actif' : 'Active'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {visibleTravaux.length > 0 && (
+              <div className="list-section">
+                <button className="list-section-header" onClick={() => toggleSection('travaux')}>
+                  <span>{openSections.travaux ? '▾' : '▸'} 🚧 {t('travauxRoutiers', lang)}</span>
+                  <span className="list-section-count">{visibleTravaux.length}</span>
+                </button>
+                {openSections.travaux && visibleTravaux.map((inc) => {
+                  const status = travauxStatus(inc.debut, inc.fin, lang);
+                  return (
+                    <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                      <div className="rc-icon-hex official">🚧</div>
+                      <div className="rc-body">
+                        <div className="rc-title">{inc.title ?? inc.sourceName}</div>
+                        <div className="rc-meta">{formatMtmdDate(inc.debut, lang)} → {formatMtmdDate(inc.fin, lang)}</div>
+                      </div>
+                      <span className="pill" style={{ background: 'rgba(255,255,255,0.08)', color: status.color }}>
+                        {status.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </aside>
