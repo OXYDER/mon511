@@ -580,7 +580,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   <span className="list-section-count">{filteredReports.length}</span>
                 </button>
                 {openSections.reports && filteredReports.map((r) => (
-                  <div key={r.id} className="report-card" onClick={() => openReport(r)}>
+                  <div
+                    key={r.id}
+                    className="report-card"
+                    style={{ borderColor: selection?.type === 'report' && selection.id === r.id ? 'var(--accent-signal)' : undefined }}
+                    onClick={() => openReport(r)}
+                  >
                     <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
                       {r.problemTypeIcon ?? '📍'}
                     </div>
@@ -603,7 +608,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   <span className="list-section-count">{visibleCabanes.length}</span>
                 </button>
                 {openSections.cabanes && visibleCabanes.map((inc) => (
-                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                  <div
+                    key={inc.id}
+                    className="report-card"
+                    style={{ borderColor: selection?.type === 'external' && selection.id === inc.id ? 'var(--accent-signal)' : undefined }}
+                    onClick={() => openExternal(inc)}
+                  >
                     <div className="rc-icon-hex official">🍁</div>
                     <div className="rc-body">
                       <div className="rc-title">{inc.title ?? inc.sourceName}</div>
@@ -621,7 +631,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   <span className="list-section-count">{visibleFeux.length}</span>
                 </button>
                 {openSections.feux && visibleFeux.map((inc) => (
-                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                  <div
+                    key={inc.id}
+                    className="report-card"
+                    style={{ borderColor: selection?.type === 'external' && selection.id === inc.id ? 'var(--accent-signal)' : undefined }}
+                    onClick={() => openExternal(inc)}
+                  >
                     <div className="rc-icon-hex official">🔥</div>
                     <div className="rc-body">
                       <div className="rc-title">{inc.feuMunicipalite ?? inc.title ?? inc.sourceName}</div>
@@ -642,7 +657,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   <span className="list-section-count">{visibleAvertissements.length}</span>
                 </button>
                 {openSections.avertissements && visibleAvertissements.map((inc) => (
-                  <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                  <div
+                    key={inc.id}
+                    className="report-card"
+                    style={{ borderColor: selection?.type === 'external' && selection.id === inc.id ? 'var(--accent-signal)' : undefined }}
+                    onClick={() => openExternal(inc)}
+                  >
                     <div className="rc-icon-hex official">⚠️</div>
                     <div className="rc-body">
                       <div className="rc-title">{inc.municipalite ?? inc.title ?? inc.sourceName}</div>
@@ -665,7 +685,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 {openSections.travaux && visibleTravaux.map((inc) => {
                   const status = travauxStatus(inc.debut, inc.fin, lang);
                   return (
-                    <div key={inc.id} className="report-card" onClick={() => openExternal(inc)}>
+                    <div
+                    key={inc.id}
+                    className="report-card"
+                    style={{ borderColor: selection?.type === 'external' && selection.id === inc.id ? 'var(--accent-signal)' : undefined }}
+                    onClick={() => openExternal(inc)}
+                  >
                       <div className="rc-icon-hex official">🚧</div>
                       <div className="rc-body">
                         <div className="rc-title">{inc.title ?? inc.sourceName}</div>
