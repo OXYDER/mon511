@@ -38,6 +38,7 @@ interface Props {
     bounds: { north: number; south: number; east: number; west: number },
   ) => void;
   onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
+  focusPinId?: string | null;
 }
 
 /** Distance approximative en mètres entre deux points (formule haversine). */
@@ -59,7 +60,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, focusPinId = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -387,6 +388,17 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
 
     if (map.isStyleLoaded()) ensureSpiderfyLinesLayer();
   }, [pins, clusterVersion, spiderfiedClusterId]);
+
+  // Sélectionner un pin depuis l'extérieur (ex. clic dans la liste plutôt
+  // que sur la carte) doit aussi déployer le groupe en éventail si ce pin
+  // en fait partie — sinon il reste invisible, caché dans un groupe fermé.
+  useEffect(() => {
+    if (!mapRef.current || !focusPinId) return;
+    const clusters = clusterPins(pins, mapRef.current);
+    const owningCluster = clusters.find((c) => c.pins.length > 1 && c.pins.some((p) => p.id === focusPinId));
+    if (owningCluster) setSpiderfiedClusterId(owningCluster.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusPinId, clusterVersion, pins]);
 
   // Point "vous êtes ici" — marqueur dédié, distinct des pins de signalement
   useEffect(() => {

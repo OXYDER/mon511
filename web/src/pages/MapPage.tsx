@@ -466,6 +466,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onViewportChange={handleViewportChange}
           mapType={mapType}
           onMapClick={(lat, lng, x, y) => setContextMenu({ lat, lng, x, y })}
+          focusPinId={selection?.id ?? null}
         />
       </div>
 
