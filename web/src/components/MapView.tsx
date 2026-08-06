@@ -164,8 +164,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       el.style.width = '32px';
       el.style.height = '32px';
       el.style.cursor = pin.onClick ? 'pointer' : 'default';
-      el.style.clipPath = 'polygon(50% 0%, 100% 27%, 100% 73%, 50% 100%, 0% 73%, 0% 27%)';
+      el.style.borderRadius = '50%';
       el.style.background = '#1B1E25';
+      el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
       el.style.border = `2.5px solid ${PIN_COLORS[pin.colorVar]}`;
       el.style.display = 'flex';
       el.style.alignItems = 'center';

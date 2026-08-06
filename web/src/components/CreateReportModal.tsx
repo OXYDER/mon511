@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { reverseGeocodeAddress } from '../geocoding';
 
 interface ProblemType {
   id: string;
@@ -17,12 +18,19 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
   const [typeId, setTypeId] = useState<string>('');
   const [description, setDescription] = useState('');
   const [addressText, setAddressText] = useState('');
+  const [addressAutoFilled, setAddressAutoFilled] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [municipalityNotified, setMunicipalityNotified] = useState<'yes' | 'no' | 'unknown'>('unknown');
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifCoords: { lat: number; lng: number } } | null>(null);
+  const [checkingExif, setCheckingExif] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     api.get<any[]>('/problem-types').then((data) => {
@@ -31,17 +39,65 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
     });
   }, []);
 
-  function locate() {
+  async function locate() {
     if (!navigator.geolocation) return;
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+      async (pos) => {
+        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        setCoords(c);
         setLocating(false);
+        // Adresse la plus proche auto-remplie, sans écraser une saisie manuelle existante.
+        if (!addressText) {
+          const address = await reverseGeocodeAddress(c.lat, c.lng);
+          if (address) { setAddressText(address); setAddressAutoFilled(true); }
+        }
       },
       () => setLocating(false),
       { enableHighAccuracy: true, timeout: 10000 },
     );
+  }
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
+    setExifMismatch(null);
+
+    // Lecture des coordonnées GPS EXIF de la photo, pour proposer une
+    // contre-vérification si elles ne correspondent pas à la position
+    // détectée par le navigateur.
+    setCheckingExif(true);
+    try {
+      const exifr = (await import('exifr')).default;
+      const gps = await exifr.gps(file);
+      if (gps?.latitude && gps?.longitude) {
+        const exifAddress = await reverseGeocodeAddress(gps.latitude, gps.longitude);
+        if (exifAddress && coords) {
+          // Écart significatif (~500m+) entre la photo et la position détectée.
+          const distance = haversine(coords.lat, coords.lng, gps.latitude, gps.longitude);
+          if (distance > 500) {
+            setExifMismatch({ exifAddress, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+          }
+        } else if (exifAddress && !coords) {
+          // Aucune position détectée encore — propose directement celle de la photo.
+          setExifMismatch({ exifAddress, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+        }
+      }
+    } catch {
+      // Pas de GPS dans l'EXIF ou format non lisible — pas grave, on continue sans.
+    } finally {
+      setCheckingExif(false);
+    }
+  }
+
+  function useExifLocation() {
+    if (!exifMismatch) return;
+    setCoords({ lat: exifMismatch.exifCoords.lat, lng: exifMismatch.exifCoords.lng, accuracy: 15 });
+    setAddressText(exifMismatch.exifAddress);
+    setAddressAutoFilled(true);
+    setExifMismatch(null);
   }
 
   async function submit(e: React.FormEvent) {
@@ -53,7 +109,7 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await api.post('/reports', {
+      const report = await api.post<{ id: string }>('/reports', {
         problemTypeId: typeId,
         latitude: coords.lat,
         longitude: coords.lng,
@@ -63,6 +119,15 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
         municipalityNotified,
         municipalityName: municipalityNotified === 'yes' ? municipalityName || undefined : undefined,
       });
+
+      if (photoFile && report?.id) {
+        const formData = new FormData();
+        formData.append('file', photoFile);
+        await api.post(`/reports/${report.id}/photos`, formData).catch(() => {
+          // Le signalement est déjà créé — un échec d'upload ne doit pas bloquer l'usager.
+        });
+      }
+
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
@@ -99,9 +164,54 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
             </div>
 
             <div className="field-group">
+              <label className="field-label">Photo (optionnel)</label>
+              {!photoPreview ? (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    border: '1.5px dashed var(--panel-border)', borderRadius: 10, padding: '20px 10px',
+                    textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+                  }}
+                >
+                  📷 Ajouter une photo
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <img src={photoPreview} alt="Aperçu" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 10 }} />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={() => { setPhotoFile(null); setPhotoPreview(null); setExifMismatch(null); }}
+                    style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, fontSize: 12 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: 'none' }} />
+              {checkingExif && <div className="geo-status">Vérification de la position de la photo...</div>}
+              {exifMismatch && (
+                <div style={{ marginTop: 8, padding: 10, borderRadius: 9, background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)' }}>
+                  <div style={{ fontSize: 11.5, marginBottom: 8, lineHeight: 1.5 }}>
+                    📍 Cette photo semble avoir été prise à <strong>{exifMismatch.exifAddress}</strong>, différent de la position détectée. Utiliser l'emplacement de la photo ?
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" className="btn-ghost" onClick={useExifLocation} style={{ flex: 1 }}>Utiliser celle-ci</button>
+                    <button type="button" className="btn-ghost" onClick={() => setExifMismatch(null)} style={{ flex: 1 }}>Garder l'actuelle</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="field-group">
               <label className="field-label">Localisation</label>
               <div className="geo-btn-row">
-                <input className="text-input" placeholder="Adresse ou repère" value={addressText} onChange={(e) => setAddressText(e.target.value)} />
+                <input
+                  className="text-input"
+                  placeholder="Adresse ou repère"
+                  value={addressText}
+                  onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); }}
+                />
                 <button
                   type="button"
                   className="btn-ghost"
@@ -116,6 +226,7 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
               {coords && (
                 <div className="geo-status ok">
                   Position précise capturée — précision ±{Math.round(coords.accuracy)} m
+                  {addressAutoFilled && ' · adresse détectée automatiquement'}
                 </div>
               )}
             </div>
@@ -154,4 +265,13 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
       </div>
     </div>
   );
+}
+
+/** Distance approximative en mètres entre deux points (haversine). */
+function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
 }
