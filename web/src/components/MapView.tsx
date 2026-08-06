@@ -12,6 +12,8 @@ export interface MapPin {
   photoUrl?: string | null;
 }
 
+export type MapType = 'default' | 'satellite';
+
 export interface RoadLineFeature {
   id: string;
   geometry: any;
@@ -20,14 +22,20 @@ export interface RoadLineFeature {
 }
 
 interface Props {
-  center: { lat: number; lng: number } | null;
+  center: { lat: number; lng: number; zoom?: number } | null;
   pins: MapPin[];
   lines?: RoadLineFeature[];
   userLocation?: { lat: number; lng: number } | null;
   height?: number | string;
   fullBleed?: boolean;
   theme?: 'dark' | 'light';
-  onViewportChange?: (center: { lat: number; lng: number }, radiusMeters: number, zoom: number) => void;
+  mapType?: MapType;
+  onViewportChange?: (
+    center: { lat: number; lng: number },
+    radiusMeters: number,
+    zoom: number,
+    bounds: { north: number; south: number; east: number; west: number },
+  ) => void;
 }
 
 /** Distance approximative en mètres entre deux points (formule haversine). */
@@ -49,7 +57,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', onViewportChange }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -98,8 +106,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     }
   }
 
-  function styleUrlFor(t: 'dark' | 'light') {
+  function styleUrlFor(t: 'dark' | 'light', type: MapType) {
     if (!MAPTILER_KEY) return 'https://demotiles.maplibre.org/style.json';
+    if (type === 'satellite') return `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`;
     const styleName = t === 'dark' ? 'streets-v2-dark' : 'streets-v2-light';
     return `https://api.maptiler.com/maps/${styleName}/style.json?key=${MAPTILER_KEY}`;
   }
@@ -110,7 +119,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
 
     mapRef.current = new maplibregl.Map({
       container: containerRef.current,
-      style: styleUrlFor(theme),
+      style: styleUrlFor(theme, mapType),
       center: center ? [center.lng, center.lat] : [-71.8929, 45.4042],
       zoom: 12,
     });
@@ -126,7 +135,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         const bounds = mapRef.current.getBounds();
         const centerPoint = { lat: c.lat, lng: c.lng };
         const radius = haversineDistance(centerPoint, { lat: bounds.getNorth(), lng: bounds.getEast() });
-        onViewportChange(centerPoint, Math.max(radius, 500), mapRef.current.getZoom());
+        onViewportChange(centerPoint, Math.max(radius, 500), mapRef.current.getZoom(), {
+          north: bounds.getNorth(), south: bounds.getSouth(), east: bounds.getEast(), west: bounds.getWest(),
+        });
       }, 400);
     });
 
@@ -138,18 +149,18 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Changer le style de tuiles quand le thème change, sans recréer la carte
+  // Changer le style de tuiles quand le thème ou le type de carte change, sans recréer la carte
   useEffect(() => {
     if (mapRef.current) {
-      mapRef.current.setStyle(styleUrlFor(theme));
+      mapRef.current.setStyle(styleUrlFor(theme, mapType));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme]);
+  }, [theme, mapType]);
 
   // Recentrer quand la position change
   useEffect(() => {
     if (mapRef.current && center) {
-      mapRef.current.flyTo({ center: [center.lng, center.lat], zoom: 13, duration: 800 });
+      mapRef.current.flyTo({ center: [center.lng, center.lat], zoom: center.zoom ?? 13, duration: 800 });
     }
   }, [center]);
 

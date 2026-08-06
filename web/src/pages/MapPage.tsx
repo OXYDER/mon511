@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang } from '../i18n';
 import { searchCities, reverseGeocode, GeocodingResult } from '../geocoding';
-import MapView, { MapPin, RoadLineFeature } from '../components/MapView';
+import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
 import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
@@ -125,13 +125,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [queryCenter, setQueryCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [panelView, setPanelView] = useState<PanelView>('list');
+  const [mapType, setMapType] = useState<MapType>('default');
+  const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
+  const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     reports: true, cabanes: true, feux: true, avertissements: true, travaux: true,
   });
@@ -205,11 +208,20 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }
 
-  function handleViewportChange(c: { lat: number; lng: number }, radius: number, zoom: number) {
+  type Bounds = { north: number; south: number; east: number; west: number };
+  const [viewBounds, setViewBounds] = useState<Bounds | null>(null);
+
+  function handleViewportChange(c: { lat: number; lng: number }, radius: number, zoom: number, bounds: Bounds) {
     setQueryCenter(c);
+    setViewBounds(bounds);
     loadNearby(c.lat, c.lng, radius);
     loadOfficialLayer(c.lat, c.lng, radius);
     reverseGeocode(c.lat, c.lng, zoom).then((name) => { if (name) setCurrentAreaName(name); });
+  }
+
+  function withinBounds(lat: number, lng: number): boolean {
+    if (!viewBounds) return true;
+    return lat <= viewBounds.north && lat >= viewBounds.south && lng <= viewBounds.east && lng >= viewBounds.west;
   }
 
   function locateAndLoad() {
@@ -284,12 +296,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   function openReport(r: Report) {
     setSelection({ type: 'report', id: r.id });
-    setMapCamera({ lat: r.latitude, lng: r.longitude });
+    setMapCamera({ lat: r.latitude, lng: r.longitude, zoom: 17 });
   }
 
   function openExternal(inc: ExternalIncident) {
     setSelection({ type: 'external', id: inc.id });
-    setMapCamera({ lat: inc.latitude, lng: inc.longitude });
+    setMapCamera({ lat: inc.latitude, lng: inc.longitude, zoom: 17 });
   }
 
   function toggleTypeFilter(id: string) {
@@ -310,16 +322,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     : [];
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
+      if (!withinBounds(r.latitude, r.longitude)) return false;
       if (filterTypeIds.size > 0 && r.problemTypeId && !filterTypeIds.has(r.problemTypeId)) return false;
       if (filterStatus === 'unresolved' && r.status === 'published_resolved') return false;
       if (filterStatus === 'resolved' && r.status !== 'published_resolved') return false;
       if (searchLower && !`${r.problemTypeNameFr} ${r.addressText ?? ''} ${r.description ?? ''}`.toLowerCase().includes(searchLower)) return false;
       return true;
     });
-  }, [reports, filterTypeIds, filterStatus, searchLower]);
+  }, [reports, filterTypeIds, filterStatus, searchLower, viewBounds]);
 
   const visibleTravauxAll = externalIncidents.filter(
-    (inc) => inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers,
+    (inc) => inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers && withinBounds(inc.latitude, inc.longitude),
   );
   const visibleTravaux = searchLower
     ? visibleTravauxAll.filter((inc) => `${inc.title ?? ''}`.toLowerCase().includes(searchLower))
@@ -330,7 +343,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   );
 
   const visibleAvertissementsAll = externalIncidents.filter(
-    (inc) => inc.feedKey === 'mtmd_avertissements' && layerPrefs.avertissements,
+    (inc) => inc.feedKey === 'mtmd_avertissements' && layerPrefs.avertissements && withinBounds(inc.latitude, inc.longitude),
   );
   const visibleAvertissements = searchLower
     ? visibleAvertissementsAll.filter((inc) => `${inc.title ?? ''} ${inc.municipalite ?? ''}`.toLowerCase().includes(searchLower))
@@ -341,11 +354,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   );
 
   const visibleFeux = externalIncidents.filter(
-    (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret,
+    (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret && withinBounds(inc.latitude, inc.longitude),
   );
 
   const visibleCabanes = externalIncidents.filter(
-    (inc) => inc.feedKey === 'sit_agrotourisme' && layerPrefs.cabanes_a_sucre,
+    (inc) => inc.feedKey === 'sit_agrotourisme' && layerPrefs.cabanes_a_sucre && withinBounds(inc.latitude, inc.longitude),
   );
 
   const reportPins: MapPin[] = filteredReports.map((r) => ({
@@ -416,6 +429,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           fullBleed
           theme={theme}
           onViewportChange={handleViewportChange}
+          mapType={mapType}
         />
       </div>
 
@@ -528,31 +542,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           >
             🗺️
           </button>
-        </div>
-
-        <div className="layer-toggle" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
-          <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
-        </div>
-        <div className="layer-toggle" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>⚠️ {lang === 'fr' ? 'Avertissements' : 'Advisories'}</span>
-          <ToggleSwitch on={layerPrefs.avertissements} onToggle={() => toggleLayer('avertissements')} />
-        </div>
-        <div className="layer-toggle" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>❄️ {t('conditionsRoutieres', lang)}</span>
-          <ToggleSwitch on={layerPrefs.conditions_hivernales} onToggle={() => toggleLayer('conditions_hivernales')} />
-        </div>
-        <div className="layer-toggle" style={{ marginBottom: 14 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚗 {lang === 'fr' ? 'Débit de circulation' : 'Traffic volume'}</span>
-          <ToggleSwitch on={layerPrefs.debit_circulation} onToggle={() => toggleLayer('debit_circulation')} />
-        </div>
-        <div className="layer-toggle" style={{ marginBottom: 8 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔥 {lang === 'fr' ? 'Feux de forêt (SOPFEU)' : 'Forest fires (SOPFEU)'}</span>
-          <ToggleSwitch on={layerPrefs.feux_foret} onToggle={() => toggleLayer('feux_foret')} />
-        </div>
-        <div className="layer-toggle" style={{ marginBottom: 14 }}>
-          <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🍁 {lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</span>
-          <ToggleSwitch on={layerPrefs.cabanes_a_sucre} onToggle={() => toggleLayer('cabanes_a_sucre')} />
         </div>
 
         {error && <div className="error-banner">{error}</div>}
@@ -773,6 +762,68 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <button className="locate-btn-float" onClick={locateAndLoad} disabled={locating} title={t('localiser', lang)}>
         {locating ? '⏳' : '🎯'}
       </button>
+
+      <button
+        className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
+        style={{ bottom: 152 }}
+        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); }}
+        title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
+      >
+        🗂️
+      </button>
+      {showMapDetailsMenu && (
+        <div className="map-menu-panel" style={{ bottom: 152 }}>
+          <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
+            <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>⚠️ {lang === 'fr' ? 'Avertissements' : 'Advisories'}</span>
+            <ToggleSwitch on={layerPrefs.avertissements} onToggle={() => toggleLayer('avertissements')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>❄️ {t('conditionsRoutieres', lang)}</span>
+            <ToggleSwitch on={layerPrefs.conditions_hivernales} onToggle={() => toggleLayer('conditions_hivernales')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚗 {lang === 'fr' ? 'Débit de circulation' : 'Traffic volume'}</span>
+            <ToggleSwitch on={layerPrefs.debit_circulation} onToggle={() => toggleLayer('debit_circulation')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔥 {lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</span>
+            <ToggleSwitch on={layerPrefs.feux_foret} onToggle={() => toggleLayer('feux_foret')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 0 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🍁 {lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</span>
+            <ToggleSwitch on={layerPrefs.cabanes_a_sucre} onToggle={() => toggleLayer('cabanes_a_sucre')} />
+          </div>
+        </div>
+      )}
+
+      <button
+        className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
+        style={{ bottom: 208 }}
+        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); }}
+        title={lang === 'fr' ? 'Type de carte' : 'Map type'}
+      >
+        🗺️
+      </button>
+      {showMapTypeMenu && (
+        <div className="map-menu-panel" style={{ bottom: 208 }}>
+          <h3>{lang === 'fr' ? 'Type de carte' : 'Map type'}</h3>
+          <div className="map-type-grid">
+            <div className={`map-type-option ${mapType === 'default' ? 'active' : ''}`} onClick={() => setMapType('default')}>
+              <span className="mt-icon">🗺️</span>
+              <span>{lang === 'fr' ? 'Par défaut' : 'Default'}</span>
+            </div>
+            <div className={`map-type-option ${mapType === 'satellite' ? 'active' : ''}`} onClick={() => setMapType('satellite')}>
+              <span className="mt-icon">🛰️</span>
+              <span>{lang === 'fr' ? 'Satellite' : 'Satellite'}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <button className="fab" onClick={() => (authenticated ? setShowCreateModal(true) : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
