@@ -388,24 +388,29 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     colorVar: r.status === 'published_resolved' ? 'resolved' : 'unresolved',
     onClick: () => openReport(r),
     photoUrl: r.thumbnailUrl,
+    selected: selection?.type === 'report' && selection.id === r.id,
   }));
 
   const officialPins: MapPin[] = [
     ...visibleTravaux.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '🚧', colorVar: 'official' as const, onClick: () => openExternal(inc),
+      selected: selection?.type === 'external' && selection.id === inc.id,
     })),
     ...visibleAvertissements.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '⚠️', colorVar: 'official' as const, onClick: () => openExternal(inc),
+      selected: selection?.type === 'external' && selection.id === inc.id,
     })),
     ...visibleFeux.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '🔥', colorVar: 'official' as const, onClick: () => openExternal(inc),
+      selected: selection?.type === 'external' && selection.id === inc.id,
     })),
     ...visibleCabanes.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '🍁', colorVar: 'official' as const, onClick: () => openExternal(inc),
+      selected: selection?.type === 'external' && selection.id === inc.id,
     })),
   ];
 

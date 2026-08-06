@@ -111,7 +111,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
           )}
 
           {report.photos?.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto', flexShrink: 0 }}>
               {report.photos.map((p: any) => (
                 <img
                   key={p.id}

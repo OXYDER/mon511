@@ -30,8 +30,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const MAX_PHOTOS = 3;
   const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifCoords: { lat: number; lng: number } } | null>(null);
   const [checkingExif, setCheckingExif] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,15 +107,23 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   }
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
+    const selected = Array.from(e.target.files ?? []);
+    if (selected.length === 0) return;
+    e.target.value = ''; // permet de resélectionner le même fichier plus tard
+
+    const wasEmpty = photoFiles.length === 0;
+    const room = MAX_PHOTOS - photoFiles.length;
+    const accepted = selected.slice(0, room);
+
+    setPhotoFiles((prev) => [...prev, ...accepted]);
+    setPhotoPreviews((prev) => [...prev, ...accepted.map((f) => URL.createObjectURL(f))]);
     setExifMismatch(null);
 
-    // Lecture des coordonnées GPS EXIF de la photo, pour proposer une
-    // contre-vérification si elles ne correspondent pas à la position
-    // détectée par le navigateur.
+    // Vérification EXIF seulement sur la toute première photo ajoutée —
+    // pas la peine de re-vérifier à chaque photo supplémentaire.
+    if (!wasEmpty || accepted.length === 0) return;
+    const file = accepted[0];
+
     setCheckingExif(true);
     try {
       const exifr = (await import('exifr')).default;
@@ -137,6 +146,11 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
     } finally {
       setCheckingExif(false);
     }
+  }
+
+  function removePhoto(index: number) {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function useExifLocation() {
@@ -169,12 +183,14 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
         municipalityName: municipalityNotified === 'yes' ? municipalityName || undefined : undefined,
       });
 
-      if (photoFile && report?.id) {
-        const formData = new FormData();
-        formData.append('file', photoFile);
-        await api.post(`/reports/${report.id}/photos`, formData).catch(() => {
-          // Le signalement est déjà créé — un échec d'upload ne doit pas bloquer l'usager.
-        });
+      if (photoFiles.length > 0 && report?.id) {
+        for (const file of photoFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          await api.post(`/reports/${report.id}/photos`, formData).catch(() => {
+            // Le signalement est déjà créé — un échec d'upload ne doit pas bloquer l'usager.
+          });
+        }
       }
 
       onCreated();
@@ -213,8 +229,25 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
             </div>
 
             <div className="field-group">
-              <label className="field-label">Photo (optionnel)</label>
-              {!photoPreview ? (
+              <label className="field-label">Photos (optionnel — max {MAX_PHOTOS})</label>
+              {photoPreviews.length > 0 && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  {photoPreviews.map((src, i) => (
+                    <div key={src} style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
+                      <img src={src} alt="Aperçu" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9 }} />
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => removePhoto(i)}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, fontSize: 10 }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {photoFiles.length < MAX_PHOTOS && (
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   style={{
@@ -222,22 +255,10 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
                     textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
                   }}
                 >
-                  📷 Ajouter une photo
-                </div>
-              ) : (
-                <div style={{ position: 'relative' }}>
-                  <img src={photoPreview} alt="Aperçu" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 10 }} />
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    onClick={() => { setPhotoFile(null); setPhotoPreview(null); setExifMismatch(null); }}
-                    style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, fontSize: 12 }}
-                  >
-                    ✕
-                  </button>
+                  📷 {photoFiles.length === 0 ? 'Ajouter une photo' : `Ajouter une autre photo (${photoFiles.length}/${MAX_PHOTOS})`}
                 </div>
               )}
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoSelect} style={{ display: 'none' }} />
+              <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoSelect} style={{ display: 'none' }} />
               {checkingExif && <div className="geo-status">Vérification de la position de la photo...</div>}
               {exifMismatch && (
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 9, background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)' }}>

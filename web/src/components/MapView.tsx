@@ -10,6 +10,7 @@ export interface MapPin {
   colorVar: 'unresolved' | 'resolved' | 'official';
   onClick?: () => void;
   photoUrl?: string | null;
+  selected?: boolean;
 }
 
 export type MapType = 'default' | 'satellite';
@@ -282,7 +283,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     el.style.cursor = pin.onClick ? 'pointer' : 'default';
     el.style.borderRadius = '50%';
     el.style.background = '#1B1E25';
-    el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.4)';
+    el.style.boxShadow = pin.selected
+      ? '0 0 0 3px #FF2D3B, 0 0 0 6px rgba(255,45,59,0.35), 0 2px 6px rgba(0,0,0,0.4)'
+      : '0 2px 6px rgba(0,0,0,0.4)';
     el.style.border = `2.5px solid ${PIN_COLORS[pin.colorVar]}`;
     el.style.display = 'flex';
     el.style.alignItems = 'center';
