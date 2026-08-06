@@ -127,15 +127,51 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
 
-    mapRef.current.on('click', (e) => {
-      // Ignore les clics sur nos propres couches (lignes de conditions/débit) —
-      // elles ont déjà leur propre gestionnaire de clic dédié.
+    function triggerMapClickIfAllowed(lat: number, lng: number, point: { x: number; y: number }) {
       if (!onMapClick) return;
       if (mapRef.current!.getLayer('road-conditions-layer')) {
-        const features = mapRef.current!.queryRenderedFeatures(e.point, { layers: ['road-conditions-layer'] });
+        const features = mapRef.current!.queryRenderedFeatures(point as any, { layers: ['road-conditions-layer'] });
         if (features.length > 0) return;
       }
-      onMapClick(e.lngLat.lat, e.lngLat.lng, e.point.x, e.point.y);
+      onMapClick(lat, lng, point.x, point.y);
+    }
+
+    // Clic droit sur desktop — équivalent "clic secondaire" des logiciels de
+    // carte, n'entre pas en conflit avec le clic gauche normal de navigation.
+    mapRef.current.on('contextmenu', (e) => {
+      e.preventDefault();
+      triggerMapClickIfAllowed(e.lngLat.lat, e.lngLat.lng, e.point);
+    });
+
+    // Appui long sur mobile — équivalent tactile du clic droit. Annulé si
+    // le doigt bouge trop (c'est alors un glissement de carte, pas un appui
+    // long) ou si le doigt est relâché avant le délai.
+    const LONG_PRESS_MS = 550;
+    const MOVE_CANCEL_PX = 10;
+    let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let longPressStart: { x: number; y: number } | null = null;
+
+    mapRef.current.on('touchstart', (e) => {
+      if (e.points.length !== 1) return; // ignore le pincer-zoomer à deux doigts
+      const point = e.point;
+      longPressStart = { x: point.x, y: point.y };
+      longPressTimer = setTimeout(() => {
+        triggerMapClickIfAllowed(e.lngLat.lat, e.lngLat.lng, point);
+        longPressStart = null;
+      }, LONG_PRESS_MS);
+    });
+    mapRef.current.on('touchmove', (e) => {
+      if (!longPressStart || !longPressTimer) return;
+      const dx = e.point.x - longPressStart.x;
+      const dy = e.point.y - longPressStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_PX) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    });
+    mapRef.current.on('touchend', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      longPressStart = null;
     });
 
     mapRef.current.on('moveend', () => {
