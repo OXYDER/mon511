@@ -542,96 +542,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           </div>
         )}
 
-        <div className="panel-icon-row">
-          <button
-            className={`panel-icon-btn ${showFiltersLegend ? 'active' : ''}`}
-            title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
-            onClick={() => setShowFiltersLegend((v) => !v)}
-          >
-            🎚️ {lang === 'fr' ? 'Filtres & légende' : 'Filters & legend'}
-            {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
-          </button>
-        </div>
-
         {error && <div className="error-banner">{error}</div>}
-
-        {showFiltersLegend && (
-          <div className="report-list-scroll">
-            <div className="legend-section">
-              <div className="legend-section-title">{t('statut', lang)}</div>
-              <div className="filter-chip-row">
-                <div className={`filter-chip ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>{t('tous', lang)}</div>
-                <div className={`filter-chip ${filterStatus === 'unresolved' ? 'active' : ''}`} onClick={() => setFilterStatus('unresolved')}>{t('nonResolu', lang)}</div>
-                <div className={`filter-chip ${filterStatus === 'resolved' ? 'active' : ''}`} onClick={() => setFilterStatus('resolved')}>{t('resolu', lang)}</div>
-              </div>
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{t('type', lang)}</div>
-              <div className="filter-chip-row">
-                {problemTypes.map((pt) => (
-                  <div
-                    key={pt.id}
-                    className={`filter-chip ${filterTypeIds.has(pt.id) ? 'active' : ''}`}
-                    onClick={() => toggleTypeFilter(pt.id)}
-                  >
-                    {pt.icon} {pt.name_fr}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="legend-section">
-              <div className="legend-section-title">{lang === 'fr' ? 'Signalements communautaires' : 'Community reports'}</div>
-              {problemTypes.map((pt) => (
-                <div key={pt.id} className="legend-row">
-                  <div className="legend-icon-box">{pt.icon ?? '📍'}</div>
-                  <span>{pt.name_fr}</span>
-                </div>
-              ))}
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{t('travauxRoutiers', lang)}</div>
-              <div className="legend-row"><div className="legend-icon-box">🚧</div><span>{lang === 'fr' ? 'Travaux en cours ou prévus' : 'Ongoing or planned roadworks'}</span></div>
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{lang === 'fr' ? 'Avertissements' : 'Advisories'}</div>
-              <div className="legend-row"><div className="legend-icon-box">⚠️</div><span>{lang === 'fr' ? 'Fermeture, incident, obstacle' : 'Closure, incident, obstacle'}</span></div>
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</div>
-              <div className="legend-row"><div className="legend-icon-box">🔥</div><span>{lang === 'fr' ? 'Incendie de forêt actif (SOPFEU)' : 'Active forest fire (SOPFEU)'}</span></div>
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</div>
-              <div className="legend-row"><div className="legend-icon-box">🍁</div><span>{lang === 'fr' ? 'Cabane à sucre (SIT Québec)' : 'Sugar shack (SIT Québec)'}</span></div>
-            </div>
-            {layerPrefs.conditions_hivernales && (
-              <div className="legend-section">
-                <div className="legend-section-title">{t('conditionsRoutieres', lang)}</div>
-                {conditionsLegend.length === 0 && (
-                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    {lang === 'fr' ? 'Aucune donnée visible dans la zone actuelle.' : 'No data visible in the current view.'}
-                  </div>
-                )}
-                {conditionsLegend.map(([code, label]) => (
-                  <div key={code} className="legend-row">
-                    <div className="legend-swatch" style={{ background: `#${code}` }} />
-                    <span>{label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {layerPrefs.debit_circulation && (
-              <div className="legend-section">
-                <div className="legend-section-title">{lang === 'fr' ? 'Débit de circulation (échelle non officielle)' : 'Traffic volume (unofficial scale)'}</div>
-                <div className="legend-row"><div className="legend-swatch" style={{ background: '#2FBF71' }} /><span>{lang === 'fr' ? '< 5 000 véh/jour' : '< 5,000 veh/day'}</span></div>
-                <div className="legend-row"><div className="legend-swatch" style={{ background: '#F5B301' }} /><span>5 000 – 15 000</span></div>
-                <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF8A3B' }} /><span>15 000 – 35 000</span></div>
-                <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF4D5E' }} /><span>{lang === 'fr' ? '> 35 000 véh/jour' : '> 35,000 veh/day'}</span></div>
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="report-list-scroll">
           {loading && <div className="center-msg">{t('chargement', lang)}</div>}
@@ -767,15 +678,104 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       </button>
 
       <button
-        className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
+        className={`map-menu-btn ${showFiltersLegend ? 'active' : ''}`}
         style={{ bottom: 208 }}
-        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); }}
+        onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); }}
+        title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
+      >
+        🎚️
+        {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
+      </button>
+      {showFiltersLegend && (
+        <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: '60vh', overflowY: 'auto' }}>
+          <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
+
+          <div className="legend-section">
+            <div className="legend-section-title">{t('statut', lang)}</div>
+            <div className="filter-chip-row">
+              <div className={`filter-chip ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>{t('tous', lang)}</div>
+              <div className={`filter-chip ${filterStatus === 'unresolved' ? 'active' : ''}`} onClick={() => setFilterStatus('unresolved')}>{t('nonResolu', lang)}</div>
+              <div className={`filter-chip ${filterStatus === 'resolved' ? 'active' : ''}`} onClick={() => setFilterStatus('resolved')}>{t('resolu', lang)}</div>
+            </div>
+          </div>
+          <div className="legend-section">
+            <div className="legend-section-title">{t('type', lang)}</div>
+            <div className="filter-chip-row">
+              {problemTypes.map((pt) => (
+                <div
+                  key={pt.id}
+                  className={`filter-chip ${filterTypeIds.has(pt.id) ? 'active' : ''}`}
+                  onClick={() => toggleTypeFilter(pt.id)}
+                >
+                  {pt.icon} {pt.name_fr}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="legend-section">
+            <div className="legend-section-title">{lang === 'fr' ? 'Signalements communautaires' : 'Community reports'}</div>
+            {problemTypes.map((pt) => (
+              <div key={pt.id} className="legend-row">
+                <div className="legend-icon-box">{pt.icon ?? '📍'}</div>
+                <span>{pt.name_fr}</span>
+              </div>
+            ))}
+          </div>
+          <div className="legend-section">
+            <div className="legend-section-title">{t('travauxRoutiers', lang)}</div>
+            <div className="legend-row"><div className="legend-icon-box">🚧</div><span>{lang === 'fr' ? 'Travaux en cours ou prévus' : 'Ongoing or planned roadworks'}</span></div>
+          </div>
+          <div className="legend-section">
+            <div className="legend-section-title">{lang === 'fr' ? 'Avertissements' : 'Advisories'}</div>
+            <div className="legend-row"><div className="legend-icon-box">⚠️</div><span>{lang === 'fr' ? 'Fermeture, incident, obstacle' : 'Closure, incident, obstacle'}</span></div>
+          </div>
+          <div className="legend-section">
+            <div className="legend-section-title">{lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</div>
+            <div className="legend-row"><div className="legend-icon-box">🔥</div><span>{lang === 'fr' ? 'Incendie de forêt actif (SOPFEU)' : 'Active forest fire (SOPFEU)'}</span></div>
+          </div>
+          <div className="legend-section">
+            <div className="legend-section-title">{lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</div>
+            <div className="legend-row"><div className="legend-icon-box">🍁</div><span>{lang === 'fr' ? 'Cabane à sucre (SIT Québec)' : 'Sugar shack (SIT Québec)'}</span></div>
+          </div>
+          {layerPrefs.conditions_hivernales && (
+            <div className="legend-section">
+              <div className="legend-section-title">{t('conditionsRoutieres', lang)}</div>
+              {conditionsLegend.length === 0 && (
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                  {lang === 'fr' ? 'Aucune donnée visible dans la zone actuelle.' : 'No data visible in the current view.'}
+                </div>
+              )}
+              {conditionsLegend.map(([code, label]) => (
+                <div key={code} className="legend-row">
+                  <div className="legend-swatch" style={{ background: `#${code}` }} />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {layerPrefs.debit_circulation && (
+            <div className="legend-section">
+              <div className="legend-section-title">{lang === 'fr' ? 'Débit de circulation (échelle non officielle)' : 'Traffic volume (unofficial scale)'}</div>
+              <div className="legend-row"><div className="legend-swatch" style={{ background: '#2FBF71' }} /><span>{lang === 'fr' ? '< 5 000 véh/jour' : '< 5,000 veh/day'}</span></div>
+              <div className="legend-row"><div className="legend-swatch" style={{ background: '#F5B301' }} /><span>5 000 – 15 000</span></div>
+              <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF8A3B' }} /><span>15 000 – 35 000</span></div>
+              <div className="legend-row"><div className="legend-swatch" style={{ background: '#FF4D5E' }} /><span>{lang === 'fr' ? '> 35 000 véh/jour' : '> 35,000 veh/day'}</span></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <button
+        className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
+        style={{ bottom: 264 }}
+        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); }}
         title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
       >
         🗂️
       </button>
       {showMapDetailsMenu && (
-        <div className="map-menu-panel" style={{ bottom: 208 }}>
+        <div className="map-menu-panel" style={{ bottom: 264 }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
@@ -807,7 +807,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <button
         className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
         style={{ bottom: 152 }}
-        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); }}
+        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
         title={lang === 'fr' ? 'Type de carte' : 'Map type'}
       >
         🗺️
