@@ -127,6 +127,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
   const [panelView, setPanelView] = useState<PanelView>('list');
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
 
   const [searchText, setSearchText] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -173,7 +174,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     setLoading(true);
     setError(null);
     try {
-      const results = await api.get<Report[]>(`/reports/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(radius, 100000)}`);
+      const results = await api.get<Report[]>(`/reports/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(radius, 400000)}`);
       setReports(results);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger les signalements.');
@@ -185,7 +186,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function loadOfficialLayer(lat: number, lng: number, radius = 50000) {
     try {
       const results = await api.get<ExternalIncident[]>(
-        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 150000)}`,
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 400000)}`,
       );
       setExternalIncidents(results);
     } catch {
@@ -193,11 +194,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }
 
-  function handleViewportChange(c: { lat: number; lng: number }, radius: number) {
+  function handleViewportChange(c: { lat: number; lng: number }, radius: number, zoom: number) {
     setQueryCenter(c);
     loadNearby(c.lat, c.lng, radius);
     loadOfficialLayer(c.lat, c.lng, radius);
-    reverseGeocode(c.lat, c.lng).then((name) => { if (name) setCurrentAreaName(name); });
+    reverseGeocode(c.lat, c.lng, zoom).then((name) => { if (name) setCurrentAreaName(name); });
   }
 
   function locateAndLoad() {
@@ -223,12 +224,19 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setShowDropdown(false);
-    setAppliedSearch(searchText);
     const results = await searchCities(searchText, 1);
     if (results[0]) {
+      // Une ville a été trouvée : on y va, et on efface la recherche pour
+      // qu'elle n'agisse pas aussi comme filtre de texte sur les pins/liste
+      // (sinon rien ne correspond au nom de la ville et tout disparaît).
+      setSearchText('');
+      setAppliedSearch('');
       setMapCamera({ lat: results[0].lat, lng: results[0].lng });
       loadNearby(results[0].lat, results[0].lng);
       loadOfficialLayer(results[0].lat, results[0].lng);
+    } else {
+      // Pas de ville correspondante : on retombe sur un simple filtre de texte.
+      setAppliedSearch(searchText);
     }
   }
 
@@ -421,8 +429,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       </header>
 
-      <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''}`}>
-        <h2>{t('surLaCarte', lang)}</h2>
+      <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''} ${panelCollapsed ? 'collapsed' : ''}`}>
+        <h2 onClick={() => setPanelCollapsed((v) => !v)}>
+          <span>{t('surLaCarte', lang)}</span>
+          <button className="panel-collapse-btn" onClick={(e) => { e.stopPropagation(); setPanelCollapsed((v) => !v); }}>
+            {panelCollapsed ? '▸' : '▾'}
+          </button>
+        </h2>
 
         <form className="search-bar" onSubmit={handleSearch}>
           <span>🔍</span>
@@ -494,29 +507,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             onClick={() => setPanelView('legend')}
           >
             🗺️
-          </button>
-          <button
-            className="panel-icon-btn"
-            title={lang === 'fr' ? 'Alertes MTQ dans la zone visible — clic pour tout activer/désactiver' : 'MTQ alerts in the visible area — click to toggle all'}
-            onClick={() => {
-              const anyOff = !layerPrefs.travaux_routiers || !layerPrefs.conditions_hivernales
-                || !layerPrefs.avertissements || !layerPrefs.debit_circulation || !layerPrefs.feux_foret;
-              const next: LayerPrefs = {
-                travaux_routiers: anyOff,
-                conditions_hivernales: anyOff,
-                avertissements: anyOff,
-                debit_circulation: anyOff,
-                feux_foret: anyOff,
-              };
-              setLayerPrefs(next);
-              if (authenticated) api.patch('/users/me/map-layers', next).catch(() => {});
-              else setLocalLayerPrefs(next);
-            }}
-          >
-            🔔
-            {externalIncidents.length > 0 && (
-              <span className="badge-dot">{externalIncidents.length}</span>
-            )}
           </button>
         </div>
 

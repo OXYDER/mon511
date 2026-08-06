@@ -39,7 +39,7 @@ export class ReportsService {
         sql<boolean>`ST_DWithin(reports.location::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusMeters})`,
       )
       .orderBy('reports.created_at', 'desc')
-      .limit(500)
+      .limit(1500)
       .execute();
   }
 

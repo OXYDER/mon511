@@ -26,7 +26,7 @@ interface Props {
   height?: number | string;
   fullBleed?: boolean;
   theme?: 'dark' | 'light';
-  onViewportChange?: (center: { lat: number; lng: number }, radiusMeters: number) => void;
+  onViewportChange?: (center: { lat: number; lng: number }, radiusMeters: number, zoom: number) => void;
 }
 
 /** Distance approximative en mètres entre deux points (formule haversine). */
@@ -125,7 +125,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         const bounds = mapRef.current.getBounds();
         const centerPoint = { lat: c.lat, lng: c.lng };
         const radius = haversineDistance(centerPoint, { lat: bounds.getNorth(), lng: bounds.getEast() });
-        onViewportChange(centerPoint, Math.max(radius, 500));
+        onViewportChange(centerPoint, Math.max(radius, 500), mapRef.current.getZoom());
       }, 400);
     });
 
