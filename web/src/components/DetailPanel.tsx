@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import Lightbox from './Lightbox';
 
 interface Props {
   reportId: string;
@@ -14,6 +15,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -115,11 +117,14 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
                   key={p.id}
                   src={p.url}
                   alt="Photo du signalement"
-                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0 }}
+                  onClick={() => setLightboxSrc(p.url)}
+                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0, cursor: 'zoom-in' }}
                 />
               ))}
             </div>
           )}
+
+          {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
 
           <div className="detail-meta-row" style={{ marginBottom: 6 }}>
             <span>📍 {report.addressText ?? 'Position GPS'}</span>

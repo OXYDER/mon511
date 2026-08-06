@@ -325,7 +325,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   padding: 16px 24px;
   background: linear-gradient(to bottom, var(--bg-asphalt), transparent);
 }
-.topbar-float .topbar-actions { display: flex; align-items: center; gap: 10px; }
+.topbar-float .topbar-actions { display: flex; align-items: center; gap: 10px; margin-right: 56px; }
 
 .filters-panel-float {
   position: absolute; top: 84px; left: 24px; z-index: 30;

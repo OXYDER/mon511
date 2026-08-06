@@ -8,6 +8,7 @@ import DetailPanel from '../components/DetailPanel';
 import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
 import ProfileModal from '../components/ProfileModal';
 import ToggleSwitch from '../components/ToggleSwitch';
+import AboutModal from '../components/AboutModal';
 import AdminPage from './AdminPage';
 
 interface Report {
@@ -94,7 +95,6 @@ function formatMtmdDate(value: string | null, lang: Lang): string {
 }
 
 type Selection = { type: 'report' | 'external'; id: string } | null;
-type PanelView = 'list' | 'legend' | 'filters' | null;
 
 interface Props {
   theme: 'dark' | 'light';
@@ -110,6 +110,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [lang, setLang] = useState<Lang>(getStoredLang());
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
+  const [allCabanes, setAllCabanes] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
   const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
     travaux_routiers: false,
@@ -131,10 +132,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
-  const [panelView, setPanelView] = useState<PanelView>('list');
+  const [showFiltersLegend, setShowFiltersLegend] = useState(false);
   const [mapType, setMapType] = useState<MapType>('default');
   const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     reports: true, cabanes: true, feux: true, avertissements: true, travaux: true,
   });
@@ -205,6 +207,21 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       setExternalIncidents(results);
     } catch {
       setExternalIncidents([]);
+    }
+  }
+
+  /** Les cabanes à sucre sont peu nombreuses (une centaine) et réparties
+   * dans tout le Québec — chargées une seule fois avec un très grand rayon
+   * fixe, indépendamment de la zone visible, pour qu'elles restent toujours
+   * affichées peu importe le niveau de zoom. */
+  async function loadAllCabanes() {
+    try {
+      const results = await api.get<ExternalIncident[]>(
+        `/external-data/incidents/nearby?lat=52&lng=-71.5&radius=1500000`,
+      );
+      setAllCabanes(results.filter((inc) => inc.feedKey === 'sit_agrotourisme'));
+    } catch {
+      setAllCabanes([]);
     }
   }
 
@@ -291,6 +308,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   useEffect(() => {
     locateAndLoad();
+    loadAllCabanes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -357,9 +375,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret && withinBounds(inc.latitude, inc.longitude),
   );
 
-  const visibleCabanes = externalIncidents.filter(
-    (inc) => inc.feedKey === 'sit_agrotourisme' && layerPrefs.cabanes_a_sucre && withinBounds(inc.latitude, inc.longitude),
-  );
+  const visibleCabanes = allCabanes.filter((inc) => layerPrefs.cabanes_a_sucre);
 
   const reportPins: MapPin[] = filteredReports.map((r) => ({
     id: r.id,
@@ -460,6 +476,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           <button className="icon-btn" title={t('changerTheme', lang)} onClick={onToggleTheme}>
             {theme === 'dark' ? '🌙' : '☀️'}
           </button>
+          <button className="icon-btn" title={lang === 'fr' ? 'À propos' : 'About'} onClick={() => setShowAbout(true)}>
+            ℹ️
+          </button>
         </div>
       </header>
 
@@ -521,33 +540,42 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
         <div className="panel-icon-row">
           <button
-            className={`panel-icon-btn ${panelView === 'list' ? 'active' : ''}`}
-            title={t('surLaCarte', lang)}
-            onClick={() => setPanelView('list')}
+            className={`panel-icon-btn ${showFiltersLegend ? 'active' : ''}`}
+            title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
+            onClick={() => setShowFiltersLegend((v) => !v)}
           >
-            📋
-          </button>
-          <button
-            className={`panel-icon-btn ${panelView === 'filters' ? 'active' : ''}`}
-            title={t('filtres', lang)}
-            onClick={() => setPanelView('filters')}
-          >
-            🎚️
+            🎚️ {lang === 'fr' ? 'Filtres & légende' : 'Filters & legend'}
             {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
-          </button>
-          <button
-            className={`panel-icon-btn ${panelView === 'legend' ? 'active' : ''}`}
-            title={t('legende', lang)}
-            onClick={() => setPanelView('legend')}
-          >
-            🗺️
           </button>
         </div>
 
         {error && <div className="error-banner">{error}</div>}
 
-        {panelView === 'legend' && (
+        {showFiltersLegend && (
           <div className="report-list-scroll">
+            <div className="legend-section">
+              <div className="legend-section-title">{t('statut', lang)}</div>
+              <div className="filter-chip-row">
+                <div className={`filter-chip ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>{t('tous', lang)}</div>
+                <div className={`filter-chip ${filterStatus === 'unresolved' ? 'active' : ''}`} onClick={() => setFilterStatus('unresolved')}>{t('nonResolu', lang)}</div>
+                <div className={`filter-chip ${filterStatus === 'resolved' ? 'active' : ''}`} onClick={() => setFilterStatus('resolved')}>{t('resolu', lang)}</div>
+              </div>
+            </div>
+            <div className="legend-section">
+              <div className="legend-section-title">{t('type', lang)}</div>
+              <div className="filter-chip-row">
+                {problemTypes.map((pt) => (
+                  <div
+                    key={pt.id}
+                    className={`filter-chip ${filterTypeIds.has(pt.id) ? 'active' : ''}`}
+                    onClick={() => toggleTypeFilter(pt.id)}
+                  >
+                    {pt.icon} {pt.name_fr}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="legend-section">
               <div className="legend-section-title">{lang === 'fr' ? 'Signalements communautaires' : 'Community reports'}</div>
               {problemTypes.map((pt) => (
@@ -601,36 +629,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           </div>
         )}
 
-        {panelView === 'filters' && (
-          <div className="report-list-scroll">
-            <div className="legend-section">
-              <div className="legend-section-title">{t('statut', lang)}</div>
-              <div className="filter-chip-row">
-                <div className={`filter-chip ${filterStatus === 'all' ? 'active' : ''}`} onClick={() => setFilterStatus('all')}>{t('tous', lang)}</div>
-                <div className={`filter-chip ${filterStatus === 'unresolved' ? 'active' : ''}`} onClick={() => setFilterStatus('unresolved')}>{t('nonResolu', lang)}</div>
-                <div className={`filter-chip ${filterStatus === 'resolved' ? 'active' : ''}`} onClick={() => setFilterStatus('resolved')}>{t('resolu', lang)}</div>
-              </div>
-            </div>
-            <div className="legend-section">
-              <div className="legend-section-title">{t('type', lang)}</div>
-              <div className="filter-chip-row">
-                {problemTypes.map((pt) => (
-                  <div
-                    key={pt.id}
-                    className={`filter-chip ${filterTypeIds.has(pt.id) ? 'active' : ''}`}
-                    onClick={() => toggleTypeFilter(pt.id)}
-                  >
-                    {pt.icon} {pt.name_fr}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {panelView === 'list' && (
-          <div className="report-list-scroll">
-            {loading && <div className="center-msg">{t('chargement', lang)}</div>}
+        <div className="report-list-scroll">
+          {loading && <div className="center-msg">{t('chargement', lang)}</div>}
             {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && visibleCabanes.length === 0 && !error && (
               <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
             )}
@@ -743,7 +743,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               </div>
             )}
           </div>
-        )}
       </aside>
 
       {selection?.type === 'report' && (
@@ -849,6 +848,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showProfileModal && (
         <ProfileModal onClose={() => setShowProfileModal(false)} onLogout={onLogout} />
       )}
+      {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
       </>}
     </div>
   );
