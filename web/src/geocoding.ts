@@ -84,3 +84,22 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
     return null;
   }
 }
+
+/** Colle une coordonnée GPS brute sur la route la plus proche — évite que
+ * les signalements atterrissent au milieu d'un champ ou d'un bâtiment alors
+ * que c'est un problème routier. Utilise le service public de démonstration
+ * OSRM (gratuit, mais pas fait pour un très gros volume de production —
+ * à auto-héberger si le trafic grandit beaucoup). En cas d'échec, retombe
+ * silencieusement sur la coordonnée d'origine. */
+export async function snapToRoad(lat: number, lng: number): Promise<{ lat: number; lng: number; snapped: boolean }> {
+  try {
+    const res = await fetch(`https://router.project-osrm.org/nearest/v1/driving/${lng},${lat}`);
+    if (!res.ok) return { lat, lng, snapped: false };
+    const data = await res.json();
+    const snapped = data.waypoints?.[0]?.location;
+    if (!snapped) return { lat, lng, snapped: false };
+    return { lat: snapped[1], lng: snapped[0], snapped: true };
+  } catch {
+    return { lat, lng, snapped: false };
+  }
+}

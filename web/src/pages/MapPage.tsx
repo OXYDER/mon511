@@ -190,7 +190,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function loadOfficialLayer(lat: number, lng: number, radius = 50000) {
     try {
       const results = await api.get<ExternalIncident[]>(
-        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 400000)}`,
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 1500000)}`,
       );
       setExternalIncidents(results);
     } catch {

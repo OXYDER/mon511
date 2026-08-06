@@ -25,7 +25,7 @@ export class ReportsService {
         'reports.id',
         'reports.status',
         'reports.description',
-        'reports.address_text',
+        'reports.address_text as addressText',
         'reports.created_at',
         'reports.problem_type_id as problemTypeId',
         'problem_types.name_fr as problemTypeNameFr',
@@ -46,8 +46,18 @@ export class ReportsService {
   async findOne(id: string) {
     const report = await this.db
       .selectFrom('reports')
-      .selectAll()
-      .where('id', '=', id)
+      .leftJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
+      .select([
+        'reports.id', 'reports.status', 'reports.description', 'reports.address_text',
+        'reports.created_at', 'reports.updated_at', 'reports.resolved_at',
+        'reports.municipality_notified', 'reports.municipality_name',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+        'users.id as authorId', 'users.email as authorEmail', 'users.first_name as authorFirstName',
+        sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),
+        sql<number>`ST_X(reports.location::geometry)`.as('longitude'),
+      ])
+      .where('reports.id', '=', id)
       .executeTakeFirst();
 
     if (!report) throw new NotFoundException('Signalement introuvable.');

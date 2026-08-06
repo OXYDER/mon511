@@ -88,7 +88,10 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
   return (
     <div className="detail-panel-float mobile-visible">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-        <div className="detail-title" style={{ fontSize: 17 }}>{report?.description || 'Signalement'}</div>
+        <div className="detail-title" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>{report?.problemTypeIcon ?? '📍'}</span>
+          <span>{report?.problemTypeNameFr ?? 'Signalement'}</span>
+        </div>
         <button className="detail-panel-close" onClick={onClose}>✕</button>
       </div>
 
@@ -97,10 +100,39 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
       {report && (
         <>
-          <div className="detail-meta-row" style={{ marginBottom: 14 }}>
-            <span>📍 {report.address_text ?? 'Position GPS'}</span>
+          <span className={`pill ${report.status === 'published_resolved' ? 'resolved' : 'unresolved'}`} style={{ marginBottom: 10, display: 'inline-block' }}>
+            {report.status === 'published_resolved' ? 'Résolu' : report.status === 'pending_moderation' ? 'En modération' : 'Non résolu'}
+          </span>
+
+          {report.description && (
+            <div style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.5 }}>{report.description}</div>
+          )}
+
+          {report.photos?.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto' }}>
+              {report.photos.map((p: any) => (
+                <img
+                  key={p.id}
+                  src={p.url}
+                  alt="Photo du signalement"
+                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0 }}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="detail-meta-row" style={{ marginBottom: 6 }}>
+            <span>📍 {report.addressText ?? 'Position GPS'}</span>
             <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
           </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+            👤 Signalé par {report.authorFirstName || report.authorEmail?.split('@')[0] || 'Anonyme'}
+          </div>
+          {report.municipality_notified === 'yes' && (
+            <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>
+              🏛️ Municipalité avisée{report.municipality_name ? ` — ${report.municipality_name}` : ''}
+            </div>
+          )}
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
             👍 {report.confirmationsCount} confirmations
           </div>

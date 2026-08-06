@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { reverseGeocodeAddress } from '../geocoding';
+import { reverseGeocodeAddress, snapToRoad } from '../geocoding';
 
 interface ProblemType {
   id: string;
@@ -20,6 +20,7 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
   const [addressText, setAddressText] = useState('');
   const [addressAutoFilled, setAddressAutoFilled] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const [snappedToRoad, setSnappedToRoad] = useState(false);
   const [municipalityNotified, setMunicipalityNotified] = useState<'yes' | 'no' | 'unknown'>('unknown');
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
@@ -44,9 +45,15 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const c = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+        const raw = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        // Colle sur la route la plus proche — un signalement routier doit
+        // apparaître sur la chaussée, pas au milieu d'un champ ou d'un
+        // bâtiment à cause de l'imprécision naturelle du GPS.
+        const { lat, lng, snapped } = await snapToRoad(raw.lat, raw.lng);
+        const c = { lat, lng, accuracy: pos.coords.accuracy };
         setCoords(c);
         setLocating(false);
+        setSnappedToRoad(snapped);
         // Adresse la plus proche auto-remplie, sans écraser une saisie manuelle existante.
         if (!addressText) {
           const address = await reverseGeocodeAddress(c.lat, c.lng);
@@ -92,9 +99,11 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
     }
   }
 
-  function useExifLocation() {
+  async function useExifLocation() {
     if (!exifMismatch) return;
-    setCoords({ lat: exifMismatch.exifCoords.lat, lng: exifMismatch.exifCoords.lng, accuracy: 15 });
+    const { lat, lng, snapped } = await snapToRoad(exifMismatch.exifCoords.lat, exifMismatch.exifCoords.lng);
+    setCoords({ lat, lng, accuracy: 15 });
+    setSnappedToRoad(snapped);
     setAddressText(exifMismatch.exifAddress);
     setAddressAutoFilled(true);
     setExifMismatch(null);
@@ -226,6 +235,7 @@ export default function CreateReportModal({ onClose, onCreated }: Props) {
               {coords && (
                 <div className="geo-status ok">
                   Position précise capturée — précision ±{Math.round(coords.accuracy)} m
+                  {snappedToRoad && ' · alignée sur la route'}
                   {addressAutoFilled && ' · adresse détectée automatiquement'}
                 </div>
               )}
