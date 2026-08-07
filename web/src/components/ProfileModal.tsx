@@ -171,7 +171,7 @@ export default function ProfileModal({ onClose, onLogout }: Props) {
                   </div>
                   <div className="rc-body">
                     <div className="rc-title">{r.problemTypeNameFr}</div>
-                    <div className="rc-meta">{new Date(r.created_at).toLocaleDateString('fr-CA')}</div>
+                    <div className="rc-meta">{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}</div>
                   </div>
                   <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
                     {r.status === 'published_resolved' ? 'Résolu' : r.status === 'pending_moderation' ? 'En modération' : 'Non résolu'}

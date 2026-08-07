@@ -28,6 +28,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submittedSummary, setSubmittedSummary] = useState<{ typeName: string; typeIcon: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
@@ -193,7 +194,8 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
         }
       }
 
-      onCreated();
+      const chosenType = types.find((t) => t.id === typeId);
+      setSubmittedSummary({ typeName: chosenType?.nameFr ?? 'Signalement', typeIcon: chosenType?.icon ?? '📍' });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
     } finally {
@@ -202,13 +204,41 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   }
 
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) (submittedSummary ? onCreated() : onClose()); }}>
       <div className="modal-box">
         <div className="modal-head">
-          <div className="modal-title">Nouveau signalement</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
+          <div className="modal-title">{submittedSummary ? 'Signalement envoyé' : 'Nouveau signalement'}</div>
+          <button className="modal-close" onClick={() => (submittedSummary ? onCreated() : onClose())}>✕</button>
         </div>
         <div className="modal-body">
+          {submittedSummary ? (
+            <>
+              <div className="success-banner" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}>
+                <span style={{ fontSize: 22 }}>✅</span>
+                <span>Merci ! Ton signalement a bien été envoyé.</span>
+              </div>
+
+              <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 14, marginTop: 4, marginBottom: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, marginBottom: 10 }}>
+                  <span>{submittedSummary.typeIcon}</span>
+                  <span>{submittedSummary.typeName}</span>
+                </div>
+                {description && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>{description}</div>
+                )}
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <span>📍 {addressText || 'Position GPS'}</span>
+                  {municipalityNotified === 'yes' && (
+                    <span>🏛️ Municipalité avisée{municipalityName ? ` — ${municipalityName}` : ''}</span>
+                  )}
+                  {photoFiles.length > 0 && <span>📷 {photoFiles.length} photo{photoFiles.length > 1 ? 's' : ''} jointe{photoFiles.length > 1 ? 's' : ''}</span>}
+                </div>
+              </div>
+
+              <button className="btn-primary" onClick={onCreated}>Voir sur la carte</button>
+            </>
+          ) : (
+          <>
           {error && <div className="error-banner">{error}</div>}
 
           <form onSubmit={submit}>
@@ -343,6 +373,8 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
               {submitting ? 'Envoi...' : 'Envoyer le signalement'}
             </button>
           </form>
+          </>
+          )}
         </div>
       </div>
     </div>

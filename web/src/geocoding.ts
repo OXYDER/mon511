@@ -72,14 +72,35 @@ export async function reverseGeocode(lat: number, lng: number, zoom = 12): Promi
 
 /** Adresse précise (numéro civique + rue) pour auto-remplir le formulaire de
  * signalement — distinct du repère "où on regarde" ci-dessus, qui reste
- * volontairement moins précis (nom de ville) pour rester lisible. */
+ * volontairement moins précis (nom de ville) pour rester lisible.
+ *
+ * Sur les grandes routes rurales (pas de numéro civique à proximité),
+ * MapTiler retourne souvent juste le nom de la route sans la municipalité
+ * (ex. "R 116, Canada") — inutilisable pour une municipalité qui recevrait
+ * ce signalement. On reconstruit une adresse plus utile en combinant le nom
+ * de la route avec la municipalité la plus proche trouvée dans le contexte. */
 export async function reverseGeocodeAddress(lat: number, lng: number): Promise<string | null> {
   if (!MAPTILER_KEY) return null;
   try {
     const res = await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr`);
     if (!res.ok) return null;
     const data = await res.json();
-    return data.features?.[0]?.place_name ?? null;
+    const feature = data.features?.[0];
+    if (!feature) return null;
+
+    const municipality = feature.context?.find((c: any) => c.id?.startsWith('municipality') || c.id?.startsWith('place'));
+    const region = feature.context?.find((c: any) => c.id?.startsWith('region'));
+
+    // A un numéro civique ou une rue claire (ex. "40 Rue Roux") — le
+    // place_name de MapTiler est déjà correct pour ce cas.
+    if (feature.address || /^\d/.test(feature.text ?? '')) {
+      return feature.place_name ?? feature.text ?? null;
+    }
+
+    // Sinon (ex. juste "Route 116" sans numéro), on rajoute la municipalité
+    // manuellement plutôt que de laisser passer "Route 116, Canada".
+    const parts = [feature.text, municipality?.text, region?.text].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : (feature.place_name ?? null);
   } catch {
     return null;
   }

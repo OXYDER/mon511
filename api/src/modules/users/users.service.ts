@@ -120,6 +120,7 @@ export class UsersService {
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .select([
         'reports.id', 'reports.status', 'reports.created_at',
+        'reports.address_text as addressText', 'reports.problem_type_id',
         'problem_types.name_fr as problemTypeNameFr',
         'problem_types.icon as problemTypeIcon',
       ])
