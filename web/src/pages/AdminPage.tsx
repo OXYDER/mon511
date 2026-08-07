@@ -18,7 +18,7 @@ export default function AdminPage({ onClose }: Props) {
           <span className="brand-mark">511</span>
           <span className="brand-name">Administration</span>
         </div>
-        <button className="btn-ghost" onClick={onClose}>← Retour à la carte</button>
+        <button className="btn-ghost" onClick={onClose} style={{ pointerEvents: 'auto' }}>← Retour à la carte</button>
       </header>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 24px 60px' }}>
