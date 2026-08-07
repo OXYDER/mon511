@@ -132,6 +132,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
+  const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -468,6 +469,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           mapType={mapType}
           onMapClick={(lat, lng, x, y) => setContextMenu({ lat, lng, x, y })}
           focusPinId={selection?.id ?? null}
+          hoveredPinId={hoveredPinId}
         />
       </div>
 
@@ -586,6 +588,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     className="report-card"
                     style={{ borderColor: selection?.type === 'report' && selection.id === r.id ? 'var(--accent-signal)' : undefined }}
                     onClick={() => openReport(r)}
+                    onMouseEnter={() => setHoveredPinId(r.id)}
+                    onMouseLeave={() => setHoveredPinId(null)}
                   >
                     <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
                       {r.problemTypeIcon ?? '📍'}

@@ -40,6 +40,7 @@ interface Props {
   ) => void;
   onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   focusPinId?: string | null;
+  hoveredPinId?: string | null;
 }
 
 /** Distance approximative en mètres entre deux points (formule haversine). */
@@ -61,10 +62,12 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, focusPinId = null }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, focusPinId = null, hoveredPinId = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const popupsRef = useRef<maplibregl.Popup[]>([]);
+  const popupsByIdRef = useRef<Record<string, { popup: maplibregl.Popup; lng: number; lat: number }>>({});
   const userMarkerRef = useRef<Marker | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const linesClickMapRef = useRef<Record<string, () => void>>({});
@@ -295,13 +298,22 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     el.style.justifyContent = 'center';
     el.style.fontSize = '14px';
     el.textContent = pin.icon;
-    if (pin.onClick) el.addEventListener('click', pin.onClick);
 
+    let photoPopup: maplibregl.Popup | undefined;
     if (pin.photoUrl) {
-      const popup = new maplibregl.Popup({ offset: 20, closeButton: false, closeOnClick: false, className: 'pin-thumb-popup' })
+      photoPopup = new maplibregl.Popup({ offset: 20, closeButton: false, closeOnClick: false, className: 'pin-thumb-popup' })
         .setHTML(`<img src="${pin.photoUrl}" alt="" style="width:72px;height:72px;object-fit:cover;border-radius:8px;display:block;" />`);
-      el.addEventListener('mouseenter', () => popup.setLngLat([pin.longitude, pin.latitude]).addTo(mapRef.current!));
-      el.addEventListener('mouseleave', () => popup.remove());
+      popupsRef.current.push(photoPopup);
+      popupsByIdRef.current[pin.id] = { popup: photoPopup, lng: pin.longitude, lat: pin.latitude };
+      el.addEventListener('mouseenter', () => photoPopup!.setLngLat([pin.longitude, pin.latitude]).addTo(mapRef.current!));
+      el.addEventListener('mouseleave', () => photoPopup!.remove());
+    }
+
+    if (pin.onClick) {
+      el.addEventListener('click', () => {
+        photoPopup?.remove(); // évite qu'elle reste "coincée" sur tactile, où mouseleave ne se déclenche pas naturellement
+        pin.onClick!();
+      });
     }
     return el;
   }
@@ -312,6 +324,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    popupsRef.current.forEach((p) => p.remove());
+    popupsRef.current = [];
+    popupsByIdRef.current = {};
     spiderfyLegsRef.current = [];
 
     const clusters = clusterPins(pins, map);
@@ -401,6 +416,21 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     if (owningCluster) setSpiderfiedClusterId(owningCluster.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPinId, clusterVersion, pins]);
+
+  // Survol d'un élément dans la liste (hors carte) → montrer la bulle photo
+  // du pin correspondant, réciproque du survol direct du pin sur la carte.
+  const prevHoveredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (prevHoveredRef.current && prevHoveredRef.current !== hoveredPinId) {
+      popupsByIdRef.current[prevHoveredRef.current]?.popup.remove();
+    }
+    if (hoveredPinId) {
+      const entry = popupsByIdRef.current[hoveredPinId];
+      entry?.popup.setLngLat([entry.lng, entry.lat]).addTo(mapRef.current);
+    }
+    prevHoveredRef.current = hoveredPinId;
+  }, [hoveredPinId]);
 
   // Point "vous êtes ici" — marqueur dédié, distinct des pins de signalement
   useEffect(() => {
