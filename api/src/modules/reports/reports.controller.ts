@@ -59,12 +59,18 @@ export class ReportsController {
     return this.reportsService.flag(id, user.userId, reason, notes);
   }
 
+  @Get(':id/owner-detail')
+  @UseGuards(JwtAuthGuard)
+  ownerDetail(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.findOwnDetail(id, user.userId);
+  }
+
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
   updateOwn(
     @Param('id') id: string,
     @CurrentUser() user: CurrentUserPayload,
-    @Body() changes: { description?: string; addressText?: string; municipalityNotified?: 'yes' | 'no' | 'unknown'; municipalityName?: string },
+    @Body() changes: { description?: string; addressText?: string; municipalityNotified?: 'yes' | 'no' | 'unknown'; municipalityName?: string; problemTypeId?: string },
   ) {
     return this.reportsService.updateOwn(id, user.userId, changes);
   }
