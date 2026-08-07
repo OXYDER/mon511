@@ -32,7 +32,7 @@ export default function AboutModal({ onClose, lang }: Props) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5 }}>
             <span style={{ color: 'var(--text-muted)' }}>{lang === 'fr' ? 'Fondateur' : 'Founder'}</span>
-            <span>Benoît</span>
+            <span>Benoît Laprise</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', fontSize: 12.5 }}>
             <span style={{ color: 'var(--text-muted)' }}>{lang === 'fr' ? 'Contact' : 'Contact'}</span>
