@@ -13,6 +13,22 @@ export class UpsertMunicipalityIntegrationDto {
 
   @IsOptional()
   @IsString()
+  contactPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  contactWebsite?: string;
+
+  @IsOptional()
+  @IsString()
+  mailingAddress?: string;
+
+  @IsOptional()
+  @IsString()
+  postalCode?: string;
+
+  @IsOptional()
+  @IsString()
   emailSubjectTemplate?: string;
 
   @IsOptional()

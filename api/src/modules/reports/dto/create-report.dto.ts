@@ -37,4 +37,13 @@ export class CreateReportDto {
   @IsString()
   @MaxLength(100)
   municipalityCaseNumber?: string;
+
+  // Nom de municipalité détecté automatiquement par géolocalisation inverse
+  // à la création — sert de repli pour associer le signalement à la bonne
+  // municipalité tant qu'on n'a pas importé de vraies frontières
+  // géographiques (voir reports.service.ts). Modifiable par la modération.
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  municipalityHint?: string;
 }

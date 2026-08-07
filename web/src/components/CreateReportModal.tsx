@@ -20,6 +20,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   const [description, setDescription] = useState('');
   const [addressText, setAddressText] = useState('');
   const [addressAutoFilled, setAddressAutoFilled] = useState(false);
+  const [detectedMunicipality, setDetectedMunicipality] = useState<string | null>(null);
   const [coords, setCoords] = useState<{ lat: number; lng: number; accuracy: number } | null>(null);
   const [snappedToRoad, setSnappedToRoad] = useState(false);
   const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
@@ -34,7 +35,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const MAX_PHOTOS = 3;
-  const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifCoords: { lat: number; lng: number } } | null>(null);
+  const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifMunicipality: string | null; exifCoords: { lat: number; lng: number } } | null>(null);
   const [checkingExif, setCheckingExif] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,8 +54,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
       const { lat, lng, snapped } = await snapToRoad(initialCoords.lat, initialCoords.lng);
       setCoords({ lat, lng, accuracy: 15 });
       setSnappedToRoad(snapped);
-      const address = await reverseGeocodeAddress(lat, lng);
-      if (address) { setAddressText(address); setAddressAutoFilled(true); }
+      const geo = await reverseGeocodeAddress(lat, lng);
+      if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
+      if (geo.municipality) setDetectedMunicipality(geo.municipality);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -98,8 +100,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
         setSnappedToRoad(snapped);
         // Adresse la plus proche auto-remplie, sans écraser une saisie manuelle existante.
         if (!addressText) {
-          const address = await reverseGeocodeAddress(c.lat, c.lng);
-          if (address) { setAddressText(address); setAddressAutoFilled(true); }
+          const geo = await reverseGeocodeAddress(c.lat, c.lng);
+          if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
+          if (geo.municipality) setDetectedMunicipality(geo.municipality);
         }
       },
       () => setLocating(false),
@@ -130,16 +133,16 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
       const exifr = (await import('exifr')).default;
       const gps = await exifr.gps(file);
       if (gps?.latitude && gps?.longitude) {
-        const exifAddress = await reverseGeocodeAddress(gps.latitude, gps.longitude);
-        if (exifAddress && coords) {
+        const geo = await reverseGeocodeAddress(gps.latitude, gps.longitude);
+        if (geo.address && coords) {
           // Écart significatif (~500m+) entre la photo et la position détectée.
           const distance = haversine(coords.lat, coords.lng, gps.latitude, gps.longitude);
           if (distance > 500) {
-            setExifMismatch({ exifAddress, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+            setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
           }
-        } else if (exifAddress && !coords) {
+        } else if (geo.address && !coords) {
           // Aucune position détectée encore — propose directement celle de la photo.
-          setExifMismatch({ exifAddress, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+          setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
         }
       }
     } catch {
@@ -161,6 +164,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
     setSnappedToRoad(snapped);
     setAddressText(exifMismatch.exifAddress);
     setAddressAutoFilled(true);
+    if (exifMismatch.exifMunicipality) setDetectedMunicipality(exifMismatch.exifMunicipality);
     setExifMismatch(null);
   }
 
@@ -186,6 +190,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
         description: description || undefined,
         municipalityNotified,
         municipalityName: municipalityNotified === 'yes' ? municipalityName || undefined : undefined,
+        municipalityHint: detectedMunicipality || undefined,
       });
 
       if (photoFiles.length > 0 && report?.id) {

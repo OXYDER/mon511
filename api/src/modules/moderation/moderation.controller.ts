@@ -56,6 +56,11 @@ export class ModerationController {
     return this.moderationService.findDetail(id);
   }
 
+  @Patch(':id/region')
+  setRegion(@Param('id') id: string, @Body('regionId') regionId: string | null) {
+    return this.moderationService.setRegion(id, regionId);
+  }
+
   @Patch(':id/decision')
   decide(
     @Param('id') id: string,

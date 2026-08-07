@@ -173,7 +173,7 @@ export class ReportsService {
    */
   async create(userId: string | null, dto: CreateReportDto) {
     return this.db.transaction().execute(async (trx) => {
-      const region = await trx
+      let region = await trx
         .selectFrom('regions')
         .select('id')
         .where('type', '=', 'municipality')
@@ -181,6 +181,22 @@ export class ReportsService {
           sql<boolean>`ST_Contains(boundary, ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326))`,
         )
         .executeTakeFirst();
+
+      // Repli par nom : on n'a pas encore importé de vraies frontières
+      // géographiques pour la plupart des municipalités (boundary est NULL),
+      // donc ST_Contains ne trouve rien la plupart du temps. En attendant,
+      // on utilise le nom de municipalité détecté par géolocalisation
+      // inverse côté client — la modération humaine reste le filet de
+      // sécurité si jamais la correspondance est imprécise près d'une
+      // frontière (voir moderation.service.ts, écran d'approbation).
+      if (!region && dto.municipalityHint) {
+        region = await trx
+          .selectFrom('regions')
+          .select('id')
+          .where('type', '=', 'municipality')
+          .where('name_fr', 'ilike', dto.municipalityHint.trim())
+          .executeTakeFirst();
+      }
 
       const report = await trx
         .insertInto('reports')

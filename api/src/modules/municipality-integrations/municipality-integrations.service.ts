@@ -12,15 +12,36 @@ export class MunicipalityIntegrationsService {
     private readonly emailService: EmailService,
   ) {}
 
-  async findAll() {
-    return this.db
+  async findAll(search?: string, limit = 50, offset = 0) {
+    let query = this.db
       .selectFrom('municipality_integrations')
       .innerJoin('regions', 'regions.id', 'municipality_integrations.region_id')
       .select([
-        'municipality_integrations.id', 'municipality_integrations.auto_send_enabled',
-        'municipality_integrations.contact_email', 'regions.name_fr as regionNameFr',
+        'municipality_integrations.id', 'municipality_integrations.region_id',
+        'municipality_integrations.auto_send_enabled', 'municipality_integrations.contact_email',
+        'municipality_integrations.contact_phone', 'municipality_integrations.contact_website',
+        'municipality_integrations.mailing_address', 'municipality_integrations.postal_code',
+        'municipality_integrations.mrc_name', 'municipality_integrations.population',
+        'regions.name_fr as regionNameFr',
       ])
-      .execute();
+      .orderBy('regions.name_fr', 'asc')
+      .limit(limit)
+      .offset(offset);
+
+    if (search) {
+      query = query.where('regions.name_fr', 'ilike', `%${search}%`);
+    }
+
+    const results = await query.execute();
+
+    let countQuery = this.db
+      .selectFrom('municipality_integrations')
+      .innerJoin('regions', 'regions.id', 'municipality_integrations.region_id')
+      .select(({ fn }) => fn.count<number>('municipality_integrations.id').as('count'));
+    if (search) countQuery = countQuery.where('regions.name_fr', 'ilike', `%${search}%`);
+    const total = await countQuery.executeTakeFirst();
+
+    return { results, total: total?.count ?? 0 };
   }
 
   async upsert(dto: UpsertMunicipalityIntegrationDto, updatedBy: string) {
@@ -34,6 +55,10 @@ export class MunicipalityIntegrationsService {
       region_id: dto.regionId,
       auto_send_enabled: dto.autoSendEnabled,
       contact_email: dto.contactEmail ?? null,
+      contact_phone: dto.contactPhone ?? null,
+      contact_website: dto.contactWebsite ?? null,
+      mailing_address: dto.mailingAddress ?? null,
+      postal_code: dto.postalCode ?? null,
       email_subject_template: dto.emailSubjectTemplate ?? null,
       email_body_template: dto.emailBodyTemplate ?? null,
       notify_category_ids: dto.notifyCategoryIds ?? null,
@@ -52,6 +77,15 @@ export class MunicipalityIntegrationsService {
     return this.db
       .insertInto('municipality_integrations')
       .values(values)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  async toggleAutoSend(id: string, enabled: boolean, updatedBy: string) {
+    return this.db
+      .updateTable('municipality_integrations')
+      .set({ auto_send_enabled: enabled, updated_at: new Date() as any, updated_by: updatedBy })
+      .where('id', '=', id)
       .returningAll()
       .executeTakeFirstOrThrow();
   }

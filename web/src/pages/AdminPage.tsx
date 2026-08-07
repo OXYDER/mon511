@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -35,6 +35,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
             Utilisateurs
           </button>
+          <button className={`tab-item ${tab === 'municipalities' ? 'active' : ''}`} onClick={() => setTab('municipalities')}>
+            Municipalités
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -44,6 +47,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'types' && <ProblemTypesAdmin />}
         {tab === 'external' && <ExternalDataAdmin />}
         {tab === 'users' && <UsersAdmin />}
+        {tab === 'municipalities' && <MunicipalitiesAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -56,6 +60,9 @@ function ModerationQueue() {
   const [detail, setDetail] = useState<any>(null);
   const [reason, setReason] = useState('');
   const [reply, setReply] = useState('');
+  const [editingMunicipality, setEditingMunicipality] = useState(false);
+  const [municipalitySearch, setMunicipalitySearch] = useState('');
+  const [municipalityResults, setMunicipalityResults] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -73,9 +80,32 @@ function ModerationQueue() {
     try {
       const d = await api.get<any>(`/moderation/${id}`);
       setDetail(d);
+      setEditingMunicipality(false);
+      setMunicipalitySearch('');
+      setMunicipalityResults([]);
     } catch {
       setDetail(null);
     }
+  }
+
+  async function searchMunicipalities(q: string) {
+    setMunicipalitySearch(q);
+    if (q.trim().length < 2) { setMunicipalityResults([]); return; }
+    try {
+      const data = await api.get<{ results: any[] }>(`/municipality-integrations?search=${encodeURIComponent(q)}&limit=8`);
+      setMunicipalityResults(data.results);
+    } catch {
+      setMunicipalityResults([]);
+    }
+  }
+
+  async function applyMunicipality(regionId: string, name: string) {
+    if (!selectedId) return;
+    await api.patch(`/moderation/${selectedId}/region`, { regionId });
+    setEditingMunicipality(false);
+    setMunicipalitySearch('');
+    setMunicipalityResults([]);
+    setDetail((prev: any) => ({ ...prev, regionNameFr: name }));
   }
 
   useEffect(() => { loadQueue(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -146,6 +176,34 @@ function ModerationQueue() {
                 <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
                 <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
               </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--panel-hover)', borderRadius: 9 }}>
+                <span style={{ fontSize: 12 }}>
+                  🏛️ Municipalité détectée : <strong>{detail.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>
+                </span>
+                <button className="btn-ghost" style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => setEditingMunicipality((v: boolean) => !v)}>
+                  {editingMunicipality ? 'Fermer' : 'Corriger'}
+                </button>
+              </div>
+              {editingMunicipality && (
+                <div style={{ marginBottom: 14, position: 'relative' }}>
+                  <input
+                    className="text-input"
+                    placeholder="Rechercher une municipalité..."
+                    value={municipalitySearch}
+                    onChange={(e) => searchMunicipalities(e.target.value)}
+                  />
+                  {municipalityResults.length > 0 && (
+                    <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10 }}>
+                      {municipalityResults.map((m: any) => (
+                        <div key={m.region_id} className="search-dropdown-item" onClick={() => applyMunicipality(m.region_id, m.regionNameFr)}>
+                          <span>🏛️</span><span>{m.regionNameFr}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {detail.flags?.length > 0 && (
                 <div className="error-banner">
@@ -514,6 +572,163 @@ function SiteSettingsAdmin() {
           </span>
         </div>
       ))}
+    </div>
+  );
+}
+
+function MunicipalitiesAdmin() {
+  const [search, setSearch] = useState('');
+  const [results, setResults] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
+  const LIMIT = 30;
+
+  const [selected, setSelected] = useState<any | null>(null);
+  const [form, setForm] = useState<any>({});
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const data = await api.get<{ results: any[]; total: number }>(
+        `/municipality-integrations?search=${encodeURIComponent(search)}&limit=${LIMIT}&offset=${offset}`,
+      );
+      setResults(data.results);
+      setTotal(data.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setOffset(0); }, [search]);
+  useEffect(() => { if (offset === 0) load(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function selectMunicipality(m: any) {
+    setSelected(m);
+    setForm({
+      contactEmail: m.contact_email ?? '',
+      contactPhone: m.contact_phone ?? '',
+      contactWebsite: m.contact_website ?? '',
+      mailingAddress: m.mailing_address ?? '',
+      postalCode: m.postal_code ?? '',
+      autoSendEnabled: m.auto_send_enabled,
+    });
+    setFeedback(null);
+  }
+
+  async function toggleAutoSend(m: any) {
+    await api.patch(`/municipality-integrations/${m.id}/auto-send`, { enabled: !m.auto_send_enabled });
+    load();
+    if (selected?.id === m.id) setForm((f: any) => ({ ...f, autoSendEnabled: !f.autoSendEnabled }));
+  }
+
+  async function save() {
+    if (!selected) return;
+    setError(null);
+    try {
+      await api.post('/municipality-integrations', {
+        regionId: selected.region_id,
+        autoSendEnabled: form.autoSendEnabled,
+        contactEmail: form.contactEmail || undefined,
+        contactPhone: form.contactPhone || undefined,
+        contactWebsite: form.contactWebsite || undefined,
+        mailingAddress: form.mailingAddress || undefined,
+        postalCode: form.postalCode || undefined,
+      });
+      setFeedback('Enregistré.');
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    }
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      <div style={{ flex: '1 1 320px', minWidth: 280 }}>
+        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+          Municipalités ({total})
+        </div>
+        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+          Source : Répertoire des municipalités du Québec (MAMH). L'envoi automatique est désactivé
+          par défaut pour chacune — à activer ici une fois l'adresse vérifiée.
+        </p>
+        <div className="field-group">
+          <input
+            className="text-input"
+            placeholder="Rechercher une municipalité..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {results.map((m) => (
+          <div
+            key={m.id}
+            className="report-card"
+            style={{ borderColor: selected?.id === m.id ? 'var(--accent-signal)' : undefined }}
+            onClick={() => selectMunicipality(m)}
+          >
+            <div className="rc-icon-hex">🏛️</div>
+            <div className="rc-body">
+              <div className="rc-title">{m.regionNameFr}</div>
+              <div className="rc-meta">{m.contact_email ?? 'Aucun courriel'}</div>
+            </div>
+            <ToggleSwitch
+              on={m.auto_send_enabled}
+              onToggle={(e?: any) => { e?.stopPropagation?.(); toggleAutoSend(m); }}
+              title={m.auto_send_enabled ? 'Envoi automatique activé' : 'Envoi automatique désactivé'}
+            />
+          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+          <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>
+          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', alignSelf: 'center' }}>
+            {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
+          </span>
+          <button className="btn-ghost" disabled={offset + LIMIT >= total} onClick={() => setOffset(offset + LIMIT)}>Suivant →</button>
+        </div>
+      </div>
+
+      <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
+        {!selected && <div className="center-msg">Sélectionne une municipalité à gauche.</div>}
+        {selected && (
+          <>
+            {feedback && <div className="success-banner">{feedback}</div>}
+            <div className="detail-title" style={{ fontSize: 17, marginBottom: 4 }}>{selected.regionNameFr}</div>
+            {selected.mrc_name && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 16 }}>{selected.mrc_name}{selected.population ? ` · ${selected.population.toLocaleString('fr-CA')} habitants` : ''}</div>}
+
+            <div className="privacy-row">
+              <span>Envoi automatique des signalements approuvés</span>
+              <ToggleSwitch on={form.autoSendEnabled} onToggle={() => setForm((f: any) => ({ ...f, autoSendEnabled: !f.autoSendEnabled }))} />
+            </div>
+
+            <div className="field-group" style={{ marginTop: 16 }}>
+              <label className="field-label">Courriel de contact</label>
+              <input className="text-input" value={form.contactEmail} onChange={(e) => setForm((f: any) => ({ ...f, contactEmail: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Téléphone</label>
+              <input className="text-input" value={form.contactPhone} onChange={(e) => setForm((f: any) => ({ ...f, contactPhone: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Site web</label>
+              <input className="text-input" value={form.contactWebsite} onChange={(e) => setForm((f: any) => ({ ...f, contactWebsite: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Adresse postale</label>
+              <input className="text-input" value={form.mailingAddress} onChange={(e) => setForm((f: any) => ({ ...f, mailingAddress: e.target.value }))} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Code postal</label>
+              <input className="text-input" value={form.postalCode} onChange={(e) => setForm((f: any) => ({ ...f, postalCode: e.target.value }))} />
+            </div>
+
+            <button className="btn-primary" onClick={save}>Enregistrer</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

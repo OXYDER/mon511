@@ -36,8 +36,10 @@ export class ModerationService {
   async findDetail(reportId: string) {
     const report = await this.db
       .selectFrom('reports')
-      .selectAll()
-      .where('id', '=', reportId)
+      .leftJoin('regions', 'regions.id', 'reports.region_id')
+      .selectAll('reports')
+      .select('regions.name_fr as regionNameFr')
+      .where('reports.id', '=', reportId)
       .executeTakeFirst();
     if (!report) throw new NotFoundException('Signalement introuvable.');
 
@@ -59,6 +61,18 @@ export class ModerationService {
       .execute();
 
     return { report, messages, flags };
+  }
+
+  /** Corrige la municipalité associée à un signalement avant décision — la
+   * détection automatique (nom via géolocalisation) peut se tromper près
+   * d'une frontière ou si aucune correspondance n'a été trouvée. */
+  async setRegion(reportId: string, regionId: string | null) {
+    await this.db
+      .updateTable('reports')
+      .set({ region_id: regionId, updated_at: new Date() as any })
+      .where('id', '=', reportId)
+      .execute();
+    return { reportId, regionId };
   }
 
   /**

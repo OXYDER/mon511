@@ -14,6 +14,7 @@ export interface RegionsTable {
   name_fr: string;
   name_en: string;
   deployment_status: 'active' | 'partial' | 'inactive';
+  source_mcode: string | null;
   created_at: Generated<Timestamp>;
 }
 
@@ -184,6 +185,13 @@ export interface MunicipalityIntegrationsTable {
   auto_send_enabled: Generated<boolean>;
   notification_method: Generated<'email' | 'webhook' | 'api'>;
   contact_email: string | null;
+  contact_phone: string | null;
+  contact_website: string | null;
+  mailing_address: string | null;
+  postal_code: string | null;
+  mrc_name: string | null;
+  population: number | null;
+  source_mcode: string | null;
   webhook_url: string | null;
   api_credentials: Record<string, unknown> | null;
   email_subject_template: string | null;

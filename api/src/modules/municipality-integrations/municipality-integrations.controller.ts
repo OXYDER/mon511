@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { MunicipalityIntegrationsService } from './municipality-integrations.service';
 import { UpsertMunicipalityIntegrationDto } from './dto/upsert-municipality-integration.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -13,12 +13,21 @@ export class MunicipalityIntegrationsController {
   constructor(private readonly service: MunicipalityIntegrationsService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(
+    @Query('search') search?: string,
+    @Query('limit') limit = '50',
+    @Query('offset') offset = '0',
+  ) {
+    return this.service.findAll(search, Number(limit), Number(offset));
   }
 
   @Post()
   upsert(@Body() dto: UpsertMunicipalityIntegrationDto, @CurrentUser() user: CurrentUserPayload) {
     return this.service.upsert(dto, user.userId);
+  }
+
+  @Patch(':id/auto-send')
+  toggleAutoSend(@Param('id') id: string, @Body('enabled') enabled: boolean, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.toggleAutoSend(id, enabled, user.userId);
   }
 }

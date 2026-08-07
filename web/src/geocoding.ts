@@ -87,8 +87,16 @@ export async function reverseGeocode(lat: number, lng: number, zoom = 12): Promi
  * (ex. "R 116, Canada") — inutilisable pour une municipalité qui recevrait
  * ce signalement. On reconstruit une adresse plus utile en combinant le nom
  * de la route avec la municipalité la plus proche trouvée dans le contexte. */
-export async function reverseGeocodeAddress(lat: number, lng: number): Promise<string | null> {
-  if (!MAPTILER_KEY) return null;
+export interface AddressResult {
+  address: string | null;
+  /** Nom de municipalité détecté (contexte MapTiler) — utilisé pour associer
+   * automatiquement un signalement à la bonne municipalité en attendant
+   * l'import de vraies frontières géographiques (voir reports.service.ts). */
+  municipality: string | null;
+}
+
+export async function reverseGeocodeAddress(lat: number, lng: number): Promise<AddressResult> {
+  if (!MAPTILER_KEY) return { address: null, municipality: null };
   try {
     const res = await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -98,11 +106,12 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
 
     const municipality = feature.context?.find((c: any) => c.id?.startsWith('municipality') || c.id?.startsWith('place'));
     const region = feature.context?.find((c: any) => c.id?.startsWith('region'));
+    const municipalityName = municipality?.text ?? null;
 
     // A un numéro civique ou une rue claire (ex. "40 Rue Roux") — le
     // place_name de MapTiler est déjà correct pour ce cas.
     if (feature.address || /^\d/.test(feature.text ?? '')) {
-      return feature.place_name ?? feature.text ?? null;
+      return { address: feature.place_name ?? feature.text ?? null, municipality: municipalityName };
     }
 
     // Repli de base, toujours calculé avant d'essayer l'amélioration ci-dessous
@@ -132,19 +141,20 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
           const distance = haversineMeters(lat, lng, addrCenter[1], addrCenter[0]);
           // Au-delà de 800m, l'adresse trouvée n'a plus vraiment de lien
           // avec l'endroit signalé — mieux vaut le repli route+municipalité.
-          if (distance <= 800) return `près de ${addrFeature.place_name}`;
+          if (distance <= 800) return { address: `près de ${addrFeature.place_name}`, municipality: municipalityName };
         }
       }
     } catch {
       // Repli silencieux sur le nom de route + municipalité ci-dessous.
     }
 
-    return fallback;
+    return { address: fallback, municipality: municipalityName };
   } catch {
     // Le géocodage principal a complètement échoué (réseau, quota, etc.) —
     // dernier filet de sécurité avec le repère de zone déjà utilisé ailleurs
     // dans l'app, plutôt que de ne rien afficher du tout.
-    return reverseGeocode(lat, lng, 16);
+    const areaName = await reverseGeocode(lat, lng, 16);
+    return { address: areaName, municipality: null };
   }
 }
 
