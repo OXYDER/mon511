@@ -91,10 +91,10 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
   if (!MAPTILER_KEY) return null;
   try {
     const res = await fetch(`https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr`);
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const feature = data.features?.[0];
-    if (!feature) return null;
+    if (!feature) throw new Error('Aucun résultat');
 
     const municipality = feature.context?.find((c: any) => c.id?.startsWith('municipality') || c.id?.startsWith('place'));
     const region = feature.context?.find((c: any) => c.id?.startsWith('region'));
@@ -105,15 +105,25 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
       return feature.place_name ?? feature.text ?? null;
     }
 
+    // Repli de base, toujours calculé avant d'essayer l'amélioration ci-dessous
+    // — si l'appel suivant échoue ou est trop lent, on a déjà quelque chose.
+    const fallback = [feature.text, municipality?.text, region?.text].filter(Boolean).join(', ') || feature.place_name || null;
+
     // Pas d'adresse civique exactement à ce point (typique sur une grande
     // route rurale) — on cherche la vraie adresse civique connue la plus
     // proche (interpolation officielle de MapTiler à partir de plages
     // d'adresses réelles, pas une invention de notre part), préfixée
     // "près de" pour être honnête que ce n'est pas la position exacte.
+    // Délai limité à 4s pour ne jamais bloquer longtemps sur cette requête
+    // secondaire — le repli ci-dessus est déjà prêt si besoin.
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
       const addrRes = await fetch(
         `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr&types=address`,
+        { signal: controller.signal },
       );
+      clearTimeout(timeout);
       if (addrRes.ok) {
         const addrData = await addrRes.json();
         const addrFeature = addrData.features?.[0];
@@ -129,10 +139,12 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
       // Repli silencieux sur le nom de route + municipalité ci-dessous.
     }
 
-    const parts = [feature.text, municipality?.text, region?.text].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : (feature.place_name ?? null);
+    return fallback;
   } catch {
-    return null;
+    // Le géocodage principal a complètement échoué (réseau, quota, etc.) —
+    // dernier filet de sécurité avec le repère de zone déjà utilisé ailleurs
+    // dans l'app, plutôt que de ne rien afficher du tout.
+    return reverseGeocode(lat, lng, 16);
   }
 }
 
