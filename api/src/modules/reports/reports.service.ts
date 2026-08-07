@@ -59,7 +59,7 @@ export class ReportsService {
       .leftJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .leftJoin('users', 'users.id', 'reports.user_id')
       .select([
-        'reports.id', 'reports.status', 'reports.description', 'reports.address_text',
+        'reports.id', 'reports.status', 'reports.description', 'reports.address_text as addressText',
         'reports.created_at', 'reports.updated_at', 'reports.resolved_at',
         'reports.municipality_notified', 'reports.municipality_name',
         'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',

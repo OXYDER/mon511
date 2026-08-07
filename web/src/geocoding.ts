@@ -1,5 +1,13 @@
 const MAPTILER_KEY = import.meta.env.VITE_MAPTILER_API_KEY;
 
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 export interface GeocodingResult {
   name: string;
   lat: number;
@@ -97,8 +105,30 @@ export async function reverseGeocodeAddress(lat: number, lng: number): Promise<s
       return feature.place_name ?? feature.text ?? null;
     }
 
-    // Sinon (ex. juste "Route 116" sans numéro), on rajoute la municipalité
-    // manuellement plutôt que de laisser passer "Route 116, Canada".
+    // Pas d'adresse civique exactement à ce point (typique sur une grande
+    // route rurale) — on cherche la vraie adresse civique connue la plus
+    // proche (interpolation officielle de MapTiler à partir de plages
+    // d'adresses réelles, pas une invention de notre part), préfixée
+    // "près de" pour être honnête que ce n'est pas la position exacte.
+    try {
+      const addrRes = await fetch(
+        `https://api.maptiler.com/geocoding/${lng},${lat}.json?key=${MAPTILER_KEY}&language=fr&types=address`,
+      );
+      if (addrRes.ok) {
+        const addrData = await addrRes.json();
+        const addrFeature = addrData.features?.[0];
+        const addrCenter = addrFeature?.center; // [lng, lat]
+        if (addrFeature?.place_name && addrCenter) {
+          const distance = haversineMeters(lat, lng, addrCenter[1], addrCenter[0]);
+          // Au-delà de 800m, l'adresse trouvée n'a plus vraiment de lien
+          // avec l'endroit signalé — mieux vaut le repli route+municipalité.
+          if (distance <= 800) return `près de ${addrFeature.place_name}`;
+        }
+      }
+    } catch {
+      // Repli silencieux sur le nom de route + municipalité ci-dessous.
+    }
+
     const parts = [feature.text, municipality?.text, region?.text].filter(Boolean);
     return parts.length > 0 ? parts.join(', ') : (feature.place_name ?? null);
   } catch {
