@@ -170,6 +170,10 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
       setError("Utilise le bouton de localisation avant d'envoyer le signalement.");
       return;
     }
+    if (photoFiles.length === 0) {
+      setError('Ajoute au moins une photo pour appuyer ton signalement.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -259,7 +263,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
             </div>
 
             <div className="field-group">
-              <label className="field-label">Photos (optionnel — max {MAX_PHOTOS})</label>
+              <label className="field-label">Photos (au moins 1 requise — max {MAX_PHOTOS})</label>
               {photoPreviews.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   {photoPreviews.map((src, i) => (
@@ -341,8 +345,8 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
                   {addressAutoFilled && ' · adresse détectée automatiquement'}
                 </div>
               )}
-              <div className="field-hint" style={{ marginTop: 6 }}>
-                Tu peux modifier ou préciser l'adresse toi-même — utile sur une route sans adresse civique claire (ex. « Route 116, km 42 »).
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                Vous pouvez modifier cette adresse si inexacte.
               </div>
             </div>
 
