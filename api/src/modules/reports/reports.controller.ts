@@ -3,6 +3,7 @@ import { ReportsService } from './reports.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { SuggestResolutionDto } from './dto/suggest-resolution.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-user.decorator';
 
 @Controller('reports')
@@ -10,12 +11,14 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('nearby')
+  @UseGuards(OptionalJwtAuthGuard)
   findNearby(
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radius') radius = '5000',
+    @CurrentUser() user?: CurrentUserPayload,
   ) {
-    return this.reportsService.findNearby(Number(lat), Number(lng), Number(radius));
+    return this.reportsService.findNearby(Number(lat), Number(lng), Number(radius), user?.userId);
   }
 
   @Get(':id')

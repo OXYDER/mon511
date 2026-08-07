@@ -102,9 +102,14 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
       {report && (
         <>
-          <span className={`pill ${report.status === 'published_resolved' ? 'resolved' : 'unresolved'}`} style={{ marginBottom: 10, display: 'inline-block' }}>
-            {report.status === 'published_resolved' ? 'Résolu' : report.status === 'pending_moderation' ? 'En modération' : 'Non résolu'}
+          <span className={`pill ${report.status === 'published_resolved' ? 'resolved' : report.status === 'pending_moderation' ? 'official' : 'unresolved'}`} style={{ marginBottom: 10, display: 'inline-block' }}>
+            {report.status === 'published_resolved' ? 'Résolu' : report.status === 'pending_moderation' ? '⏳ En attente d\'approbation' : 'Non résolu'}
           </span>
+          {report.status === 'pending_moderation' && (
+            <div className="error-banner" style={{ background: 'rgba(59,156,255,0.14)', borderColor: 'var(--official-blue)', color: 'var(--official-blue)' }}>
+              Non visible pour les autres usagers pour l'instant. Tu recevras une notification une fois approuvé et publié.
+            </div>
+          )}
 
           {report.description && (
             <div style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.5 }}>{report.description}</div>

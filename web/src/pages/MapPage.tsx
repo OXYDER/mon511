@@ -399,6 +399,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     onClick: () => openReport(r),
     photoUrl: r.thumbnailUrl,
     selected: selection?.type === 'report' && selection.id === r.id,
+    pending: r.status === 'pending_moderation',
   }));
 
   const officialPins: MapPin[] = [
@@ -593,8 +594,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                       <div className="rc-title">{r.problemTypeNameFr}</div>
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                     </div>
-                    <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
-                      {r.status === 'published_resolved' ? t('resolu', lang) : t('nonResolu', lang)}
+                    <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'pending_moderation' ? 'official' : 'unresolved'}`}>
+                      {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
                     </span>
                   </div>
                 ))}

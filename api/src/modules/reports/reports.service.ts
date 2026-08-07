@@ -17,7 +17,7 @@ export class ReportsService {
    * alimente la carte. ST_DWithin utilise l'index GIST sur `location`
    * (voir migration 0001_init.sql) pour rester performant à grande échelle.
    */
-  async findNearby(lat: number, lng: number, radiusMeters = 5000) {
+  async findNearby(lat: number, lng: number, radiusMeters = 5000, currentUserId?: string) {
     return this.db
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
@@ -35,7 +35,16 @@ export class ReportsService {
         sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),
         sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
       ])
-      .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
+      .where((eb) =>
+        currentUserId
+          // L'auteur voit aussi son propre signalement en attente d'approbation
+          // — invisible pour tout le monde d'autre, mais pas pour lui-même.
+          ? eb.or([
+              eb('reports.status', 'in', ['published_unresolved', 'published_resolved']),
+              eb.and([eb('reports.status', '=', 'pending_moderation'), eb('reports.user_id', '=', currentUserId)]),
+            ])
+          : eb('reports.status', 'in', ['published_unresolved', 'published_resolved']),
+      )
       .where(
         sql<boolean>`ST_DWithin(reports.location::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusMeters})`,
       )

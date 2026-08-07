@@ -341,6 +341,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
                   {addressAutoFilled && ' · adresse détectée automatiquement'}
                 </div>
               )}
+              <div className="field-hint" style={{ marginTop: 6 }}>
+                Tu peux modifier ou préciser l'adresse toi-même — utile sur une route sans adresse civique claire (ex. « Route 116, km 42 »).
+              </div>
             </div>
 
             <div className="field-group">
