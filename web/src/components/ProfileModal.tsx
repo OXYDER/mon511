@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, clearToken } from '../api';
 import ToggleSwitch from './ToggleSwitch';
+import CustomSelect from './CustomSelect';
 
 interface Props {
   onClose: () => void;
   onLogout: () => void;
+  onOpenMyReports: () => void;
 }
 
 const PRIVACY_LABELS: [string, string, string][] = [
@@ -14,9 +16,8 @@ const PRIVACY_LABELS: [string, string, string][] = [
   ['show_real_name', 'showRealName', 'Afficher mon vrai nom'],
 ];
 
-export default function ProfileModal({ onClose, onLogout }: Props) {
+export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Props) {
   const [me, setMe] = useState<any>(null);
-  const [myReports, setMyReports] = useState<any[]>([]);
   const [tab, setTab] = useState<'profile' | 'privacy' | 'security'>('profile');
 
   const [firstName, setFirstName] = useState('');
@@ -34,7 +35,7 @@ export default function ProfileModal({ onClose, onLogout }: Props) {
       setFirstName(data.first_name ?? '');
       setLastName(data.last_name ?? '');
     });
-    api.get<any[]>('/users/me/reports').then(setMyReports);
+    // (Mes signalements affichés maintenant dans leur propre page dédiée.)
   }, []);
 
   async function togglePrivacy(snakeKey: string, camelKey: string, current: boolean) {
@@ -133,11 +134,21 @@ export default function ProfileModal({ onClose, onLogout }: Props) {
 
                   <div className="field-group" style={{ marginTop: 16 }}>
                     <label className="field-label">Affichage de mon nom de famille</label>
-                    <select value={me.privacy_settings.last_name_display ?? 'hidden'} onChange={(e) => setLastNameDisplay(e.target.value as any)}>
-                      <option value="hidden">Ne pas afficher</option>
-                      <option value="initial">Première lettre seulement (ex. « Benoit T. »)</option>
-                      <option value="full">Nom complet</option>
-                    </select>
+                    <CustomSelect
+                      value={me.privacy_settings.last_name_display ?? 'hidden'}
+                      onChange={(v) => setLastNameDisplay(v as any)}
+                      options={[
+                        { value: 'hidden', label: 'Ne pas afficher' },
+                        {
+                          value: 'initial',
+                          label: `Première lettre seulement${me.last_name ? ` (ex. « ${me.first_name || 'Toi'} ${me.last_name[0].toUpperCase()}. »)` : ''}`,
+                        },
+                        {
+                          value: 'full',
+                          label: `Nom complet${me.last_name ? ` (ex. « ${me.first_name || 'Toi'} ${me.last_name} »)` : ''}`,
+                        },
+                      ]}
+                    />
                   </div>
                 </>
               )}
@@ -160,28 +171,17 @@ export default function ProfileModal({ onClose, onLogout }: Props) {
                 </form>
               )}
 
-              <div className="section-label">Mes signalements ({myReports.length})</div>
-              {myReports.length === 0 && (
-                <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Tu n'as encore fait aucun signalement.</div>
-              )}
-              {myReports.map((r) => (
-                <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
-                  <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                    {r.problemTypeIcon ?? '📍'}
-                  </div>
-                  <div className="rc-body">
-                    <div className="rc-title">{r.problemTypeNameFr}</div>
-                    <div className="rc-meta">{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}</div>
-                  </div>
-                  <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : 'unresolved'}`}>
-                    {r.status === 'published_resolved' ? 'Résolu' : r.status === 'pending_moderation' ? 'En modération' : 'Non résolu'}
-                  </span>
-                </div>
-              ))}
+              <button
+                className="btn-primary"
+                style={{ width: '100%', marginTop: 20 }}
+                onClick={onOpenMyReports}
+              >
+                📋 Mes signalements
+              </button>
 
               <button
                 className="btn-ghost btn-danger"
-                style={{ width: '100%', marginTop: 20 }}
+                style={{ width: '100%', marginTop: 10 }}
                 onClick={() => { clearToken(); onLogout(); }}
               >
                 Se déconnecter

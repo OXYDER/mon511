@@ -76,19 +76,52 @@ export class UsersService {
   }
 
   /** Profil public — respecte privacy_settings de l'usager consulté (§ users, modèle de données). */
+  /** Nom d'affichage respectant le réglage de confidentialité choisi par
+   * l'usager lui-même — utilisé partout où le nom d'un usager est montré à
+   * quelqu'un d'autre (détail d'un signalement, profil public, etc.). */
+  formatDisplayName(firstName: string | null, lastName: string | null, lastNameDisplay: 'full' | 'initial' | 'hidden' | undefined, fallbackEmail: string): string {
+    const first = firstName || fallbackEmail.split('@')[0];
+    if (!lastName || lastNameDisplay === 'hidden' || !lastNameDisplay) return first;
+    if (lastNameDisplay === 'initial') return `${first} ${lastName[0].toUpperCase()}.`;
+    return `${first} ${lastName}`;
+  }
+
   async findPublicProfile(id: string) {
     const user = await this.findById(id);
-    const settings = user.privacy_settings;
+    const settings = user.privacy_settings as any;
+
+    const displayName = this.formatDisplayName(user.first_name, user.last_name, settings.last_name_display, user.email);
+
+    let region: { id: string; name_fr: string } | undefined;
+    if (settings.show_region && user.region_id) {
+      region = await this.db.selectFrom('regions').select(['id', 'name_fr']).where('id', '=', user.region_id).executeTakeFirst();
+    }
+
+    let reports: any[] = [];
+    if (settings.show_report_history) {
+      reports = await this.db
+        .selectFrom('reports')
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .select([
+          'reports.id', 'reports.status', 'reports.created_at',
+          'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+        ])
+        .where('reports.user_id', '=', id)
+        .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
+        .orderBy('reports.created_at', 'desc')
+        .limit(20)
+        .execute();
+    }
 
     return {
       id: user.id,
-      displayName: settings.show_real_name
-        ? `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim()
-        : user.email.split('@')[0],
+      displayName,
       avatarUrl: user.avatar_url,
       reputationScore: settings.show_reputation ? user.reputation_score : null,
-      regionId: settings.show_region ? user.region_id : null,
+      regionName: region?.name_fr ?? null,
       memberSince: user.created_at,
+      reports,
+      showReportHistory: settings.show_report_history,
     };
   }
 

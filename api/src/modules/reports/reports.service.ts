@@ -5,6 +5,16 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 import { CreateReportDto } from './dto/create-report.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
+/** Nom d'affichage respectant le réglage de confidentialité choisi par
+ * l'usager lui-même — dupliqué localement depuis UsersService pour éviter
+ * une dépendance inter-module pour une si petite fonction pure. */
+function formatDisplayName(firstName: string | null, lastName: string | null, lastNameDisplay: string | undefined, fallbackEmail: string): string {
+  const first = firstName || fallbackEmail.split('@')[0];
+  if (!lastName || lastNameDisplay === 'hidden' || !lastNameDisplay) return first;
+  if (lastNameDisplay === 'initial') return `${first} ${lastName[0].toUpperCase()}.`;
+  return `${first} ${lastName}`;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
@@ -64,6 +74,7 @@ export class ReportsService {
         'reports.municipality_notified', 'reports.municipality_name',
         'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
         'users.id as authorId', 'users.email as authorEmail', 'users.first_name as authorFirstName',
+        'users.last_name as authorLastName', 'users.privacy_settings as authorPrivacySettings',
         sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),
         sql<number>`ST_X(reports.location::geometry)`.as('longitude'),
       ])
@@ -84,7 +95,12 @@ export class ReportsService {
       .where('report_id', '=', id)
       .executeTakeFirst();
 
-    return { ...report, photos, confirmationsCount: confirmationsCount?.count ?? 0 };
+    const authorSettings = report.authorPrivacySettings as any;
+    const authorDisplayName = report.authorId
+      ? formatDisplayName(report.authorFirstName, report.authorLastName, authorSettings?.last_name_display, report.authorEmail ?? '')
+      : null;
+
+    return { ...report, photos, confirmationsCount: confirmationsCount?.count ?? 0, authorDisplayName };
   }
 
   /** Détail enrichi pour l'auteur seulement — inclut ce qui n'est pas

@@ -904,7 +904,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       {showProfileModal && (
-        <ProfileModal onClose={() => setShowProfileModal(false)} onLogout={onLogout} />
+        <ProfileModal
+          onClose={() => setShowProfileModal(false)}
+          onLogout={() => { setShowProfileModal(false); onLogout(); }}
+          onOpenMyReports={() => { setShowProfileModal(false); setShowMyReports(true); }}
+        />
       )}
       {contextMenu && (
         <div
