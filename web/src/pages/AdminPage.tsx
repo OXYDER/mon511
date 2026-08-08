@@ -105,7 +105,7 @@ function ModerationQueue() {
     setEditingMunicipality(false);
     setMunicipalitySearch('');
     setMunicipalityResults([]);
-    setDetail((prev: any) => ({ ...prev, regionNameFr: name }));
+    setDetail((prev: any) => ({ ...prev, report: { ...prev.report, regionNameFr: name } }));
   }
 
   useEffect(() => { loadQueue(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -229,7 +229,7 @@ function ModerationQueue() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--panel-hover)', borderRadius: 9 }}>
                 <span style={{ fontSize: 12 }}>
-                  🏛️ Municipalité détectée : <strong>{detail.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>
+                  🏛️ Municipalité détectée : <strong>{detail.report.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>
                 </span>
                 <button className="btn-ghost" style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => setEditingMunicipality((v: boolean) => !v)}>
                   {editingMunicipality ? 'Fermer' : 'Corriger'}
