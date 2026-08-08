@@ -80,6 +80,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
     setSnappedToRoad(snapped);
     setAddressText(result.name);
     setAddressAutoFilled(true);
+    if (result.municipality) setDetectedMunicipality(result.municipality);
     setShowAddressDropdown(false);
     setAddressSuggestions([]);
   }

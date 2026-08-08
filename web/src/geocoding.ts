@@ -12,6 +12,9 @@ export interface GeocodingResult {
   name: string;
   lat: number;
   lng: number;
+  /** Municipalité détectée (contexte MapTiler) — présente ici pour éviter un
+   * appel réseau séparé quand on choisit une suggestion d'adresse. */
+  municipality: string | null;
 }
 
 /** Recherche plusieurs villes/adresses au Québec via MapTiler, pour un menu
@@ -24,7 +27,10 @@ export async function searchCities(query: string, limit = 4): Promise<GeocodingR
     );
     if (!res.ok) return [];
     const data = await res.json();
-    return (data.features ?? []).map((f: any) => ({ name: f.place_name, lat: f.center[1], lng: f.center[0] }));
+    return (data.features ?? []).map((f: any) => {
+      const municipality = f.context?.find((c: any) => c.id?.startsWith('municipality') || c.id?.startsWith('place'));
+      return { name: f.place_name, lat: f.center[1], lng: f.center[0], municipality: municipality?.text ?? null };
+    });
   } catch {
     return [];
   }
