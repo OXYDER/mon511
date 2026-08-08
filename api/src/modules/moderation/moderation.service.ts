@@ -4,6 +4,7 @@ import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { ModerationDecisionDto } from './dto/moderation-decision.dto';
 import { MunicipalityIntegrationsService } from '../municipality-integrations/municipality-integrations.service';
+import { ReputationService } from '../reputation/reputation.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class ModerationService {
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly municipalityIntegrations: MunicipalityIntegrationsService,
     private readonly notifications: NotificationsService,
+    private readonly reputationService: ReputationService,
   ) {}
 
   /** File d'attente — signalements en attente de modération, plus récents en premier. */
@@ -140,6 +142,7 @@ export class ModerationService {
             title: 'Ton signalement a été refusé',
             body: dto.reason,
           });
+          await this.reputationService.award(report.user_id, 'report_rejected', reportId);
         }
       }
 
@@ -185,18 +188,40 @@ export class ModerationService {
     return Array.from(byReport.values());
   }
 
-  async dismissFlags(reportId: string, moderatorId: string) {
+  private async markFlagsHandled(reportId: string, moderatorId: string) {
     await this.db
       .updateTable('report_flags')
       .set({ handled_at: new Date() as any, handled_by: moderatorId })
       .where('report_id', '=', reportId)
       .where('handled_at', 'is', null)
       .execute();
+  }
+
+  async dismissFlags(reportId: string, moderatorId: string) {
+    // Les usagers qui ont signalé à tort — pas de pénalité par défaut
+    // (flag_rejected = 0 au barème), mais l'événement reste journalisé.
+    const flaggers = await this.db
+      .selectFrom('report_flags')
+      .select('user_id')
+      .where('report_id', '=', reportId)
+      .where('handled_at', 'is', null)
+      .execute();
+    for (const f of flaggers) await this.reputationService.award(f.user_id, 'flag_rejected', reportId);
+
+    await this.markFlagsHandled(reportId, moderatorId);
     return { reportId, dismissed: true };
   }
 
   async removeReportForAbuse(reportId: string, moderatorId: string, reason: string) {
-    await this.dismissFlags(reportId, moderatorId);
+    // Les usagers qui ont signalé à raison — points pour eux, pénalité pour l'auteur du contenu retiré.
+    const [flaggers, report] = await Promise.all([
+      this.db.selectFrom('report_flags').select('user_id').where('report_id', '=', reportId).where('handled_at', 'is', null).execute(),
+      this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst(),
+    ]);
+    for (const f of flaggers) await this.reputationService.award(f.user_id, 'flag_upheld', reportId);
+    if (report?.user_id) await this.reputationService.award(report.user_id, 'report_flagged_valid', reportId);
+
+    await this.markFlagsHandled(reportId, moderatorId);
     await this.db
       .updateTable('reports')
       .set({ status: 'rejected', updated_at: new Date() as any })
@@ -241,6 +266,13 @@ export class ModerationService {
   }
 
   async acceptResolution(reportId: string, moderatorId: string) {
+    const suggesters = await this.db
+      .selectFrom('report_resolution_suggestions')
+      .select('suggested_by')
+      .where('report_id', '=', reportId)
+      .where('status', '=', 'pending')
+      .execute();
+
     await this.db
       .updateTable('report_resolution_suggestions')
       .set({ status: 'accepted' })
@@ -256,6 +288,10 @@ export class ModerationService {
       .insertInto('report_status_history')
       .values({ report_id: reportId, old_status: 'published_unresolved', new_status: 'published_resolved', changed_by: moderatorId, reason: 'Confirmé par la modération' })
       .execute();
+
+    for (const s of suggesters) await this.reputationService.award(s.suggested_by, 'resolution_suggestion_correct', reportId);
+    const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
+    if (report?.user_id) await this.reputationService.award(report.user_id, 'report_resolved', reportId);
     return { reportId, accepted: true };
   }
 

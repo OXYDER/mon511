@@ -16,6 +16,7 @@ import { MessagingModule } from './modules/messaging/messaging.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { ExternalDataModule } from './modules/external-data/external-data.module';
 import { SiteSettingsModule } from './modules/site-settings/site-settings.module';
+import { ReputationModule } from './modules/reputation/reputation.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SiteSettingsModule } from './modules/site-settings/site-settings.module
     UploadsModule,
     ExternalDataModule,
     SiteSettingsModule,
+    ReputationModule,
   ],
   controllers: [HealthController],
 })

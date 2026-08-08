@@ -4,6 +4,7 @@ import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { CreateReportDto } from './dto/create-report.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReputationService } from '../reputation/reputation.service';
 
 /** Nom d'affichage respectant le réglage de confidentialité choisi par
  * l'usager lui-même — dupliqué localement depuis UsersService pour éviter
@@ -20,6 +21,7 @@ export class ReportsService {
   constructor(
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly notifications: NotificationsService,
+    private readonly reputationService: ReputationService,
   ) {}
 
   /**
@@ -340,11 +342,20 @@ export class ReportsService {
 
   /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
   async confirm(reportId: string, userId: string) {
-    return this.db
+    const result = await this.db
       .insertInto('report_confirmations')
       .values({ report_id: reportId, user_id: userId })
       .onConflict((oc) => oc.doNothing())
-      .execute();
+      .executeTakeFirst();
+
+    // Seulement si c'est une vraie nouvelle confirmation (pas un doublon ignoré).
+    if (result.numInsertedOrUpdatedRows && result.numInsertedOrUpdatedRows > 0n) {
+      const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
+      await this.reputationService.award(userId, 'gave_confirmation', reportId);
+      if (report?.user_id) await this.reputationService.award(report.user_id, 'report_confirmed_by_other', reportId, userId);
+    }
+
+    return result;
   }
 
   /** Signalement d'un problème avec le signalement lui-même (doublon, inapproprié, etc.). */
