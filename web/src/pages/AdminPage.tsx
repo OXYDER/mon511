@@ -177,6 +177,56 @@ function ModerationQueue() {
                 <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
               </div>
 
+              {detail.authenticity && (
+                <div style={{
+                  marginBottom: 16, padding: 12, borderRadius: 10,
+                  background: !detail.authenticity.verifiable ? 'var(--panel-hover)'
+                    : detail.authenticity.confidencePercent >= 70 ? 'rgba(47,191,113,0.12)'
+                    : detail.authenticity.confidencePercent >= 40 ? 'rgba(245,179,1,0.12)'
+                    : 'rgba(255,45,59,0.12)',
+                  border: `1px solid ${!detail.authenticity.verifiable ? 'var(--panel-border)'
+                    : detail.authenticity.confidencePercent >= 70 ? 'var(--status-resolved)'
+                    : detail.authenticity.confidencePercent >= 40 ? 'var(--status-unresolved)'
+                    : '#FF2D3B'}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 16 }}>{!detail.authenticity.verifiable ? '❔' : detail.authenticity.confidencePercent >= 70 ? '✅' : detail.authenticity.confidencePercent >= 40 ? '⚠️' : '🚩'}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>
+                      {!detail.authenticity.verifiable
+                        ? 'Vérification photo : non vérifiable'
+                        : `Vérification photo : ${detail.authenticity.confidencePercent}% de confiance`}
+                    </span>
+                  </div>
+                  {detail.authenticity.details.map((d: string, i: number) => (
+                    <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 3, lineHeight: 1.5 }}>• {d}</div>
+                  ))}
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                    Aide à la décision, pas un verdict — le jugement final reste humain.
+                  </div>
+                </div>
+              )}
+
+              {detail.photos?.length > 0 && (
+                <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                  {detail.photos.map((p: any) => (
+                    <div key={p.id} style={{ width: 130 }}>
+                      <img src={p.url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, marginBottom: 6 }} />
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        {p.exif_latitude ? (
+                          <div>📍 {p.exif_latitude.toFixed(5)}, {p.exif_longitude.toFixed(5)}</div>
+                        ) : (
+                          <div>📍 Aucune position GPS</div>
+                        )}
+                        <div>🕓 {p.exif_captured_at ? new Date(p.exif_captured_at).toLocaleString('fr-CA') : 'Date inconnue'}</div>
+                        {(p.exif_camera_make || p.exif_camera_model) && (
+                          <div>📷 {[p.exif_camera_make, p.exif_camera_model].filter(Boolean).join(' ')}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--panel-hover)', borderRadius: 9 }}>
                 <span style={{ fontSize: 12 }}>
                   🏛️ Municipalité détectée : <strong>{detail.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>

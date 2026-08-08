@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
+import { computeAuthenticitySignal } from '../reports/authenticity.util';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { ModerationDecisionDto } from './dto/moderation-decision.dto';
 import { MunicipalityIntegrationsService } from '../municipality-integrations/municipality-integrations.service';
@@ -40,10 +41,25 @@ export class ModerationService {
       .selectFrom('reports')
       .leftJoin('regions', 'regions.id', 'reports.region_id')
       .selectAll('reports')
-      .select('regions.name_fr as regionNameFr')
+      .select([
+        'regions.name_fr as regionNameFr',
+        sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),
+        sql<number>`ST_X(reports.location::geometry)`.as('longitude'),
+      ])
       .where('reports.id', '=', reportId)
       .executeTakeFirst();
     if (!report) throw new NotFoundException('Signalement introuvable.');
+
+    const photos = await this.db
+      .selectFrom('report_photos')
+      .select([
+        'id', 'url', 'exif_latitude', 'exif_longitude', 'exif_captured_at',
+        'exif_camera_make', 'exif_camera_model',
+      ])
+      .where('report_id', '=', reportId)
+      .execute();
+
+    const authenticity = computeAuthenticitySignal(photos, report.latitude, report.longitude, report.created_at as any);
 
     const messages = await this.db
       .selectFrom('report_messages')
@@ -62,7 +78,7 @@ export class ModerationService {
       .where('report_id', '=', reportId)
       .execute();
 
-    return { report, messages, flags };
+    return { report, messages, flags, photos, authenticity };
   }
 
   /** Corrige la municipalité associée à un signalement avant décision — la

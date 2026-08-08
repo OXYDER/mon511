@@ -96,6 +96,12 @@ export interface ReportPhotosTable {
   url: string;
   storage_driver: Generated<'minio' | 's3' | 'r2'>;
   storage_key: string;
+  exif_latitude: number | null;
+  exif_longitude: number | null;
+  exif_captured_at: Timestamp | null;
+  exif_camera_make: string | null;
+  exif_camera_model: string | null;
+  exif_raw: Record<string, unknown> | null;
   uploaded_at: Generated<Timestamp>;
 }
 

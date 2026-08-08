@@ -1,8 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Kysely } from 'kysely';
 import { randomUUID } from 'crypto';
+import * as exifr from 'exifr';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 
@@ -10,6 +11,7 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 export class UploadsService {
   private readonly s3: S3Client;
   private readonly bucket = 'mon511-reports';
+  private readonly logger = new Logger(UploadsService.name);
 
   constructor(
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
@@ -43,6 +45,29 @@ export class UploadsService {
 
     const publicUrl = `${this.config.get('STORAGE_PUBLIC_URL') ?? `http://${this.config.get('STORAGE_ENDPOINT')}:${this.config.get('STORAGE_PORT')}`}/${this.bucket}/${key}`;
 
+    // Extraction EXIF directement du fichier reçu sur le serveur — pas de
+    // valeurs envoyées par le navigateur, donc pas falsifiable par un
+    // client malveillant qui voudrait maquiller la provenance d'une photo.
+    let exif: { latitude?: number; longitude?: number; capturedAt?: Date; make?: string; model?: string; raw?: any } = {};
+    try {
+      const [gps, meta] = await Promise.all([
+        exifr.gps(file.buffer).catch(() => null),
+        exifr.parse(file.buffer, { pick: ['DateTimeOriginal', 'CreateDate', 'Make', 'Model'] }).catch(() => null),
+      ]);
+      exif = {
+        latitude: gps?.latitude,
+        longitude: gps?.longitude,
+        capturedAt: meta?.DateTimeOriginal ?? meta?.CreateDate ?? undefined,
+        make: meta?.Make,
+        model: meta?.Model,
+        raw: meta ?? undefined,
+      };
+    } catch (error) {
+      // Pas d'EXIF lisible (photo sans métadonnées, format non supporté,
+      // etc.) — pas une erreur bloquante, juste une photo non vérifiable.
+      this.logger.debug(`Pas d'EXIF exploitable pour ${key}`);
+    }
+
     return this.db
       .insertInto('report_photos')
       .values({
@@ -50,6 +75,12 @@ export class UploadsService {
         url: publicUrl,
         storage_driver: 'minio',
         storage_key: key,
+        exif_latitude: exif.latitude ?? null,
+        exif_longitude: exif.longitude ?? null,
+        exif_captured_at: (exif.capturedAt as any) ?? null,
+        exif_camera_make: exif.make ?? null,
+        exif_camera_model: exif.model ?? null,
+        exif_raw: exif.raw ?? null,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
