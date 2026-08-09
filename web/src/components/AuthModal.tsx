@@ -120,14 +120,19 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
         </div>
         <div className="modal-body">
           {(view === 'login' || view === 'register') && (
-            <div className="tabs">
-              <button className={`tab-item ${view === 'login' ? 'active' : ''}`} onClick={() => { setView('login'); setError(null); }}>
-                Connexion
-              </button>
-              <button className={`tab-item ${view === 'register' ? 'active' : ''}`} onClick={() => { setView('register'); setError(null); }}>
-                Créer un compte
-              </button>
-            </div>
+            <>
+              <div style={{ textAlign: 'center', marginBottom: 16 }}>
+                <img src="/brand/logo-full.png" alt="mon511.ca" style={{ width: '100%', maxWidth: 260 }} />
+              </div>
+              <div className="tabs">
+                <button className={`tab-item ${view === 'login' ? 'active' : ''}`} onClick={() => { setView('login'); setError(null); }}>
+                  Connexion
+                </button>
+                <button className={`tab-item ${view === 'register' ? 'active' : ''}`} onClick={() => { setView('register'); setError(null); }}>
+                  Créer un compte
+                </button>
+              </div>
+            </>
           )}
 
           {error && <div className="error-banner">{error}</div>}
