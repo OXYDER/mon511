@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -26,6 +26,11 @@ export class EmailService {
    * le courriel est simplement journalisé plutôt que de faire échouer la
    * requête — pratique pour tester le reste de l'application sans avoir
    * de vraies identifiants SMTP dès le départ.
+   *
+   * Si le SMTP EST configuré mais que l'envoi échoue (mauvais identifiants,
+   * serveur injoignable, etc.), on journalise le détail technique complet
+   * côté serveur (pour diagnostiquer), mais on lance une erreur claire côté
+   * usager plutôt que de laisser fuir un 'Internal server error' opaque.
    */
   async send(to: string, subject: string, body: string) {
     if (!this.transporter) {
@@ -33,13 +38,19 @@ export class EmailService {
       return { simulated: true };
     }
 
-    await this.transporter.sendMail({
-      from: this.config.get('EMAIL_FROM') ?? 'notifications@mon511.ca',
-      to,
-      subject,
-      text: body,
-    });
-
-    return { simulated: false };
+    try {
+      await this.transporter.sendMail({
+        from: this.config.get('EMAIL_FROM') ?? 'notifications@mon511.ca',
+        to,
+        subject,
+        text: body,
+      });
+      return { simulated: false };
+    } catch (error) {
+      this.logger.error(`Échec d'envoi du courriel à ${to} ("${subject}")`, error as Error);
+      throw new ServiceUnavailableException(
+        "Impossible d'envoyer le courriel pour l'instant — réessaie dans quelques minutes. Si le problème persiste, contacte-nous à info@mon511.ca.",
+      );
+    }
   }
 }
