@@ -14,7 +14,10 @@ export default function AboutModal({ onClose, lang }: Props) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <img src="/icons/icon-192.png" alt="" style={{ width: 92, height: 92 }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, justifyContent: 'center' }}>
             <span className="brand-mark" style={{ fontSize: 16 }}>511</span>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 600 }}>
               {lang === 'fr' ? 'mon511.ca' : 'my511.ca'}
