@@ -35,6 +35,7 @@ export interface UsersTable {
   region_id: string | null;
   role_id: string;
   status: Generated<'active' | 'suspended' | 'banned'>;
+  email_verified: Generated<boolean>;
   reputation_score: Generated<number>;
   privacy_settings: Generated<{
     show_reputation: boolean;
@@ -284,10 +285,24 @@ export interface ExternalIncidentsTable {
   is_stale: Generated<boolean>;
 }
 
+export interface VerificationCodesTable {
+  id: Generated<string>;
+  user_id: string | null;
+  email: string;
+  purpose: 'signup' | 'email_change' | 'password_change' | 'password_reset';
+  code_hash: string;
+  metadata: Record<string, unknown> | null;
+  expires_at: Timestamp;
+  used_at: Timestamp | null;
+  attempts: Generated<number>;
+  created_at: Generated<Timestamp>;
+}
+
 export interface Database {
   regions: RegionsTable;
   roles: RolesTable;
   users: UsersTable;
+  verification_codes: VerificationCodesTable;
   problem_categories: ProblemCategoriesTable;
   problem_types: ProblemTypesTable;
   reports: ReportsTable;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UpdatePrivacyDto } from './dto/update-privacy.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -38,8 +38,26 @@ export class UsersController {
 
   @Patch('me/password')
   @UseGuards(JwtAuthGuard)
-  changePassword(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChangePasswordDto) {
-    return this.usersService.changePassword(user.userId, dto);
+  requestPasswordChange(@CurrentUser() user: CurrentUserPayload, @Body() dto: ChangePasswordDto) {
+    return this.usersService.requestPasswordChange(user.userId, dto);
+  }
+
+  @Post('me/password/confirm')
+  @UseGuards(JwtAuthGuard)
+  confirmPasswordChange(@CurrentUser() user: CurrentUserPayload, @Body('code') code: string) {
+    return this.usersService.confirmPasswordChange(user.userId, code);
+  }
+
+  @Patch('me/email')
+  @UseGuards(JwtAuthGuard)
+  requestEmailChange(@CurrentUser() user: CurrentUserPayload, @Body('newEmail') newEmail: string) {
+    return this.usersService.requestEmailChange(user.userId, newEmail);
+  }
+
+  @Post('me/email/confirm')
+  @UseGuards(JwtAuthGuard)
+  confirmEmailChange(@CurrentUser() user: CurrentUserPayload, @Body('newEmail') newEmail: string, @Body('code') code: string) {
+    return this.usersService.confirmEmailChange(user.userId, newEmail, code);
   }
 
   @Patch('me/map-layers')

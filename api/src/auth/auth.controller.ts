@@ -19,6 +19,26 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
+  @Post('verify-email')
+  verifyEmail(@Body('email') email: string, @Body('code') code: string) {
+    return this.authService.verifyEmail(email, code);
+  }
+
+  @Post('resend-signup-code')
+  resendSignupCode(@Body('email') email: string) {
+    return this.authService.resendSignupCode(email);
+  }
+
+  @Post('forgot-password')
+  forgotPassword(@Body('email') email: string) {
+    return this.authService.forgotPassword(email);
+  }
+
+  @Post('reset-password')
+  resetPassword(@Body('email') email: string, @Body('code') code: string, @Body('newPassword') newPassword: string) {
+    return this.authService.resetPassword(email, code, newPassword);
+  }
+
   // Petite route pratique pour vérifier qu'un jeton est valide côté client
   @Get('me')
   @UseGuards(JwtAuthGuard)

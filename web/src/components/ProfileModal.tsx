@@ -28,6 +28,14 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
   const [newPassword, setNewPassword] = useState('');
   const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordAwaitingCode, setPasswordAwaitingCode] = useState(false);
+  const [passwordCode, setPasswordCode] = useState('');
+
+  const [newEmail, setNewEmail] = useState('');
+  const [emailFeedback, setEmailFeedback] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailAwaitingCode, setEmailAwaitingCode] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
 
   useEffect(() => {
     api.get<any>('/users/me').then((data) => {
@@ -57,17 +65,59 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
     setProfileFeedback('Profil mis à jour.');
   }
 
-  async function savePassword(e: React.FormEvent) {
+  async function requestPassword(e: React.FormEvent) {
     e.preventDefault();
     setPasswordFeedback(null);
     setPasswordError(null);
     try {
       await api.patch('/users/me/password', { currentPassword, newPassword });
-      setCurrentPassword('');
-      setNewPassword('');
-      setPasswordFeedback('Mot de passe changé.');
+      setPasswordAwaitingCode(true);
+      setPasswordFeedback('Code envoyé par courriel — entre-le ci-dessous pour confirmer le changement.');
     } catch (err) {
       setPasswordError(err instanceof Error ? err.message : 'Impossible de changer le mot de passe.');
+    }
+  }
+
+  async function confirmPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError(null);
+    try {
+      await api.post('/users/me/password/confirm', { code: passwordCode });
+      setCurrentPassword('');
+      setNewPassword('');
+      setPasswordCode('');
+      setPasswordAwaitingCode(false);
+      setPasswordFeedback('Mot de passe changé.');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Code invalide.');
+    }
+  }
+
+  async function requestEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setEmailFeedback(null);
+    setEmailError(null);
+    try {
+      await api.patch('/users/me/email', { newEmail });
+      setEmailAwaitingCode(true);
+      setEmailFeedback(`Code envoyé à ${newEmail} — entre-le ci-dessous pour confirmer.`);
+    } catch (err) {
+      setEmailError(err instanceof Error ? err.message : "Impossible de changer l'adresse.");
+    }
+  }
+
+  async function confirmEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setEmailError(null);
+    try {
+      const updated = await api.post<any>('/users/me/email/confirm', { newEmail, code: emailCode });
+      setMe((prev: any) => ({ ...prev, email: updated.email ?? newEmail }));
+      setEmailAwaitingCode(false);
+      setEmailCode('');
+      setNewEmail('');
+      setEmailFeedback('Adresse courriel changée.');
+    } catch (err) {
+      setEmailError(err instanceof Error ? err.message : 'Code invalide.');
     }
   }
 
@@ -112,14 +162,43 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
                     <input className="text-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
                   </div>
                   <div className="field-group">
-                    <label className="field-label">Courriel</label>
+                    <label className="field-label">Courriel actuel</label>
                     <input className="text-input" value={me.email} disabled style={{ opacity: 0.6 }} />
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
-                      Le courriel ne peut pas être changé pour l'instant.
-                    </div>
                   </div>
                   <button className="btn-primary" type="submit">Enregistrer</button>
                 </form>
+              )}
+
+              {tab === 'profile' && (
+                <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--panel-border)' }}>
+                  {emailFeedback && <div className="success-banner">{emailFeedback}</div>}
+                  {emailError && <div className="error-banner">{emailError}</div>}
+                  {!emailAwaitingCode ? (
+                    <form onSubmit={requestEmail}>
+                      <div className="field-group">
+                        <label className="field-label">Changer d'adresse courriel</label>
+                        <input className="text-input" type="email" required placeholder="nouvelle-adresse@courriel.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
+                      </div>
+                      <button className="btn-ghost" type="submit">Envoyer un code de confirmation</button>
+                    </form>
+                  ) : (
+                    <form onSubmit={confirmEmail}>
+                      <div className="field-group">
+                        <label className="field-label">Code reçu à {newEmail}</label>
+                        <input
+                          className="text-input"
+                          inputMode="numeric"
+                          maxLength={6}
+                          required
+                          value={emailCode}
+                          onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                          style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                        />
+                      </div>
+                      <button className="btn-primary" type="submit">Confirmer le changement</button>
+                    </form>
+                  )}
+                </div>
               )}
 
               {tab === 'privacy' && (
@@ -153,8 +232,8 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
                 </>
               )}
 
-              {tab === 'security' && (
-                <form onSubmit={savePassword}>
+              {tab === 'security' && !passwordAwaitingCode && (
+                <form onSubmit={requestPassword}>
                   <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>Changer le mot de passe</div>
                   {passwordFeedback && <div className="success-banner">{passwordFeedback}</div>}
                   {passwordError && <div className="error-banner">{passwordError}</div>}
@@ -167,7 +246,27 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
                     <input className="text-input" type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Minimum 10 caractères.</div>
                   </div>
-                  <button className="btn-primary" type="submit">Changer le mot de passe</button>
+                  <button className="btn-primary" type="submit">Envoyer un code de confirmation</button>
+                </form>
+              )}
+              {tab === 'security' && passwordAwaitingCode && (
+                <form onSubmit={confirmPassword}>
+                  <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>Confirmer le changement</div>
+                  {passwordFeedback && <div className="success-banner">{passwordFeedback}</div>}
+                  {passwordError && <div className="error-banner">{passwordError}</div>}
+                  <div className="field-group">
+                    <label className="field-label">Code reçu par courriel</label>
+                    <input
+                      className="text-input"
+                      inputMode="numeric"
+                      maxLength={6}
+                      required
+                      value={passwordCode}
+                      onChange={(e) => setPasswordCode(e.target.value.replace(/\D/g, ''))}
+                      style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                    />
+                  </div>
+                  <button className="btn-primary" type="submit">Confirmer</button>
                 </form>
               )}
 

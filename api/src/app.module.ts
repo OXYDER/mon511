@@ -17,6 +17,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { ExternalDataModule } from './modules/external-data/external-data.module';
 import { SiteSettingsModule } from './modules/site-settings/site-settings.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
+import { VerificationModule } from './verification/verification.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ReputationModule } from './modules/reputation/reputation.module';
     ExternalDataModule,
     SiteSettingsModule,
     ReputationModule,
+    VerificationModule,
   ],
   controllers: [HealthController],
 })

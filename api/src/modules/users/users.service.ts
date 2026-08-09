@@ -6,10 +6,16 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 import { UpdatePrivacyDto } from './dto/update-privacy.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { VerificationService } from '../../verification/verification.service';
+import { EmailService } from '../../email/email.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+    private readonly verification: VerificationService,
+    private readonly email: EmailService,
+  ) {}
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
     await this.db
@@ -24,10 +30,10 @@ export class UsersService {
     return this.findById(userId);
   }
 
-  async changePassword(userId: string, dto: ChangePasswordDto) {
+  async requestPasswordChange(userId: string, dto: ChangePasswordDto) {
     const user = await this.db
       .selectFrom('users')
-      .select(['password_hash'])
+      .select(['email', 'password_hash'])
       .where('id', '=', userId)
       .executeTakeFirst();
 
@@ -39,11 +45,66 @@ export class UsersService {
     if (!valid) throw new UnauthorizedException('Mot de passe actuel incorrect.');
 
     const newHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.verification.createAndSend(
+      user.email,
+      'password_change',
+      'Confirme le changement de mot de passe — mon511.ca',
+      'Une demande de changement de mot de passe a été faite sur ton compte.',
+      userId,
+      { newPasswordHash: newHash },
+    );
+
+    return { pendingConfirmation: true };
+  }
+
+  async confirmPasswordChange(userId: string, code: string) {
+    const user = await this.db.selectFrom('users').select(['email']).where('id', '=', userId).executeTakeFirstOrThrow();
+    const metadata = await this.verification.verify(user.email, 'password_change', code);
+    const newPasswordHash = metadata?.newPasswordHash as string | undefined;
+    if (!newPasswordHash) throw new BadRequestException('Code invalide pour ce changement.');
+
     await this.db
       .updateTable('users')
-      .set({ password_hash: newHash, updated_at: new Date() as any })
+      .set({ password_hash: newPasswordHash, updated_at: new Date() as any })
       .where('id', '=', userId)
       .execute();
+
+    return { changed: true };
+  }
+
+  async requestEmailChange(userId: string, newEmail: string) {
+    const existing = await this.db.selectFrom('users').select('id').where('email', '=', newEmail).executeTakeFirst();
+    if (existing) throw new BadRequestException('Cette adresse courriel est déjà utilisée par un autre compte.');
+
+    await this.verification.createAndSend(
+      newEmail,
+      'email_change',
+      'Confirme ta nouvelle adresse — mon511.ca',
+      'Une demande de changement d\'adresse courriel a été faite pour ce compte mon511.ca.',
+      userId,
+      { newEmail },
+    );
+
+    return { pendingConfirmation: true };
+  }
+
+  async confirmEmailChange(userId: string, newEmail: string, code: string) {
+    const metadata = await this.verification.verify(newEmail, 'email_change', code);
+    const confirmedEmail = metadata?.newEmail as string | undefined;
+    if (!confirmedEmail || confirmedEmail !== newEmail) throw new BadRequestException('Code invalide pour ce changement.');
+
+    const oldUser = await this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirstOrThrow();
+
+    await this.db
+      .updateTable('users')
+      .set({ email: newEmail, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .execute();
+
+    // Avis de sécurité à l'ancienne adresse — pas bloquant si l'envoi échoue.
+    this.email
+      .send(oldUser.email, 'Ton adresse courriel a été changée — mon511.ca', `L'adresse courriel de ton compte mon511.ca a été changée pour ${newEmail}. Si tu n'es pas à l'origine de ce changement, contacte-nous immédiatement à info@mon511.ca.`)
+      .catch(() => {});
 
     return { changed: true };
   }

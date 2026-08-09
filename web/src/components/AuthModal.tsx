@@ -7,95 +7,256 @@ interface Props {
   initialMode?: 'login' | 'register';
 }
 
+type View = 'login' | 'register' | 'verify' | 'forgot-email' | 'forgot-reset';
+
 export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login' }: Props) {
-  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
+  const [view, setView] = useState<View>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function submit(e: React.FormEvent) {
+  async function submitAuth(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
-      const path = mode === 'login' ? '/auth/login' : '/auth/register';
-      const body = mode === 'login' ? { email, password } : { email, password, firstName };
-      const result = await api.post<{ accessToken: string }>(path, body);
-      setToken(result.accessToken);
-      onAuthenticated();
+      if (view === 'login') {
+        const result = await api.post<{ accessToken: string }>('/auth/login', { email, password });
+        setToken(result.accessToken);
+        onAuthenticated();
+      } else {
+        await api.post('/auth/register', { email, password, firstName });
+        setInfo(null);
+        setView('verify');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.');
+      const message = err instanceof Error ? err.message : 'Une erreur est survenue.';
+      setError(message);
+      // Compte existant mais pas encore vérifié — propose directement le code.
+      if (view === 'login' && message.toLowerCase().includes('vérifié')) {
+        setView('verify');
+      }
     } finally {
       setLoading(false);
     }
   }
 
+  async function submitVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const result = await api.post<{ accessToken: string }>('/auth/verify-email', { email, code });
+      setToken(result.accessToken);
+      onAuthenticated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Code invalide.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function resendCode() {
+    setError(null);
+    setInfo(null);
+    try {
+      await api.post('/auth/resend-signup-code', { email });
+      setInfo('Nouveau code envoyé — vérifie ton courriel.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    }
+  }
+
+  async function submitForgotEmail(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await api.post('/auth/forgot-password', { email });
+      setInfo("Si ce courriel correspond à un compte, un code a été envoyé.");
+      setView('forgot-reset');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitForgotReset(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await api.post('/auth/reset-password', { email, code, newPassword });
+      setInfo('Mot de passe changé — tu peux te connecter.');
+      setPassword('');
+      setView('login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const titles: Record<View, string> = {
+    login: 'Connexion',
+    register: 'Créer un compte',
+    verify: 'Vérifie ton courriel',
+    'forgot-email': 'Mot de passe oublié',
+    'forgot-reset': 'Nouveau mot de passe',
+  };
+
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ width: 420 }}>
         <div className="modal-head">
-          <div className="modal-title">
-            {mode === 'login' ? 'Connexion' : 'Créer un compte'}
-          </div>
+          <div className="modal-title">{titles[view]}</div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          <div className="tabs">
-            <button className={`tab-item ${mode === 'login' ? 'active' : ''}`} onClick={() => setMode('login')}>
-              Connexion
-            </button>
-            <button className={`tab-item ${mode === 'register' ? 'active' : ''}`} onClick={() => setMode('register')}>
-              Créer un compte
-            </button>
-          </div>
-
-          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
-            {mode === 'login'
-              ? 'Connecte-toi pour signaler, confirmer ou commenter.'
-              : 'Rejoins la communauté et aide à garder les routes sécuritaires.'}
-          </p>
+          {(view === 'login' || view === 'register') && (
+            <div className="tabs">
+              <button className={`tab-item ${view === 'login' ? 'active' : ''}`} onClick={() => { setView('login'); setError(null); }}>
+                Connexion
+              </button>
+              <button className={`tab-item ${view === 'register' ? 'active' : ''}`} onClick={() => { setView('register'); setError(null); }}>
+                Créer un compte
+              </button>
+            </div>
+          )}
 
           {error && <div className="error-banner">{error}</div>}
+          {info && <div className="success-banner">{info}</div>}
 
-          <form onSubmit={submit}>
-            {mode === 'register' && (
-              <div className="field-group">
-                <label className="field-label">Prénom</label>
-                <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              </div>
-            )}
-            <div className="field-group">
-              <label className="field-label">Courriel</label>
-              <input
-                className="text-input"
-                type="email"
-                required
-                placeholder="prenom.nom@courriel.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Mot de passe</label>
-              <input
-                className="text-input"
-                type="password"
-                required
-                minLength={mode === 'register' ? 10 : undefined}
-                placeholder="••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              {mode === 'register' && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Minimum 10 caractères.</div>
+          {(view === 'login' || view === 'register') && (
+            <>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+                {view === 'login'
+                  ? 'Connecte-toi pour signaler, confirmer ou commenter.'
+                  : 'Rejoins la communauté et aide à garder les routes sécuritaires.'}
+              </p>
+              <form onSubmit={submitAuth}>
+                {view === 'register' && (
+                  <div className="field-group">
+                    <label className="field-label">Prénom</label>
+                    <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </div>
+                )}
+                <div className="field-group">
+                  <label className="field-label">Courriel</label>
+                  <input
+                    className="text-input"
+                    type="email"
+                    required
+                    placeholder="prenom.nom@courriel.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Mot de passe</label>
+                  <input
+                    className="text-input"
+                    type="password"
+                    required
+                    minLength={view === 'register' ? 10 : undefined}
+                    placeholder="••••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  {view === 'register' && (
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Minimum 10 caractères.</div>
+                  )}
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  {loading ? 'Un instant...' : view === 'login' ? 'Se connecter' : 'Créer mon compte'}
+                </button>
+              </form>
+              {view === 'login' && (
+                <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => { setView('forgot-email'); setError(null); setInfo(null); }}>
+                  Mot de passe oublié ?
+                </button>
               )}
-            </div>
-            <button className="btn-primary" type="submit" disabled={loading}>
-              {loading ? 'Un instant...' : mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
-            </button>
-          </form>
+            </>
+          )}
+
+          {view === 'verify' && (
+            <>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+                On a envoyé un code à <strong>{email}</strong>. Entre-le ici pour activer ton compte.
+              </p>
+              <form onSubmit={submitVerify}>
+                <div className="field-group">
+                  <label className="field-label">Code à 6 chiffres</label>
+                  <input
+                    className="text-input"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  {loading ? 'Un instant...' : 'Confirmer'}
+                </button>
+              </form>
+              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={resendCode}>
+                Renvoyer le code
+              </button>
+            </>
+          )}
+
+          {view === 'forgot-email' && (
+            <>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+                Entre ton courriel — si un compte y est associé, tu recevras un code pour choisir un nouveau mot de passe.
+              </p>
+              <form onSubmit={submitForgotEmail}>
+                <div className="field-group">
+                  <label className="field-label">Courriel</label>
+                  <input className="text-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  {loading ? 'Un instant...' : 'Envoyer le code'}
+                </button>
+              </form>
+              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => setView('login')}>
+                ← Retour à la connexion
+              </button>
+            </>
+          )}
+
+          {view === 'forgot-reset' && (
+            <form onSubmit={submitForgotReset}>
+              <div className="field-group">
+                <label className="field-label">Code reçu par courriel</label>
+                <input
+                  className="text-input"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                />
+              </div>
+              <div className="field-group">
+                <label className="field-label">Nouveau mot de passe</label>
+                <input className="text-input" type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              </div>
+              <button className="btn-primary" type="submit" disabled={loading}>
+                {loading ? 'Un instant...' : 'Changer le mot de passe'}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
