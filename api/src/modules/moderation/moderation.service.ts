@@ -6,6 +6,7 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 import { ModerationDecisionDto } from './dto/moderation-decision.dto';
 import { MunicipalityIntegrationsService } from '../municipality-integrations/municipality-integrations.service';
 import { ReputationService } from '../reputation/reputation.service';
+import { EmailService } from '../../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class ModerationService {
     private readonly municipalityIntegrations: MunicipalityIntegrationsService,
     private readonly notifications: NotificationsService,
     private readonly reputationService: ReputationService,
+    private readonly email: EmailService,
   ) {}
 
   /** File d'attente — signalements en attente de modération, plus récents en premier. */
@@ -141,6 +143,8 @@ export class ModerationService {
         .executeTakeFirst();
 
       if (report?.user_id) {
+        const user = await this.db.selectFrom('users').select('email').where('id', '=', report.user_id).executeTakeFirst();
+
         if (dto.decision === 'approve') {
           await this.notifications.create({
             userId: report.user_id,
@@ -149,6 +153,11 @@ export class ModerationService {
             title: 'Ton signalement a été approuvé',
             body: 'Il est maintenant visible publiquement sur la carte.',
           });
+          if (user) {
+            this.email
+              .send(user.email, 'Ton signalement a été approuvé', "Bonne nouvelle ! Ton signalement a été approuvé par notre équipe et est maintenant visible publiquement sur la carte de mon511.ca.")
+              .catch(() => {});
+          }
           await this.municipalityIntegrations.notifyMunicipality(reportId);
         } else {
           await this.notifications.create({
@@ -158,6 +167,11 @@ export class ModerationService {
             title: 'Ton signalement a été refusé',
             body: dto.reason,
           });
+          if (user) {
+            this.email
+              .send(user.email, 'Ton signalement a été refusé', `Ton signalement n'a pas été approuvé par notre équipe.\n\nMotif : ${dto.reason}\n\nTu peux créer un nouveau signalement en tenant compte de ce motif si applicable.`)
+              .catch(() => {});
+          }
           await this.reputationService.award(report.user_id, 'report_rejected', reportId);
         }
       }

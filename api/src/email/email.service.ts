@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import { renderEmailHtml } from './email-template';
 
 @Injectable()
 export class EmailService {
@@ -32,11 +33,22 @@ export class EmailService {
    * côté serveur (pour diagnostiquer), mais on lance une erreur claire côté
    * usager plutôt que de laisser fuir un 'Internal server error' opaque.
    */
-  async send(to: string, subject: string, body: string) {
+  async send(to: string, subject: string, body: string, options?: { ctaLabel?: string; ctaUrl?: string }) {
     if (!this.transporter) {
       this.logger.warn(`SMTP non configuré — courriel simulé à ${to} : "${subject}"`);
       return { simulated: true };
     }
+
+    // Le texte brut envoyé par les appelants est transformé en paragraphes
+    // HTML simples pour habiller le gabarit de marque, tout en gardant le
+    // texte original comme repli pour les clients courriel qui n'affichent
+    // pas le HTML.
+    const bodyHtml = body
+      .split('\n\n')
+      .map((p) => `<p style="margin:0 0 12px;">${p.replace(/\n/g, '<br />')}</p>`)
+      .join('');
+
+    const html = renderEmailHtml({ title: subject, bodyHtml, ctaLabel: options?.ctaLabel, ctaUrl: options?.ctaUrl });
 
     try {
       await this.transporter.sendMail({
@@ -44,6 +56,7 @@ export class EmailService {
         to,
         subject,
         text: body,
+        html,
       });
       return { simulated: false };
     } catch (error) {

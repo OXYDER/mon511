@@ -5,6 +5,7 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 import { CreateReportDto } from './dto/create-report.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReputationService } from '../reputation/reputation.service';
+import { EmailService } from '../../email/email.service';
 
 /** Nom d'affichage respectant le réglage de confidentialité choisi par
  * l'usager lui-même — dupliqué localement depuis UsersService pour éviter
@@ -22,6 +23,7 @@ export class ReportsService {
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly notifications: NotificationsService,
     private readonly reputationService: ReputationService,
+    private readonly email: EmailService,
   ) {}
 
   /**
@@ -190,7 +192,7 @@ export class ReportsService {
    * à la sélectionner lui-même.
    */
   async create(userId: string | null, dto: CreateReportDto) {
-    return this.db.transaction().execute(async (trx) => {
+    const report = await this.db.transaction().execute(async (trx) => {
       let region = await trx
         .selectFrom('regions')
         .select('id')
@@ -249,6 +251,31 @@ export class ReportsService {
 
       return report;
     });
+
+    // Courriel de confirmation à l'auteur — après la transaction, pour ne
+    // jamais faire échouer la création d'un signalement si l'envoi du
+    // courriel a un problème (SMTP temporairement en panne, etc.).
+    if (userId) {
+      this.sendSubmissionConfirmation(userId, dto.problemTypeId).catch(() => {});
+    }
+
+    return report;
+  }
+
+  private async sendSubmissionConfirmation(userId: string, problemTypeId: string) {
+    const [user, type] = await Promise.all([
+      this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirst(),
+      this.db.selectFrom('problem_types').select('name_fr').where('id', '=', problemTypeId).executeTakeFirst(),
+    ]);
+    if (!user) return;
+
+    await this.email.send(
+      user.email,
+      'Ton signalement a été reçu',
+      `Merci ! Ton signalement (${type?.name_fr ?? 'problème routier'}) a bien été ajouté au système.\n\n` +
+        `Il n'est pas encore visible pour les autres membres — il est en attente de validation par notre équipe de modération.\n\n` +
+        `Tu recevras un prochain courriel dès qu'un changement de statut survient (accepté, refusé, informations manquantes, etc.). Une fois approuvé, il devient visible publiquement sur la carte.`,
+    );
   }
 
   /**
