@@ -189,6 +189,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
   }, [authenticated]);
 
+  // À la connexion ou déconnexion, la liste déjà en mémoire peut contenir
+  // des signalements qui ne devraient plus être visibles (ex. mon propre
+  // signalement en attente d'approbation, retiré côté serveur dès qu'on se
+  // déconnecte) — sans ça, ils restaient affichés jusqu'au prochain
+  // déplacement de la carte. On force un rafraîchissement immédiat.
+  useEffect(() => {
+    if (queryCenter) loadNearby(queryCenter.lat, queryCenter.lng);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
+
   async function toggleLayer(key: keyof LayerPrefs) {
     const next = { ...layerPrefs, [key]: !layerPrefs[key] };
     setLayerPrefs(next);
