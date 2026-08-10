@@ -396,6 +396,19 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     setMapCamera({ lat: r.latitude, lng: r.longitude, zoom: 17 });
   }
 
+  /** Ouvre un signalement dont on n'a que l'id (ex. depuis une notification)
+   * — va chercher ses coordonnées pour centrer la carte dessus. */
+  async function openReportById(id: string) {
+    setSelection({ type: 'report', id });
+    try {
+      const r = await api.get<any>(`/reports/${id}`);
+      if (r.latitude && r.longitude) setMapCamera({ lat: r.latitude, lng: r.longitude, zoom: 17 });
+    } catch {
+      // Le panneau de détail affichera son propre message d'erreur si le
+      // signalement est introuvable — pas besoin de dupliquer ici.
+    }
+  }
+
   function openExternal(inc: ExternalIncident) {
     setSelection({ type: 'external', id: inc.id });
     setMapCamera({ lat: inc.latitude, lng: inc.longitude, zoom: 17 });
@@ -1033,7 +1046,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
-      {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} />}
+      {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} />}
       </>}
     </div>
   );

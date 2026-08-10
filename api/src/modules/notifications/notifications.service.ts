@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 
@@ -7,14 +7,36 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 export class NotificationsService {
   constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
 
-  /** Alimente l'onglet Alertes de la maquette mobile. */
+  /** Alimente l'onglet Alertes de la maquette mobile — enrichi avec les
+   * informations de base du signalement lié (type, adresse, première
+   * photo) pour qu'on sache de quoi on parle sans devoir cliquer. */
   async findMine(userId: string) {
     return this.db
       .selectFrom('notifications')
-      .selectAll()
-      .where('user_id', '=', userId)
-      .orderBy('created_at', 'desc')
+      .leftJoin('reports', 'reports.id', 'notifications.report_id')
+      .leftJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .select([
+        'notifications.id', 'notifications.type', 'notifications.report_id as reportId',
+        'notifications.title', 'notifications.body', 'notifications.read_at as readAt',
+        'notifications.created_at as createdAt',
+        'reports.address_text as reportAddressText',
+        'problem_types.name_fr as reportProblemTypeNameFr',
+        'problem_types.name_en as reportProblemTypeNameEn',
+        'problem_types.icon as reportProblemTypeIcon',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('reportThumbnailUrl'),
+      ])
+      .where('notifications.user_id', '=', userId)
+      .orderBy('notifications.created_at', 'desc')
       .limit(100)
+      .execute();
+  }
+
+  async markAllRead(userId: string) {
+    return this.db
+      .updateTable('notifications')
+      .set({ read_at: new Date() as any })
+      .where('user_id', '=', userId)
+      .where('read_at', 'is', null)
       .execute();
   }
 

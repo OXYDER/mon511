@@ -32,7 +32,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterTypeId, setFilterTypeId] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc'>('date_desc');
+  const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'municipality'>('date_desc');
 
   async function loadList() {
     const results = await api.get<any[]>('/users/me/reports');
@@ -112,9 +112,14 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   const filteredReports = reports
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
     .filter((r) => filterTypeId === 'all' || r.problem_type_id === filterTypeId)
-    .sort((a, b) => sortBy === 'date_desc'
-      ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      : new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    .sort((a, b) => {
+      if (sortBy === 'municipality') {
+        return (a.municipalityName ?? '').localeCompare(b.municipalityName ?? '', 'fr-CA');
+      }
+      return sortBy === 'date_desc'
+        ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        : new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
 
   const activeFlags = detail?.flags?.filter((f: any) => !f.handled_at) ?? [];
   const pendingSuggestions = detail?.resolutionSuggestions?.filter((s: any) => s.status === 'pending') ?? [];
@@ -147,6 +152,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
             <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ flex: 1 }}>
               <option value="date_desc">{lang === 'fr' ? 'Plus récent' : 'Newest'}</option>
               <option value="date_asc">{lang === 'fr' ? 'Plus ancien' : 'Oldest'}</option>
+              <option value="municipality">{lang === 'fr' ? 'Municipalité (A-Z)' : 'Municipality (A-Z)'}</option>
             </select>
           </div>
           <select value={filterTypeId} onChange={(e) => setFilterTypeId(e.target.value)} style={{ width: '100%', marginBottom: 14 }}>
@@ -173,7 +179,9 @@ export default function MyReportsPage({ onClose, lang }: Props) {
               </div>
               <div className="rc-body">
                 <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
-                <div className="rc-meta">{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}</div>
+                <div className="rc-meta">
+                  {r.municipalityName ? `🏛️ ${r.municipalityName} · ` : ''}{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
+                </div>
               </div>
               <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
                 {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}

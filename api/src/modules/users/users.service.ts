@@ -213,12 +213,14 @@ export class UsersService {
     return this.db
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('regions', 'regions.id', 'reports.region_id')
       .select([
         'reports.id', 'reports.status', 'reports.created_at',
         'reports.address_text as addressText', 'reports.problem_type_id',
         'problem_types.name_fr as problemTypeNameFr',
         'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',
+        'regions.name_fr as municipalityName',
       ])
       .where('reports.user_id', '=', userId)
       .orderBy('reports.created_at', 'desc')
