@@ -154,6 +154,32 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
     mapRef.current.on('style.load', ensureSpiderfyLinesLayer);
+    // Filet de sécurité supplémentaire : 'styledata' se déclenche plus
+    // largement que 'style.load' (y compris lors d'une reconstruction
+    // silencieuse du style par MapLibre après un incident, ex. perte de
+    // contexte WebGL) — sans ça, nos couches personnalisées (conditions
+    // routières, débit de circulation) peuvent rester invisibles après un
+    // tel incident même si la carte elle-même s'est rétablie.
+    mapRef.current.on('styledata', () => {
+      if (!mapRef.current!.getLayer('road-conditions-layer')) ensureLinesLayer();
+      if (!mapRef.current!.getSource('spiderfy-legs')) ensureSpiderfyLinesLayer();
+    });
+
+    // La perte du contexte WebGL (ressources graphiques, plusieurs onglets
+    // ouverts, pilote graphique, etc.) fait disparaître tout ce qui est
+    // dessiné. MapLibre se reconstruit généralement tout seul, mais on
+    // force quand même un nouveau rendu de tous les pins une fois le
+    // contexte restauré, pour être certain que rien ne reste invisible.
+    mapRef.current.on('webglcontextlost', () => {
+      console.warn('[MapView] Contexte WebGL perdu — récupération en cours...');
+    });
+    mapRef.current.on('webglcontextrestored', () => {
+      console.warn('[MapView] Contexte WebGL restauré — redessin forcé.');
+      setClusterVersion((v) => v + 1);
+    });
+    mapRef.current.on('error', (e) => {
+      console.error('[MapView] Erreur MapLibre :', e.error);
+    });
 
     // Les distances en pixels entre pins changent avec le zoom — il faut
     // recalculer les groupes. Le déplacement (pan) seul ne change pas ces
