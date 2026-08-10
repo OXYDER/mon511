@@ -96,6 +96,18 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   function ensureLinesLayer() {
     const map = mapRef.current;
     if (!map) return;
+
+    // Si le style n'est pas encore prêt, addSource/addLayer échoueraient
+    // silencieusement — on réessaie automatiquement dès que le style est
+    // chargé, plutôt que de perdre la mise à jour (ce qui arrivait quand
+    // les données arrivaient avant la fin du chargement du style : la
+    // couche restait vide en permanence, rien ne la resynchronisait après
+    // coup).
+    if (!map.isStyleLoaded()) {
+      map.once('idle', () => ensureLinesLayer());
+      return;
+    }
+
     if (!map.getSource('road-conditions')) {
       map.addSource('road-conditions', { type: 'geojson', data: buildLinesGeoJson() as any });
       map.addLayer({
@@ -507,7 +519,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     linesClickMapRef.current = Object.fromEntries(
       lines.filter((l) => l.onClick).map((l) => [l.id, l.onClick as () => void]),
     );
-    if (mapRef.current && mapRef.current.isStyleLoaded()) {
+    if (mapRef.current) {
       ensureLinesLayer();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
