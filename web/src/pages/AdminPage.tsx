@@ -64,6 +64,7 @@ function ModerationQueue() {
   const [municipalitySearch, setMunicipalitySearch] = useState('');
   const [municipalityResults, setMunicipalityResults] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [decidedFeedback, setDecidedFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -86,6 +87,7 @@ function ModerationQueue() {
     try {
       const d = await api.get<any>(`/moderation/${id}`);
       setDetail(d);
+      setDecidedFeedback(null);
       setEditingMunicipality(false);
       setMunicipalitySearch('');
       setMunicipalityResults([]);
@@ -125,10 +127,15 @@ function ModerationQueue() {
     }
     try {
       await api.patch(`/moderation/${selectedId}/decision`, { decision, reason: reason || undefined });
-      setFeedback(decision === 'approve' ? 'Signalement approuvé.' : 'Signalement refusé.');
+      // La confirmation reste attachée à CE signalement — on ne vide pas la
+      // sélection ni le détail, et on ne saute pas automatiquement au
+      // suivant (ça faisait apparaître le message sur le mauvais
+      // signalement, celui sélectionné automatiquement après coup). La
+      // liste se met à jour en arrière-plan (le signalement traité en
+      // disparaît) ; le modérateur clique lui-même sur le prochain quand il
+      // est prêt.
+      setDecidedFeedback(decision === 'approve' ? 'Signalement approuvé.' : 'Signalement refusé.');
       setReason('');
-      setSelectedId(null);
-      setDetail(null);
       loadQueue();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action impossible.');
@@ -184,6 +191,11 @@ function ModerationQueue() {
           {detail && (
             <>
               {feedback && <div className="success-banner">{feedback}</div>}
+              {decidedFeedback && (
+                <div className="success-banner" style={{ fontSize: 14, fontWeight: 600 }}>
+                  ✓ {decidedFeedback}
+                </div>
+              )}
               <div className="detail-title" style={{ fontSize: 17 }}>{detail.report.description || 'Signalement'}</div>
               <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
                 <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
@@ -286,17 +298,21 @@ function ModerationQueue() {
                 <button className="btn-ghost" onClick={sendReply}>Envoyer</button>
               </div>
 
-              <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
-              <div className="field-group">
-                <label className="field-label">Motif (obligatoire pour un refus)</label>
-                <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-              <div className="action-row">
-                <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
-                  ✔ Approuver
-                </button>
-                <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
-              </div>
+              {!decidedFeedback && (
+                <>
+                  <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
+                  <div className="field-group">
+                    <label className="field-label">Motif (obligatoire pour un refus)</label>
+                    <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
+                  </div>
+                  <div className="action-row">
+                    <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
+                      ✔ Approuver
+                    </button>
+                    <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
