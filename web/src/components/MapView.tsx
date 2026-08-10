@@ -66,6 +66,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const styleRetriedRef = useRef(false);
   const popupsRef = useRef<maplibregl.Popup[]>([]);
   const popupsByIdRef = useRef<Record<string, { popup: maplibregl.Popup; lng: number; lat: number }>>({});
   const userMarkerRef = useRef<Marker | null>(null);
@@ -154,6 +155,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
     mapRef.current.on('style.load', ensureSpiderfyLinesLayer);
+    mapRef.current.on('style.load', () => { styleRetriedRef.current = false; });
     // Filet de sécurité supplémentaire : 'styledata' se déclenche plus
     // largement que 'style.load' (y compris lors d'une reconstruction
     // silencieuse du style par MapLibre après un incident, ex. perte de
@@ -179,6 +181,18 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     });
     mapRef.current.on('error', (e) => {
       console.error('[MapView] Erreur MapLibre :', e.error);
+      // Si c'est le tout premier chargement du style qui échoue (ex.
+      // extension de blocage, hoquet réseau ponctuel), la carte reste
+      // cassée en permanence sans ça — un simple nouvel essai résout la
+      // grande majorité des cas transitoires.
+      const message = (e.error as any)?.message ?? '';
+      if (!styleRetriedRef.current && /style\.json|Failed to fetch|NetworkError/i.test(message)) {
+        styleRetriedRef.current = true;
+        console.warn('[MapView] Échec du chargement du style — nouvel essai dans 1.5s...');
+        setTimeout(() => {
+          if (mapRef.current) mapRef.current.setStyle(styleUrlFor(theme, mapType));
+        }, 1500);
+      }
     });
 
     // Les distances en pixels entre pins changent avec le zoom — il faut
