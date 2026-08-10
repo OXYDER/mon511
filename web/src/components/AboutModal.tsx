@@ -15,7 +15,7 @@ export default function AboutModal({ onClose, lang }: Props) {
         </div>
         <div className="modal-body">
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <img src="/icons/icon-192.png" alt="" style={{ width: 92, height: 92 }} />
+            <img src="/brand/logo-full.png" alt="mon511.ca" style={{ width: '100%', maxWidth: 280 }} />
           </div>
 
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 18 }}>
