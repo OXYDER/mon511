@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
+import LoadingScreen from '../components/LoadingScreen';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
@@ -125,8 +126,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     feux_foret: false,
     cabanes_a_sucre: false,
   });
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  // Le gros chargement animé n'est montré qu'au tout premier chargement de
+  // la carte (démarrage de l'app) — pas à chaque déplacement/recherche qui
+  // remet aussi `loading` à true.
+  const hasLoadedOnceRef = useRef(false);
+  useEffect(() => {
+    if (!loading) hasLoadedOnceRef.current = true;
+  }, [loading]);
+  const showInitialLoader = loading && !hasLoadedOnceRef.current;
   const [locating, setLocating] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -532,6 +541,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   return (
     <div className="app-full">
+      <LoadingScreen visible={showInitialLoader} />
       {showAdmin && <AdminPage onClose={() => setShowAdmin(false)} />}
       {showMyReports && !showAdmin && <MyReportsPage onClose={() => setShowMyReports(false)} lang={lang} />}
       {!showAdmin && !showMyReports && <>
