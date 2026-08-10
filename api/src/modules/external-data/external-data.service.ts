@@ -15,8 +15,8 @@ export class ExternalDataService {
    * la couche MTMD distincte). On exclut les entités `is_stale` (absentes
    * du dernier sync, donc probablement terminées/résolues côté source).
    */
-  async findNearby(lat: number, lng: number, radiusMeters = 15000) {
-    return this.db
+  async findNearby(lat: number, lng: number, radiusMeters = 15000, feedKey?: string) {
+    let query = this.db
       .selectFrom('external_incidents')
       .innerJoin('external_data_sources', 'external_data_sources.id', 'external_incidents.source_id')
       .select([
@@ -48,9 +48,17 @@ export class ExternalDataService {
       .where(
         sql<boolean>`ST_DWithin(external_incidents.location::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusMeters})`,
       )
-      .where('external_data_sources.active', '=', true)
-      .limit(1500)
-      .execute();
+      .where('external_data_sources.active', '=', true);
+
+    // Sans ce filtre, un type très volumineux (ex. débit de circulation —
+    // près de 8000 segments à travers le Québec) peut à lui seul remplir
+    // toute la limite de lignes et écraser des types beaucoup plus rares
+    // (ex. cabanes à sucre — une centaine) dans le même résultat partagé.
+    if (feedKey) {
+      query = query.where('external_data_sources.feed_key', '=', feedKey);
+    }
+
+    return query.limit(5000).execute();
   }
 
   async listSources() {

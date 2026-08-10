@@ -13,8 +13,9 @@ export class ExternalDataController {
     @Query('lat') lat: string,
     @Query('lng') lng: string,
     @Query('radius') radius = '15000',
+    @Query('feedKey') feedKey?: string,
   ) {
-    return this.service.findNearby(Number(lat), Number(lng), Number(radius));
+    return this.service.findNearby(Number(lat), Number(lng), Number(radius), feedKey);
   }
 
   @Get('incidents/:id')

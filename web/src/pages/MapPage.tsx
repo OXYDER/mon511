@@ -112,6 +112,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [lang, setLang] = useState<Lang>(getStoredLang());
   const [reports, setReports] = useState<Report[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
+  const [circulationIncidents, setCirculationIncidents] = useState<ExternalIncident[]>([]);
   const [allCabanes, setAllCabanes] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
   const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
@@ -231,6 +232,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     } catch {
       setExternalIncidents([]);
     }
+    // Le débit de circulation est de loin le type le plus volumineux
+    // (près de 8000 segments à travers le Québec) — une requête séparée,
+    // filtrée par type, l'empêche d'écraser les autres types (conditions,
+    // travaux, avertissements, feux) dans une même limite partagée.
+    try {
+      const circulation = await api.get<ExternalIncident[]>(
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 1500000)}&feedKey=mtmd_debit_circulation`,
+      );
+      setCirculationIncidents(circulation);
+    } catch {
+      setCirculationIncidents([]);
+    }
   }
 
   /** Les cabanes à sucre sont peu nombreuses (une centaine) et réparties
@@ -240,9 +253,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   async function loadAllCabanes() {
     try {
       const results = await api.get<ExternalIncident[]>(
-        `/external-data/incidents/nearby?lat=52&lng=-71.5&radius=1500000`,
+        `/external-data/incidents/nearby?lat=52&lng=-71.5&radius=1500000&feedKey=sit_agrotourisme`,
       );
-      setAllCabanes(results.filter((inc) => inc.feedKey === 'sit_agrotourisme'));
+      setAllCabanes(results);
     } catch {
       setAllCabanes([]);
     }
@@ -391,8 +404,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     ? visibleAvertissementsAll.filter((inc) => `${inc.title ?? ''} ${inc.municipalite ?? ''}`.toLowerCase().includes(searchLower))
     : visibleAvertissementsAll;
 
-  const visibleCirculation = externalIncidents.filter(
-    (inc) => inc.feedKey === 'mtmd_debit_circulation' && layerPrefs.debit_circulation,
+  const visibleCirculation = circulationIncidents.filter(
+    (inc) => layerPrefs.debit_circulation,
   );
 
   const visibleFeux = externalIncidents.filter(
