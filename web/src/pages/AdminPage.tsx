@@ -65,6 +65,12 @@ function ModerationQueue() {
   const [municipalityResults, setMunicipalityResults] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const sortedQueue = [...queue].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return sortDir === 'asc' ? diff : -diff;
+  });
 
   async function loadQueue() {
     try {
@@ -149,8 +155,15 @@ function ModerationQueue() {
           <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
             En attente d'approbation ({queue.length})
           </div>
+          <button
+            className="btn-ghost"
+            style={{ marginBottom: 12, fontSize: 11.5 }}
+            onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          >
+            {sortDir === 'asc' ? '↓ Ascendant (plus ancien d\'abord)' : '↑ Descendant (plus récent d\'abord)'}
+          </button>
           {queue.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement en attente.</div>}
-          {queue.map((r) => (
+          {sortedQueue.map((r) => (
             <div
               key={r.id}
               className="report-card"
@@ -513,6 +526,12 @@ function UsersAdmin() {
   const [users, setUsers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const sortedUsers = [...users].sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return sortDir === 'asc' ? diff : -diff;
+  });
 
   async function load() {
     try {
@@ -552,7 +571,14 @@ function UsersAdmin() {
           onKeyDown={(e) => e.key === 'Enter' && load()}
         />
       </div>
-      {users.map((u) => (
+      <button
+        className="btn-ghost"
+        style={{ marginBottom: 14, fontSize: 11.5 }}
+        onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+      >
+        {sortDir === 'asc' ? '↓ Ascendant (plus ancien d\'abord)' : '↑ Descendant (plus récent d\'abord)'}
+      </button>
+      {sortedUsers.map((u) => (
         <div key={u.id} className="report-card" style={{ cursor: 'default' }}>
           <div className="rc-icon-hex">{(u.first_name?.[0] ?? u.email[0]).toUpperCase()}</div>
           <div className="rc-body">
@@ -631,6 +657,7 @@ function MunicipalitiesAdmin() {
   const [results, setResults] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const LIMIT = 30;
 
   const [selected, setSelected] = useState<any | null>(null);
@@ -641,7 +668,7 @@ function MunicipalitiesAdmin() {
   async function load() {
     try {
       const data = await api.get<{ results: any[]; total: number }>(
-        `/municipality-integrations?search=${encodeURIComponent(search)}&limit=${LIMIT}&offset=${offset}`,
+        `/municipality-integrations?search=${encodeURIComponent(search)}&limit=${LIMIT}&offset=${offset}&sortDir=${sortDir}`,
       );
       setResults(data.results);
       setTotal(data.total);
@@ -650,7 +677,7 @@ function MunicipalitiesAdmin() {
     }
   }
 
-  useEffect(() => { load(); }, [offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [offset, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setOffset(0); }, [search]);
   useEffect(() => { if (offset === 0) load(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -713,6 +740,13 @@ function MunicipalitiesAdmin() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <button
+          className="btn-ghost"
+          style={{ marginBottom: 14, fontSize: 11.5 }}
+          onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+        >
+          {sortDir === 'asc' ? '↓ Ascendant (A-Z)' : '↑ Descendant (Z-A)'}
+        </button>
         {results.map((m) => (
           <div
             key={m.id}

@@ -17,8 +17,9 @@ export class MunicipalityIntegrationsController {
     @Query('search') search?: string,
     @Query('limit') limit = '50',
     @Query('offset') offset = '0',
+    @Query('sortDir') sortDir: 'asc' | 'desc' = 'asc',
   ) {
-    return this.service.findAll(search, Number(limit), Number(offset));
+    return this.service.findAll(search, Number(limit), Number(offset), sortDir);
   }
 
   @Post()

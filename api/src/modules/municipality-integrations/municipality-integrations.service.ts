@@ -12,7 +12,7 @@ export class MunicipalityIntegrationsService {
     private readonly emailService: EmailService,
   ) {}
 
-  async findAll(search?: string, limit = 50, offset = 0) {
+  async findAll(search?: string, limit = 50, offset = 0, sortDir: 'asc' | 'desc' = 'asc') {
     let query = this.db
       .selectFrom('municipality_integrations')
       .innerJoin('regions', 'regions.id', 'municipality_integrations.region_id')
@@ -24,7 +24,7 @@ export class MunicipalityIntegrationsService {
         'municipality_integrations.mrc_name', 'municipality_integrations.population',
         'regions.name_fr as regionNameFr',
       ])
-      .orderBy('regions.name_fr', 'asc')
+      .orderBy('regions.name_fr', sortDir)
       .limit(limit)
       .offset(offset);
 

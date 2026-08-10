@@ -6,15 +6,24 @@ interface Props {
   onClose: () => void;
   lang: 'fr' | 'en';
   onOpenReport: (reportId: string) => void;
+  onUnreadCountChange: (count: number) => void;
 }
 
-export default function NotificationsPanel({ onClose, lang, onOpenReport }: Props) {
+export default function NotificationsPanel({ onClose, lang, onOpenReport, onUnreadCountChange }: Props) {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.get<any[]>('/notifications').then((data) => { setItems(data); setLoading(false); }).catch(() => setLoading(false));
   }, []);
+
+  // Garde la bulle de compte non lu dans la barre du haut synchronisée en
+  // direct — sans ça, elle ne se mettait à jour qu'en fermant puis
+  // rouvrant le panneau.
+  useEffect(() => {
+    onUnreadCountChange(items.filter((n) => !n.readAt).length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   async function markRead(id: string) {
     await api.patch(`/notifications/${id}/read`, {});

@@ -1056,7 +1056,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
-      {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} />}
+      {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
       </>}
     </div>
   );
