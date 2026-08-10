@@ -485,8 +485,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <header className="topbar-float">
         <div className="brand-row">
-          <span className="brand-mark">511</span>
-          <span className="brand-name">{lang === 'fr' ? 'mon511.ca' : 'my511.ca'}</span>
+          <img src="/brand/logo-full.png" alt="mon511.ca" style={{ height: 52, width: 'auto' }} />
         </div>
         <div className="topbar-actions">
           {authenticated ? (
