@@ -182,3 +182,35 @@ export async function snapToRoad(lat: number, lng: number): Promise<{ lat: numbe
     return { lat, lng, snapped: false };
   }
 }
+
+/** Historique des recherches — conservé localement (pas besoin de backend
+ * pour ça), limité aux 8 plus récentes, sans doublons. */
+const SEARCH_HISTORY_KEY = 'mon511_search_history';
+const MAX_HISTORY = 8;
+
+export function getSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addToSearchHistory(query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) return;
+  const current = getSearchHistory().filter((q) => q.toLowerCase() !== trimmed.toLowerCase());
+  const updated = [trimmed, ...current].slice(0, MAX_HISTORY);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+}
+
+export function removeFromSearchHistory(query: string) {
+  const updated = getSearchHistory().filter((q) => q !== query);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updated));
+}
+
+export function clearSearchHistory() {
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+}
+

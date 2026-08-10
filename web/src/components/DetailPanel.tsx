@@ -11,9 +11,10 @@ interface Props {
   authenticated: boolean;
   onRequireAuth: () => void;
   lang: 'fr' | 'en';
+  currentUserId: string | null;
 }
 
-export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth, lang }: Props) {
+export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth, lang, currentUserId }: Props) {
   const [report, setReport] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -21,6 +22,10 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [showAuthorProfile, setShowAuthorProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
 
   async function load() {
     try {
@@ -30,6 +35,8 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       ]);
       setReport(r);
       setComments(c);
+      setEditDescription(r.description ?? '');
+      setEditAddress(r.addressText ?? '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signalement introuvable.');
     }
@@ -37,8 +44,23 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
   useEffect(() => {
     load();
+    setEditing(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
+
+  async function saveEdit() {
+    setEditSaving(true);
+    try {
+      await api.patch(`/reports/${reportId}`, { description: editDescription, addressText: editAddress });
+      setEditing(false);
+      await load();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   async function confirm() {
     if (!authenticated) return onRequireAuth();
@@ -115,8 +137,39 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             </div>
           )}
 
-          {report.description && (
+          {!editing && report.description && (
             <div style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.5 }}>{report.description}</div>
+          )}
+
+          {!editing && report.authorId && currentUserId === report.authorId && (
+            <button
+              className="btn-ghost"
+              style={{ marginBottom: 12, fontSize: 12 }}
+              onClick={() => setEditing(true)}
+            >
+              ✏️ {lang === 'fr' ? 'Modifier' : 'Edit'}
+            </button>
+          )}
+
+          {editing && (
+            <div style={{ marginBottom: 14, padding: 12, borderRadius: 9, background: 'var(--panel-hover)' }}>
+              <div className="field-group">
+                <label className="field-label">{lang === 'fr' ? 'Description' : 'Description'}</label>
+                <textarea rows={3} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+              </div>
+              <div className="field-group">
+                <label className="field-label">{lang === 'fr' ? 'Adresse' : 'Address'}</label>
+                <input className="text-input" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+              </div>
+              <div className="action-row">
+                <button className="btn-primary" onClick={saveEdit} disabled={editSaving}>
+                  {editSaving ? (lang === 'fr' ? 'Enregistrement...' : 'Saving...') : (lang === 'fr' ? 'Enregistrer' : 'Save')}
+                </button>
+                <button className="btn-ghost" onClick={() => { setEditing(false); setEditDescription(report.description ?? ''); setEditAddress(report.addressText ?? ''); }}>
+                  {lang === 'fr' ? 'Annuler' : 'Cancel'}
+                </button>
+              </div>
+            </div>
           )}
 
           {report.photos?.length > 0 && (

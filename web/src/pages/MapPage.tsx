@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
-import { searchCities, reverseGeocode, GeocodingResult } from '../geocoding';
+import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
 import DetailPanel from '../components/DetailPanel';
@@ -144,6 +144,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [mapType, setMapType] = useState<MapType>('default');
   const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Ferme automatiquement les panneaux flottants (filtres/légende, détails
+  // de la carte, type de carte) dès qu'on clique ailleurs — pas seulement
+  // en cliquant sur un autre de ces boutons.
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (target.closest('.map-menu-btn, .map-menu-panel')) return;
+      setShowFiltersLegend(false);
+      setShowMapDetailsMenu(false);
+      setShowMapTypeMenu(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [showAbout, setShowAbout] = useState(false);
   const [showMyReports, setShowMyReports] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -161,6 +177,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [currentAreaName, setCurrentAreaName] = useState('');
   const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [filterTypeIds, setFilterTypeIds] = useState<Set<string>>(new Set());
   const [filterStatus, setFilterStatus] = useState<'all' | 'unresolved' | 'resolved'>('all');
 
@@ -175,6 +192,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   useEffect(() => {
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
+    setSearchHistory(getSearchHistory());
   }, []);
 
   useEffect(() => {
@@ -186,9 +204,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     if (authenticated) {
       api.get<any>('/users/me').then((me) => {
         if (me.map_layer_preferences) setLayerPrefs(me.map_layer_preferences);
+        setCurrentUserId(me.id);
       });
     } else {
       setLayerPrefs(getLocalLayerPrefs());
+      setCurrentUserId(null);
     }
   }, [authenticated]);
 
@@ -308,6 +328,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       // Une ville a été trouvée : on y va, et on efface la recherche pour
       // qu'elle n'agisse pas aussi comme filtre de texte sur les pins/liste
       // (sinon rien ne correspond au nom de la ville et tout disparaît).
+      addToSearchHistory(searchText.trim());
+      setSearchHistory(getSearchHistory());
       setSearchText('');
       setAppliedSearch('');
       setMapCamera({ lat: results[0].lat, lng: results[0].lng });
@@ -320,12 +342,30 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   }
 
   function selectCitySuggestion(city: GeocodingResult) {
+    addToSearchHistory(city.name);
+    setSearchHistory(getSearchHistory());
     setSearchText(city.name);
     setAppliedSearch('');
     setShowDropdown(false);
     setMapCamera({ lat: city.lat, lng: city.lng });
     loadNearby(city.lat, city.lng);
     loadOfficialLayer(city.lat, city.lng);
+  }
+
+  function selectHistoryEntry(query: string) {
+    setSearchText(query);
+    setShowDropdown(true);
+    searchCities(query, 1).then((results) => {
+      if (results[0]) {
+        addToSearchHistory(query);
+        setSearchHistory(getSearchHistory());
+        setSearchText('');
+        setShowDropdown(false);
+        setMapCamera({ lat: results[0].lat, lng: results[0].lng });
+        loadNearby(results[0].lat, results[0].lng);
+        loadOfficialLayer(results[0].lat, results[0].lng);
+      }
+    });
   }
 
   function selectReportSuggestion(r: Report) {
@@ -566,6 +606,31 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           )}
         </form>
 
+        {showDropdown && !searchText.trim() && searchHistory.length > 0 && (
+          <div className="search-dropdown">
+            <div className="search-dropdown-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>{lang === 'fr' ? 'Recherches récentes' : 'Recent searches'}</span>
+              <span
+                style={{ cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}
+                onClick={() => { clearSearchHistory(); setSearchHistory([]); }}
+              >
+                {lang === 'fr' ? 'Effacer' : 'Clear'}
+              </span>
+            </div>
+            {searchHistory.map((q) => (
+              <div key={q} className="search-dropdown-item" onClick={() => selectHistoryEntry(q)} style={{ justifyContent: 'space-between' }}>
+                <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}><span>🕓</span><span>{q}</span></span>
+                <span
+                  onClick={(e) => { e.stopPropagation(); removeFromSearchHistory(q); setSearchHistory(getSearchHistory()); }}
+                  style={{ color: 'var(--text-muted)', padding: '0 4px' }}
+                >
+                  ✕
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {showDropdown && searchText.trim() && (citySuggestions.length > 0 || reportSuggestions.length > 0) && (
           <div className="search-dropdown">
             {citySuggestions.length > 0 && (
@@ -744,6 +809,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           authenticated={authenticated}
           onRequireAuth={onRequireAuth}
           lang={lang}
+          currentUserId={currentUserId}
         />
       )}
       {selection?.type === 'external' && (
