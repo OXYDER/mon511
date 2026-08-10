@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
-import CreateReportModal from '../components/CreateReportModal';
-import DetailPanel from '../components/DetailPanel';
-import ExternalIncidentPanel from '../components/ExternalIncidentPanel';
-import ProfileModal from '../components/ProfileModal';
 import ToggleSwitch from '../components/ToggleSwitch';
-import AboutModal from '../components/AboutModal';
-import NotificationsPanel from '../components/NotificationsPanel';
-import MyReportsPage from './MyReportsPage';
-import AdminPage from './AdminPage';
+
+// Chargés seulement au moment où on en a vraiment besoin (après une action
+// de l'usager) — pas nécessaires au tout premier affichage de la carte,
+// donc pas la peine de les inclure dans le paquet initial.
+const CreateReportModal = lazy(() => import('../components/CreateReportModal'));
+const DetailPanel = lazy(() => import('../components/DetailPanel'));
+const ExternalIncidentPanel = lazy(() => import('../components/ExternalIncidentPanel'));
+const ProfileModal = lazy(() => import('../components/ProfileModal'));
+const AboutModal = lazy(() => import('../components/AboutModal'));
+const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
+const MyReportsPage = lazy(() => import('./MyReportsPage'));
+const AdminPage = lazy(() => import('./AdminPage'));
 
 interface Report {
   id: string;
@@ -540,6 +544,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   );
 
   return (
+    <Suspense fallback={null}>
     <div className="app-full">
       <LoadingScreen visible={showInitialLoader} />
       {showAdmin && <AdminPage onClose={() => setShowAdmin(false)} />}
@@ -1059,5 +1064,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
       </>}
     </div>
+    </Suspense>
   );
 }
