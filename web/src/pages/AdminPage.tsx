@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -38,6 +38,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'municipalities' ? 'active' : ''}`} onClick={() => setTab('municipalities')}>
             Municipalités
           </button>
+          <button className={`tab-item ${tab === 'allReports' ? 'active' : ''}`} onClick={() => setTab('allReports')}>
+            Tous les signalements
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -48,6 +51,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'external' && <ExternalDataAdmin />}
         {tab === 'users' && <UsersAdmin />}
         {tab === 'municipalities' && <MunicipalitiesAdmin />}
+        {tab === 'allReports' && <AllReportsAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -828,6 +832,106 @@ function MunicipalitiesAdmin() {
             <button className="btn-primary" onClick={save}>Enregistrer</button>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+const STATUS_LABELS_ALL: Record<string, string> = {
+  pending_moderation: 'En modération',
+  published_unresolved: 'Non résolu',
+  published_resolved: 'Résolu',
+  rejected: 'Refusé',
+  withdrawn: 'Retiré',
+};
+
+function AllReportsAdmin() {
+  const [results, setResults] = useState<any[]>([]);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [sortBy, setSortBy] = useState<'created_at' | 'municipality'>('created_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [offset, setOffset] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const LIMIT = 30;
+
+  async function load() {
+    try {
+      const params = new URLSearchParams({
+        search, status, sortBy, sortDir, limit: String(LIMIT), offset: String(offset),
+      });
+      const data = await api.get<{ results: any[]; total: number }>(`/moderation/all-reports?${params}`);
+      setResults(data.results);
+      setTotal(data.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, [offset, status, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setOffset(0); }, [search, status]);
+  useEffect(() => { if (offset === 0) load(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Tous les signalements ({total})
+      </div>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        Vue d'ensemble de TOUS les signalements de TOUS les usagers, peu importe le statut —
+        pour la file d'approbation active, voir l'onglet « File de modération ».
+      </p>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <input
+          className="text-input"
+          style={{ flex: '2 1 220px' }}
+          placeholder="Rechercher (description, adresse, courriel, municipalité)..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select style={{ flex: '1 1 160px' }} value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Tous les statuts</option>
+          {Object.entries(STATUS_LABELS_ALL).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+        <select style={{ flex: '1 1 160px' }} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+          <option value="created_at">Trier par date</option>
+          <option value="municipality">Trier par municipalité</option>
+        </select>
+        <button className="btn-ghost" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+          {sortDir === 'asc' ? '↓ Ascendant' : '↑ Descendant'}
+        </button>
+      </div>
+
+      {results.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement pour ces filtres.</div>}
+      {results.map((r) => (
+        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+            {r.problemTypeIcon ?? '📍'}
+          </div>
+          <div className="rc-body">
+            <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
+            <div className="rc-meta">
+              {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}
+            </div>
+          </div>
+          <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
+            {STATUS_LABELS_ALL[r.status] ?? r.status}
+          </span>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
+        <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          {total === 0 ? 0 : offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
+        </span>
+        <button className="btn-ghost" disabled={offset + LIMIT >= total} onClick={() => setOffset(offset + LIMIT)}>Suivant →</button>
       </div>
     </div>
   );

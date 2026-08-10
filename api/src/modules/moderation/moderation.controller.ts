@@ -51,6 +51,20 @@ export class ModerationController {
     return this.moderationService.dismissResolution(reportId);
   }
 
+  @Get('all-reports')
+  allReports(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('sortBy') sortBy?: 'created_at' | 'municipality',
+    @Query('sortDir') sortDir?: 'asc' | 'desc',
+    @Query('limit') limit = '30',
+    @Query('offset') offset = '0',
+  ) {
+    return this.moderationService.findAllReports({
+      search, status, sortBy, sortDir, limit: Number(limit), offset: Number(offset),
+    });
+  }
+
   @Get(':id')
   detail(@Param('id') id: string) {
     return this.moderationService.findDetail(id);

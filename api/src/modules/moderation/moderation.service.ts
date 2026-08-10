@@ -38,6 +38,71 @@ export class ModerationService {
     return query.execute();
   }
 
+  /** Vue admin — TOUS les signalements de TOUS les usagers (pas seulement
+   * ceux en attente de modération), avec recherche, filtre de statut et tri
+   * par municipalité. */
+  async findAllReports(params: {
+    search?: string;
+    status?: string;
+    sortBy?: 'created_at' | 'municipality';
+    sortDir?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }) {
+    const { search, status, sortBy = 'created_at', sortDir = 'desc', limit = 30, offset = 0 } = params;
+
+    let query = this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('regions', 'regions.id', 'reports.region_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
+      .select([
+        'reports.id', 'reports.description', 'reports.address_text as addressText',
+        'reports.status', 'reports.created_at',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.name_en as problemTypeNameEn',
+        'problem_types.icon as problemTypeIcon',
+        'regions.name_fr as municipalityName',
+        'users.email as authorEmail',
+      ]);
+
+    let countQuery = this.db
+      .selectFrom('reports')
+      .leftJoin('regions', 'regions.id', 'reports.region_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
+      .select(({ fn }) => fn.count<number>('reports.id').as('count'));
+
+    if (status) {
+      query = query.where('reports.status', '=', status as any);
+      countQuery = countQuery.where('reports.status', '=', status as any);
+    }
+    if (search) {
+      const pattern = `%${search}%`;
+      query = query.where((eb) => eb.or([
+        eb('reports.description', 'ilike', pattern),
+        eb('reports.address_text', 'ilike', pattern),
+        eb('users.email', 'ilike', pattern),
+        eb('regions.name_fr', 'ilike', pattern),
+      ]));
+      countQuery = countQuery.where((eb) => eb.or([
+        eb('reports.description', 'ilike', pattern),
+        eb('reports.address_text', 'ilike', pattern),
+        eb('users.email', 'ilike', pattern),
+        eb('regions.name_fr', 'ilike', pattern),
+      ]));
+    }
+
+    query = sortBy === 'municipality'
+      ? query.orderBy('regions.name_fr', sortDir).orderBy('reports.created_at', 'desc')
+      : query.orderBy('reports.created_at', sortDir);
+
+    const [results, total] = await Promise.all([
+      query.limit(limit).offset(offset).execute(),
+      countQuery.executeTakeFirst(),
+    ]);
+
+    return { results, total: total?.count ?? 0 };
+  }
+
   async findDetail(reportId: string) {
     const report = await this.db
       .selectFrom('reports')
