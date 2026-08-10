@@ -257,7 +257,21 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   }, []);
 
   // Changer le style de tuiles quand le thème ou le type de carte change, sans recréer la carte
+  const isFirstStyleRender = useRef(true);
   useEffect(() => {
+    // La carte est déjà construite avec le bon style dès sa création
+    // (voir le useEffect d'initialisation plus haut) — sans cette garde,
+    // ce useEffect se déclenche AUSSI au tout premier montage (comportement
+    // normal de React pour un effet avec dépendances) et relance setStyle()
+    // avec le MÊME style, avant même que le premier ait fini de charger.
+    // MapLibre corrompt alors son état interne dès le départ à chaque
+    // chargement de page ('Style is not done loading.. Rebuilding the
+    // style from scratch'), ce qui peut faire disparaître nos couches
+    // personnalisées.
+    if (isFirstStyleRender.current) {
+      isFirstStyleRender.current = false;
+      return;
+    }
     if (mapRef.current) {
       mapRef.current.setStyle(styleUrlFor(theme, mapType));
     }
