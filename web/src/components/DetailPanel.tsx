@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import Lightbox from './Lightbox';
 import PublicProfileModal from './PublicProfileModal';
+import { pickName } from '../i18n';
 
 interface Props {
   reportId: string;
@@ -9,9 +10,10 @@ interface Props {
   onChanged: () => void;
   authenticated: boolean;
   onRequireAuth: () => void;
+  lang: 'fr' | 'en';
 }
 
-export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth }: Props) {
+export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth, lang }: Props) {
   const [report, setReport] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -94,7 +96,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div className="detail-title" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>{report?.problemTypeIcon ?? '📍'}</span>
-          <span>{report?.problemTypeNameFr ?? 'Signalement'}</span>
+          <span>{report ? pickName(report.problemTypeNameFr, report.problemTypeNameEn, lang) : 'Signalement'}</span>
         </div>
         <button className="detail-panel-close" onClick={onClose}>✕</button>
       </div>
@@ -151,7 +153,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             )}
           </div>
           {showAuthorProfile && report.authorId && (
-            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} />
+            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} />
           )}
           {report.municipality_notified === 'yes' && (
             <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>

@@ -165,7 +165,8 @@ export class UsersService {
         .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
         .select([
           'reports.id', 'reports.status', 'reports.created_at',
-          'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+          'problem_types.name_fr as problemTypeNameFr', 'problem_types.name_en as problemTypeNameEn',
+          'problem_types.icon as problemTypeIcon',
         ])
         .where('reports.user_id', '=', id)
         .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
@@ -216,6 +217,7 @@ export class UsersService {
         'reports.id', 'reports.status', 'reports.created_at',
         'reports.address_text as addressText', 'reports.problem_type_id',
         'problem_types.name_fr as problemTypeNameFr',
+        'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',
       ])
       .where('reports.user_id', '=', userId)

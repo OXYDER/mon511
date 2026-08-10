@@ -76,7 +76,7 @@ export class ReportsService {
         'reports.id', 'reports.status', 'reports.description', 'reports.address_text as addressText',
         'reports.created_at', 'reports.updated_at', 'reports.resolved_at',
         'reports.municipality_notified', 'reports.municipality_name',
-        'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.name_en as problemTypeNameEn', 'problem_types.icon as problemTypeIcon',
         'users.id as authorId', 'users.email as authorEmail', 'users.first_name as authorFirstName',
         'users.last_name as authorLastName', 'users.privacy_settings as authorPrivacySettings',
         sql<number>`ST_Y(reports.location::geometry)`.as('latitude'),

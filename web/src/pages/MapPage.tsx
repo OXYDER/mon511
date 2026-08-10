@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
-import { t, Lang, getStoredLang, setStoredLang } from '../i18n';
+import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
 import { searchCities, reverseGeocode, GeocodingResult } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import CreateReportModal from '../components/CreateReportModal';
@@ -20,6 +20,7 @@ interface Report {
   addressText: string | null;
   problemTypeId?: string;
   problemTypeNameFr: string;
+  problemTypeNameEn?: string;
   problemTypeIcon: string | null;
   latitude: number;
   longitude: number;
@@ -73,6 +74,7 @@ function trafficColor(djma: string | null): string {
 interface ProblemType {
   id: string;
   name_fr: string;
+  name_en?: string;
   icon: string | null;
 }
 
@@ -373,7 +375,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const searchLower = appliedSearch.trim().toLowerCase();
   const liveSearchLower = searchText.trim().toLowerCase();
   const reportSuggestions = liveSearchLower
-    ? reports.filter((r) => `${r.problemTypeNameFr} ${r.addressText ?? ''}`.toLowerCase().includes(liveSearchLower)).slice(0, 5)
+    ? reports.filter((r) => `${r.problemTypeNameFr} ${r.problemTypeNameEn ?? ''} ${r.addressText ?? ''}`.toLowerCase().includes(liveSearchLower)).slice(0, 5)
     : [];
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
@@ -381,7 +383,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       if (filterTypeIds.size > 0 && r.problemTypeId && !filterTypeIds.has(r.problemTypeId)) return false;
       if (filterStatus === 'unresolved' && r.status === 'published_resolved') return false;
       if (filterStatus === 'resolved' && r.status !== 'published_resolved') return false;
-      if (searchLower && !`${r.problemTypeNameFr} ${r.addressText ?? ''} ${r.description ?? ''}`.toLowerCase().includes(searchLower)) return false;
+      if (searchLower && !`${r.problemTypeNameFr} ${r.problemTypeNameEn ?? ''} ${r.addressText ?? ''} ${r.description ?? ''}`.toLowerCase().includes(searchLower)) return false;
       return true;
     });
   }, [reports, filterTypeIds, filterStatus, searchLower, viewBounds]);
@@ -412,7 +414,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret && withinBounds(inc.latitude, inc.longitude),
   );
 
-  const visibleCabanes = allCabanes.filter((inc) => layerPrefs.cabanes_a_sucre);
+  const visibleCabanes = allCabanes.filter((inc) => layerPrefs.cabanes_a_sucre && withinBounds(inc.latitude, inc.longitude));
 
   const reportPins: MapPin[] = filteredReports.map((r) => ({
     id: r.id,
@@ -581,7 +583,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 <div className="search-dropdown-section-title">{lang === 'fr' ? 'Signalements' : 'Reports'}</div>
                 {reportSuggestions.map((r) => (
                   <div key={r.id} className="search-dropdown-item" onClick={() => selectReportSuggestion(r)}>
-                    <span>{r.problemTypeIcon ?? '📍'}</span><span>{r.problemTypeNameFr} — {r.addressText ?? 'GPS'}</span>
+                    <span>{r.problemTypeIcon ?? '📍'}</span><span>{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)} — {r.addressText ?? 'GPS'}</span>
                   </div>
                 ))}
               </>
@@ -617,7 +619,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                       {r.problemTypeIcon ?? '📍'}
                     </div>
                     <div className="rc-body">
-                      <div className="rc-title">{r.problemTypeNameFr}</div>
+                      <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                     </div>
                     <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'pending_moderation' ? 'official' : 'unresolved'}`}>
@@ -741,6 +743,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onChanged={() => queryCenter && loadNearby(queryCenter.lat, queryCenter.lng)}
           authenticated={authenticated}
           onRequireAuth={onRequireAuth}
+          lang={lang}
         />
       )}
       {selection?.type === 'external' && (
@@ -781,7 +784,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   className={`filter-chip ${filterTypeIds.has(pt.id) ? 'active' : ''}`}
                   onClick={() => toggleTypeFilter(pt.id)}
                 >
-                  {pt.icon} {pt.name_fr}
+                  {pt.icon} {pickName(pt.name_fr, pt.name_en, lang)}
                 </div>
               ))}
             </div>
@@ -792,7 +795,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             {problemTypes.map((pt) => (
               <div key={pt.id} className="legend-row">
                 <div className="legend-icon-box">{pt.icon ?? '📍'}</div>
-                <span>{pt.name_fr}</span>
+                <span>{pickName(pt.name_fr, pt.name_en, lang)}</span>
               </div>
             ))}
           </div>
@@ -916,6 +919,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showCreateModal && (
         <CreateReportModal
           initialCoords={createModalCoords}
+          lang={lang}
           onClose={() => { setShowCreateModal(false); setCreateModalCoords(null); }}
           onCreated={() => {
             setShowCreateModal(false);

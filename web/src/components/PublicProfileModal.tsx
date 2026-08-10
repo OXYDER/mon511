@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { pickName } from '../i18n';
 
 interface Props {
   userId: string;
   onClose: () => void;
+  lang: 'fr' | 'en';
 }
 
-export default function PublicProfileModal({ userId, onClose }: Props) {
+export default function PublicProfileModal({ userId, onClose, lang }: Props) {
   const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +58,7 @@ export default function PublicProfileModal({ userId, onClose }: Props) {
                         {r.problemTypeIcon ?? '📍'}
                       </div>
                       <div className="rc-body">
-                        <div className="rc-title">{r.problemTypeNameFr}</div>
+                        <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                         <div className="rc-meta">{new Date(r.created_at).toLocaleDateString('fr-CA')}</div>
                       </div>
                     </div>

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { reverseGeocodeAddress, snapToRoad, searchCities, GeocodingResult } from '../geocoding';
+import { pickName } from '../i18n';
 
 interface ProblemType {
   id: string;
   nameFr: string;
+  nameEn?: string;
   icon: string | null;
 }
 
@@ -12,9 +14,10 @@ interface Props {
   onClose: () => void;
   onCreated: () => void;
   initialCoords?: { lat: number; lng: number } | null;
+  lang: 'fr' | 'en';
 }
 
-export default function CreateReportModal({ onClose, onCreated, initialCoords }: Props) {
+export default function CreateReportModal({ onClose, onCreated, initialCoords, lang }: Props) {
   const [types, setTypes] = useState<ProblemType[]>([]);
   const [typeId, setTypeId] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -41,7 +44,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
 
   useEffect(() => {
     api.get<any[]>('/problem-types').then((data) => {
-      setTypes(data.map((t) => ({ id: t.id, nameFr: t.name_fr, icon: t.icon })));
+      setTypes(data.map((t) => ({ id: t.id, nameFr: t.name_fr, nameEn: t.name_en, icon: t.icon })));
       if (data[0]) setTypeId(data[0].id);
     });
   }, []);
@@ -205,7 +208,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
       }
 
       const chosenType = types.find((t) => t.id === typeId);
-      setSubmittedSummary({ typeName: chosenType?.nameFr ?? 'Signalement', typeIcon: chosenType?.icon ?? '📍' });
+      setSubmittedSummary({ typeName: pickName(chosenType?.nameFr ?? 'Signalement', chosenType?.nameEn, lang), typeIcon: chosenType?.icon ?? '📍' });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
     } finally {
@@ -262,7 +265,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords }:
                     onClick={() => setTypeId(t.id)}
                   >
                     <span className="ti">{t.icon ?? '📍'}</span>
-                    <span>{t.nameFr}</span>
+                    <span>{pickName(t.nameFr, t.nameEn, lang)}</span>
                   </div>
                 ))}
               </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { pickName } from '../i18n';
 
 interface Props {
   onClose: () => void;
@@ -110,7 +111,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
   const filteredReports = reports
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
-    .filter((r) => filterTypeId === 'all' || r.problem_type_id === filterTypeId || r.problemTypeNameFr === types.find((t) => t.id === filterTypeId)?.name_fr)
+    .filter((r) => filterTypeId === 'all' || r.problem_type_id === filterTypeId)
     .sort((a, b) => sortBy === 'date_desc'
       ? new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       : new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -151,7 +152,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
           <select value={filterTypeId} onChange={(e) => setFilterTypeId(e.target.value)} style={{ width: '100%', marginBottom: 14 }}>
             <option value="all">{lang === 'fr' ? 'Tous les types' : 'All types'}</option>
             {types.map((t) => (
-              <option key={t.id} value={t.id}>{t.icon} {t.name_fr}</option>
+              <option key={t.id} value={t.id}>{t.icon} {pickName(t.name_fr, t.name_en, lang)}</option>
             ))}
           </select>
 
@@ -171,7 +172,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                 {r.problemTypeIcon ?? '📍'}
               </div>
               <div className="rc-body">
-                <div className="rc-title">{r.problemTypeNameFr}</div>
+                <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                 <div className="rc-meta">{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}</div>
               </div>
               <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
@@ -251,7 +252,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                 <label className="field-label">{lang === 'fr' ? 'Type de problème' : 'Problem type'}</label>
                 <select value={problemTypeId} onChange={(e) => setProblemTypeId(e.target.value)}>
                   {types.map((t) => (
-                    <option key={t.id} value={t.id}>{t.icon} {t.name_fr}</option>
+                    <option key={t.id} value={t.id}>{t.icon} {pickName(t.name_fr, t.name_en, lang)}</option>
                   ))}
                 </select>
               </div>

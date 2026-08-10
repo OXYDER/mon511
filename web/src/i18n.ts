@@ -43,6 +43,13 @@ export function t(key: TranslationKey, lang: Lang): string {
   return dict[key][lang];
 }
 
+/** Choisit le nom français ou anglais d'un type de problème (ou toute
+ * paire nameFr/nameEn) selon la langue active — avec repli sur le
+ * français si jamais l'anglais est manquant pour un type donné. */
+export function pickName(nameFr: string, nameEn: string | null | undefined, lang: Lang): string {
+  return lang === 'en' && nameEn ? nameEn : nameFr;
+}
+
 const LANG_KEY = 'mon511_lang';
 
 export function getStoredLang(): Lang {
