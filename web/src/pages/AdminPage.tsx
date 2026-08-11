@@ -625,11 +625,16 @@ function UsersAdmin() {
 function SiteSettingsAdmin() {
   const [settings, setSettings] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [lifecycleForm, setLifecycleForm] = useState<any | null>(null);
+  const [lifecycleSaving, setLifecycleSaving] = useState(false);
+  const [lifecycleFeedback, setLifecycleFeedback] = useState<string | null>(null);
 
   async function load() {
     try {
       const results = await api.get<any[]>('/site-settings');
       setSettings(results);
+      const lifecycle = results.find((s) => s.key === 'lifecycle_days');
+      if (lifecycle) setLifecycleForm(lifecycle.value);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
     }
@@ -642,10 +647,32 @@ function SiteSettingsAdmin() {
     load();
   }
 
+  async function saveLifecycle() {
+    setLifecycleSaving(true);
+    setLifecycleFeedback(null);
+    try {
+      await api.patch('/site-settings/lifecycle_days', { value: lifecycleForm });
+      setLifecycleFeedback('Enregistré.');
+      load();
+    } catch (err) {
+      setLifecycleFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setLifecycleSaving(false);
+    }
+  }
+
   if (error) return <div className="error-banner">{error}</div>;
 
   const booleanSettings = settings.filter((s) => typeof s.value === 'boolean');
-  const otherSettings = settings.filter((s) => typeof s.value !== 'boolean');
+  const otherSettings = settings.filter((s) => typeof s.value !== 'boolean' && s.key !== 'lifecycle_days');
+
+  const LIFECYCLE_FIELDS: [string, string, string][] = [
+    ['rejectionCorrectionDays', 'Jours pour corriger un signalement refusé', 'avant suppression définitive si non corrigé'],
+    ['stalenessWarningDays', 'Jours avant le rappel « toujours valable? »', "après publication, si aucune confirmation reçue"],
+    ['stalenessDeadlineDays', 'Jours additionnels après le rappel', 'avant archivage automatique si aucune confirmation'],
+    ['archiveRetentionYears', 'Années de conservation en archive', 'avant suppression définitive (photos incluses)'],
+    ['duplicateDetectionRadiusMeters', 'Rayon de détection de doublons (mètres)', 'pour proposer de réutiliser un signalement archivé'],
+  ];
 
   return (
     <div>
@@ -658,6 +685,33 @@ function SiteSettingsAdmin() {
           <ToggleSwitch on={s.value} onToggle={() => toggle(s.key, s.value)} />
         </div>
       ))}
+
+      <div className="section-label">Cycle de vie des signalements</div>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        Contrôle les délais du parcours complet d'un signalement : correction après refus,
+        rappels de validité, archivage, et conservation des données archivées.
+      </p>
+      {lifecycleForm && LIFECYCLE_FIELDS.map(([key, label, hint]) => (
+        <div key={key} className="field-group">
+          <label className="field-label">{label}</label>
+          <input
+            type="number"
+            min={1}
+            className="text-input"
+            value={lifecycleForm[key] ?? ''}
+            onChange={(e) => setLifecycleForm({ ...lifecycleForm, [key]: Number(e.target.value) })}
+          />
+          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{hint}</span>
+        </div>
+      ))}
+      {lifecycleForm && (
+        <div className="action-row" style={{ marginBottom: 20 }}>
+          <button className="btn-primary" onClick={saveLifecycle} disabled={lifecycleSaving}>
+            {lifecycleSaving ? 'Enregistrement...' : 'Enregistrer les délais'}
+          </button>
+          {lifecycleFeedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{lifecycleFeedback}</span>}
+        </div>
+      )}
 
       <div className="section-label">Autres paramètres</div>
       {otherSettings.map((s) => (

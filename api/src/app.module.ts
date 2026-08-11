@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { AuthModule } from './auth/auth.module';
@@ -18,10 +19,12 @@ import { ExternalDataModule } from './modules/external-data/external-data.module
 import { SiteSettingsModule } from './modules/site-settings/site-settings.module';
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { VerificationModule } from './verification/verification.module';
+import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     EmailModule,
     AuthModule,
@@ -39,6 +42,7 @@ import { VerificationModule } from './verification/verification.module';
     SiteSettingsModule,
     ReputationModule,
     VerificationModule,
+    LifecycleModule,
   ],
   controllers: [HealthController],
 })

@@ -21,6 +21,21 @@ export class ReportsController {
     return this.reportsService.findNearby(Number(lat), Number(lng), Number(radius), user?.userId);
   }
 
+  // Confirmation via le lien reçu par courriel — publique (pas de connexion
+  // requise, le jeton lui-même prouve l'identité). Doit être déclarée avant
+  // ':id' pour ne jamais être interceptée par la route paramétrée.
+  @Post('confirm-via-token/:token')
+  confirmViaToken(@Param('token') token: string) {
+    return this.reportsService.confirmViaToken(token);
+  }
+
+  // Idem — recherche d'archives à proximité pour la détection de doublons
+  // à la création d'un signalement.
+  @Get('nearby-archived')
+  findNearbyArchived(@Query('lat') lat: string, @Query('lng') lng: string) {
+    return this.reportsService.findNearbyArchived(Number(lat), Number(lng));
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.reportsService.findOne(id);

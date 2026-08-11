@@ -95,6 +95,7 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${EMAIL_FROM:-notifications@mon511.ca}
       JWT_SECRET: ${JWT_SECRET:?définir dans .env}
+      FRONTEND_URL: ${FRONTEND_URL:-https://mon511.ca}
     ports:
       - "${API_HOST_PORT:-3000}:3000"
 

@@ -82,13 +82,26 @@ export interface ReportsTable {
   gps_accuracy_m: number | null;
   address_text: string | null;
   description: string | null;
-  status: Generated<'pending_moderation' | 'published_unresolved' | 'published_resolved' | 'rejected' | 'withdrawn'>;
+  status: Generated<'pending_moderation' | 'published_unresolved' | 'published_resolved' | 'rejected' | 'withdrawn' | 'archived'>;
   municipality_notified: Generated<'yes' | 'no' | 'unknown'>;
   municipality_name: string | null;
   municipality_case_number: string | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   resolved_at: Timestamp | null;
+  rejected_at: Timestamp | null;
+  last_confirmed_at: Timestamp | null;
+  staleness_reminder_sent_at: Timestamp | null;
+  archived_at: Timestamp | null;
+}
+
+export interface ReportConfirmationTokensTable {
+  id: Generated<string>;
+  report_id: string;
+  token: string;
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  used_at: Timestamp | null;
 }
 
 export interface ReportPhotosTable {
@@ -308,6 +321,7 @@ export interface Database {
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;
+  report_confirmation_tokens: ReportConfirmationTokensTable;
   report_flags: ReportFlagsTable;
   report_messages: ReportMessagesTable;
   report_status_history: ReportStatusHistoryTable;

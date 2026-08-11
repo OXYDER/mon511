@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { Kysely } from 'kysely';
 import { randomUUID } from 'crypto';
 import * as exifr from 'exifr';
@@ -84,5 +84,22 @@ export class UploadsService {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  /** Supprime réellement les fichiers du stockage (pas seulement la ligne
+   * en base) — utilisé notamment par LifecycleService lors de la
+   * suppression définitive d'un signalement archivé expiré. */
+  async deleteObjects(keys: string[]) {
+    if (keys.length === 0) return;
+    try {
+      await this.s3.send(
+        new DeleteObjectsCommand({
+          Bucket: this.bucket,
+          Delete: { Objects: keys.map((Key) => ({ Key })) },
+        }),
+      );
+    } catch (err) {
+      this.logger.error('Échec de suppression de fichiers dans le stockage', err as Error);
+    }
   }
 }

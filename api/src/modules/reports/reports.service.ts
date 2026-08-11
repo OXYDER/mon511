@@ -1,4 +1,4 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -64,6 +64,40 @@ export class ReportsService {
       )
       .orderBy('reports.created_at', 'desc')
       .limit(1500)
+      .execute();
+  }
+
+  /** Recherche des signalements ARCHIVÉS à proximité d'un point — utilisé à
+   * la création d'un nouveau signalement pour proposer de réutiliser les
+   * informations et photos d'un signalement antérieur au même endroit
+   * plutôt que de tout ressaisir. Le rayon est configurable dans l'admin
+   * (site_settings.lifecycle_days.duplicateDetectionRadiusMeters). */
+  async findNearbyArchived(lat: number, lng: number) {
+    const setting = await this.db
+      .selectFrom('site_settings')
+      .select('value')
+      .where('key', '=', 'lifecycle_days')
+      .executeTakeFirst();
+    const radiusMeters = (setting?.value as any)?.duplicateDetectionRadiusMeters ?? 15;
+
+    return this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
+      .select([
+        'reports.id', 'reports.description', 'reports.address_text as addressText',
+        'reports.problem_type_id as problemTypeId', 'reports.archived_at as archivedAt',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.name_en as problemTypeNameEn',
+        'problem_types.icon as problemTypeIcon',
+        'users.first_name as authorFirstName',
+        sql<string[]>`(SELECT array_agg(url) FROM report_photos WHERE report_photos.report_id = reports.id)`.as('photoUrls'),
+      ])
+      .where('reports.status', '=', 'archived')
+      .where(
+        sql<boolean>`ST_DWithin(reports.location::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusMeters})`,
+      )
+      .orderBy('reports.archived_at', 'desc')
+      .limit(3)
       .execute();
   }
 
@@ -143,9 +177,14 @@ export class ReportsService {
    * le type ou la position (pour éviter les abus, un nouveau signalement
    * s'impose si l'emplacement était vraiment erroné). */
   async updateOwn(reportId: string, userId: string, changes: { description?: string; addressText?: string; municipalityNotified?: 'yes' | 'no' | 'unknown'; municipalityName?: string; problemTypeId?: string }) {
-    const report = await this.db.selectFrom('reports').select(['user_id']).where('id', '=', reportId).executeTakeFirst();
+    const report = await this.db.selectFrom('reports').select(['user_id', 'status']).where('id', '=', reportId).executeTakeFirst();
     if (!report) throw new NotFoundException('Signalement introuvable.');
     if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+
+    // Un signalement refusé qu'on corrige repasse automatiquement par la
+    // modération — la correction ne le republie pas directement, elle
+    // demande simplement un nouveau regard humain dessus.
+    const wasRejected = report.status === 'rejected';
 
     await this.db
       .updateTable('reports')
@@ -155,10 +194,24 @@ export class ReportsService {
         ...(changes.municipalityNotified !== undefined && { municipality_notified: changes.municipalityNotified }),
         ...(changes.municipalityName !== undefined && { municipality_name: changes.municipalityName }),
         ...(changes.problemTypeId !== undefined && { problem_type_id: changes.problemTypeId }),
+        ...(wasRejected && { status: 'pending_moderation' as any, rejected_at: null as any }),
         updated_at: new Date() as any,
       })
       .where('id', '=', reportId)
       .execute();
+
+    if (wasRejected) {
+      await this.db
+        .insertInto('report_status_history')
+        .values({
+          report_id: reportId,
+          old_status: 'rejected',
+          new_status: 'pending_moderation',
+          changed_by: userId,
+          reason: "Corrigé par l'auteur suite au refus — nouvelle révision demandée.",
+        })
+        .execute();
+    }
 
     return this.findOwnDetail(reportId, userId);
   }
@@ -380,9 +433,51 @@ export class ReportsService {
       const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
       await this.reputationService.award(userId, 'gave_confirmation', reportId);
       if (report?.user_id) await this.reputationService.award(report.user_id, 'report_confirmed_by_other', reportId, userId);
+      // Remet le compteur de fraîcheur à zéro — évite l'archivage automatique
+      // du cycle de vie (voir LifecycleService) tant que quelqu'un confirme
+      // régulièrement que le problème existe encore.
+      await this.db
+        .updateTable('reports')
+        .set({ last_confirmed_at: new Date() as any, staleness_reminder_sent_at: null as any })
+        .where('id', '=', reportId)
+        .execute();
     }
 
     return result;
+  }
+
+  /** Confirmation via le lien reçu par courriel (rappel à 30 jours) — pas
+   * besoin d'être connecté, le jeton prouve l'identité. Compte comme une
+   * confirmation par le propriétaire lui-même. */
+  async confirmViaToken(token: string) {
+    const record = await this.db
+      .selectFrom('report_confirmation_tokens')
+      .selectAll()
+      .where('token', '=', token)
+      .executeTakeFirst();
+
+    if (!record) throw new NotFoundException('Lien de confirmation invalide ou expiré.');
+    if (record.used_at) return { alreadyUsed: true, reportId: record.report_id };
+    if (new Date(record.expires_at) < new Date()) throw new BadRequestException('Ce lien de confirmation a expiré.');
+
+    const report = await this.db.selectFrom('reports').select(['id', 'user_id']).where('id', '=', record.report_id).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+
+    await this.db
+      .updateTable('reports')
+      .set({ last_confirmed_at: new Date() as any, staleness_reminder_sent_at: null as any })
+      .where('id', '=', report.id)
+      .execute();
+
+    await this.db
+      .updateTable('report_confirmation_tokens')
+      .set({ used_at: new Date() as any })
+      .where('token', '=', token)
+      .execute();
+
+    if (report.user_id) await this.reputationService.award(report.user_id, 'gave_confirmation', report.id);
+
+    return { alreadyUsed: false, reportId: report.id };
   }
 
   /** Signalement d'un problème avec le signalement lui-même (doublon, inapproprié, etc.). */

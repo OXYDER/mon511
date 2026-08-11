@@ -181,7 +181,12 @@ export class ModerationService {
 
       await trx
         .updateTable('reports')
-        .set({ status: newStatus, updated_at: new Date() as any })
+        .set({
+          status: newStatus,
+          updated_at: new Date() as any,
+          ...(dto.decision === 'approve' && { last_confirmed_at: new Date() as any }),
+          ...(dto.decision === 'reject' && { rejected_at: new Date() as any }),
+        })
         .where('id', '=', reportId)
         .execute();
 
@@ -225,6 +230,13 @@ export class ModerationService {
           }
           await this.municipalityIntegrations.notifyMunicipality(reportId);
         } else {
+          const lifecycle = await this.db
+            .selectFrom('site_settings')
+            .select('value')
+            .where('key', '=', 'lifecycle_days')
+            .executeTakeFirst();
+          const correctionDays = (lifecycle?.value as any)?.rejectionCorrectionDays ?? 7;
+
           await this.notifications.create({
             userId: report.user_id,
             type: 'report_rejected',
@@ -233,8 +245,14 @@ export class ModerationService {
             body: dto.reason,
           });
           if (user) {
+            const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
             this.email
-              .send(user.email, 'Ton signalement a été refusé', `Ton signalement n'a pas été approuvé par notre équipe.\n\nMotif : ${dto.reason}\n\nTu peux créer un nouveau signalement en tenant compte de ce motif si applicable.`)
+              .send(
+                user.email,
+                'Ton signalement a été refusé',
+                `Ton signalement n'a pas été approuvé par notre équipe.\n\nMotif : ${dto.reason}\n\nTu as ${correctionDays} jours pour le corriger — passé ce délai, il sera automatiquement supprimé. Une fois corrigé, il sera automatiquement soumis à une nouvelle révision.`,
+                { ctaLabel: 'Corriger mon signalement', ctaUrl: `${frontendUrl}/?editReport=${reportId}` },
+              )
               .catch(() => {});
           }
           await this.reputationService.award(report.user_id, 'report_rejected', reportId);
