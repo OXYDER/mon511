@@ -318,6 +318,12 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 }
 
 /* ---------- BULLE DE VIGNETTE AU SURVOL D'UN PIN ---------- */
+/* pointer-events: none — purement informative au survol, ne doit JAMAIS
+   intercepter un clic destiné à un pin situé en dessous ou à côté (ex.
+   quand des pins déployés en éventail sont serrés à un certain niveau de
+   zoom, la bulle d'un pin plus bas peut visuellement chevaucher le pin
+   du haut). */
+.pin-thumb-popup { pointer-events: none; }
 .pin-thumb-popup .maplibregl-popup-content {
   background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 10px;
   padding: 4px; box-shadow: var(--shadow-panel);

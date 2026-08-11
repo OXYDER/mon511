@@ -32,6 +32,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterTypeId, setFilterTypeId] = useState<string>('all');
+  const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'date_desc' | 'date_asc' | 'municipality'>('date_desc');
 
   async function loadList() {
@@ -109,9 +110,11 @@ export default function MyReportsPage({ onClose, lang }: Props) {
     setNewPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
   }
 
+  const searchLower = search.trim().toLowerCase();
   const filteredReports = reports
     .filter((r) => filterStatus === 'all' || r.status === filterStatus)
     .filter((r) => filterTypeId === 'all' || r.problem_type_id === filterTypeId)
+    .filter((r) => !searchLower || `${r.municipalityName ?? ''} ${r.addressText ?? ''}`.toLowerCase().includes(searchLower))
     .sort((a, b) => {
       if (sortBy === 'municipality') {
         return (a.municipalityName ?? '').localeCompare(b.municipalityName ?? '', 'fr-CA');
@@ -140,6 +143,15 @@ export default function MyReportsPage({ onClose, lang }: Props) {
         <div style={{ flex: '1 1 300px', minWidth: 280 }}>
           <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
             {lang === 'fr' ? 'Mes signalements' : 'My reports'} ({filteredReports.length})
+          </div>
+
+          <div className="field-group" style={{ marginBottom: 10 }}>
+            <input
+              className="text-input"
+              placeholder={lang === 'fr' ? 'Chercher par municipalité, ville, adresse...' : 'Search by municipality, city, address...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
