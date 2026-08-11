@@ -11,6 +11,10 @@ export class SiteSettingsService {
     return this.db.selectFrom('site_settings').selectAll().orderBy('key').execute();
   }
 
+  async findOne(key: string) {
+    return this.db.selectFrom('site_settings').selectAll().where('key', '=', key).executeTakeFirst();
+  }
+
   async update(key: string, value: unknown, updatedBy: string) {
     return this.db
       .updateTable('site_settings')

@@ -628,6 +628,9 @@ function SiteSettingsAdmin() {
   const [lifecycleForm, setLifecycleForm] = useState<any | null>(null);
   const [lifecycleSaving, setLifecycleSaving] = useState(false);
   const [lifecycleFeedback, setLifecycleFeedback] = useState<string | null>(null);
+  const [bannerForm, setBannerForm] = useState<any | null>(null);
+  const [bannerSaving, setBannerSaving] = useState(false);
+  const [bannerFeedback, setBannerFeedback] = useState<string | null>(null);
 
   async function load() {
     try {
@@ -635,6 +638,8 @@ function SiteSettingsAdmin() {
       setSettings(results);
       const lifecycle = results.find((s) => s.key === 'lifecycle_days');
       if (lifecycle) setLifecycleForm(lifecycle.value);
+      const banner = results.find((s) => s.key === 'site_banner');
+      if (banner) setBannerForm(banner.value);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
     }
@@ -661,10 +666,25 @@ function SiteSettingsAdmin() {
     }
   }
 
+  async function saveBanner(bumpVersion: boolean) {
+    setBannerSaving(true);
+    setBannerFeedback(null);
+    try {
+      const value = { ...bannerForm, version: bumpVersion ? (bannerForm.version ?? 1) + 1 : (bannerForm.version ?? 1) };
+      await api.patch('/site-settings/site_banner', { value });
+      setBannerFeedback(bumpVersion ? 'Enregistré — réaffichée pour tout le monde, même ceux qui avaient fermé l\'ancienne.' : 'Enregistré.');
+      load();
+    } catch (err) {
+      setBannerFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setBannerSaving(false);
+    }
+  }
+
   if (error) return <div className="error-banner">{error}</div>;
 
   const booleanSettings = settings.filter((s) => typeof s.value === 'boolean');
-  const otherSettings = settings.filter((s) => typeof s.value !== 'boolean' && s.key !== 'lifecycle_days');
+  const otherSettings = settings.filter((s) => typeof s.value !== 'boolean' && s.key !== 'lifecycle_days' && s.key !== 'site_banner');
 
   const LIFECYCLE_FIELDS: [string, string, string][] = [
     ['rejectionCorrectionDays', 'Jours pour corriger un signalement refusé', 'avant suppression définitive si non corrigé'],
@@ -685,6 +705,58 @@ function SiteSettingsAdmin() {
           <ToggleSwitch on={s.value} onToggle={() => toggle(s.key, s.value)} />
         </div>
       ))}
+
+      <div className="section-label">Bannière de notification</div>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        Petit message affiché en haut du site, fermable individuellement par chaque visiteur.
+        Modifier le texte et cliquer « Réafficher pour tout le monde » la fait réapparaître
+        même pour ceux qui l'avaient déjà fermée.
+      </p>
+      {bannerForm && (
+        <>
+          <div className="privacy-row" style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 12.5 }}>Bannière activée</span>
+            <ToggleSwitch on={bannerForm.enabled} onToggle={() => setBannerForm({ ...bannerForm, enabled: !bannerForm.enabled })} />
+          </div>
+          <div className="field-group">
+            <label className="field-label">Message (français)</label>
+            <textarea rows={2} value={bannerForm.message ?? ''} onChange={(e) => setBannerForm({ ...bannerForm, message: e.target.value })} />
+          </div>
+          <div className="field-group">
+            <label className="field-label">Message (anglais)</label>
+            <textarea rows={2} value={bannerForm.messageEn ?? ''} onChange={(e) => setBannerForm({ ...bannerForm, messageEn: e.target.value })} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+            <div className="field-group" style={{ flex: 1 }}>
+              <label className="field-label">Date de début (optionnel)</label>
+              <input
+                type="date"
+                className="text-input"
+                value={bannerForm.startDate ? bannerForm.startDate.slice(0, 10) : ''}
+                onChange={(e) => setBannerForm({ ...bannerForm, startDate: e.target.value || null })}
+              />
+            </div>
+            <div className="field-group" style={{ flex: 1 }}>
+              <label className="field-label">Date de fin (optionnel)</label>
+              <input
+                type="date"
+                className="text-input"
+                value={bannerForm.endDate ? bannerForm.endDate.slice(0, 10) : ''}
+                onChange={(e) => setBannerForm({ ...bannerForm, endDate: e.target.value || null })}
+              />
+            </div>
+          </div>
+          <div className="action-row" style={{ marginBottom: 20, flexWrap: 'wrap' }}>
+            <button className="btn-ghost" onClick={() => saveBanner(false)} disabled={bannerSaving}>
+              {bannerSaving ? 'Enregistrement...' : 'Enregistrer'}
+            </button>
+            <button className="btn-primary" onClick={() => saveBanner(true)} disabled={bannerSaving}>
+              {bannerSaving ? 'Enregistrement...' : 'Enregistrer et réafficher pour tout le monde'}
+            </button>
+            {bannerFeedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{bannerFeedback}</span>}
+          </div>
+        </>
+      )}
 
       <div className="section-label">Cycle de vie des signalements</div>
       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>

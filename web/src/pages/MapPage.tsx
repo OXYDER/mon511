@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
+import SiteBanner from '../components/SiteBanner';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import ToggleSwitch from '../components/ToggleSwitch';
@@ -160,6 +161,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
+  const [bannerVisible, setBannerVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Ferme automatiquement les panneaux flottants (filtres/légende, détails
@@ -549,8 +551,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   return (
     <Suspense fallback={null}>
-    <div className="app-full">
+    <div className="app-full" style={{ '--banner-h': bannerVisible ? '38px' : '0px' } as React.CSSProperties}>
       <LoadingScreen visible={showInitialLoader} />
+      <SiteBanner lang={lang} onVisibleChange={setBannerVisible} />
       {showAdmin && <AdminPage onClose={() => setShowAdmin(false)} />}
       {showMyReports && !showAdmin && <MyReportsPage onClose={() => setShowMyReports(false)} lang={lang} />}
       {!showAdmin && !showMyReports && <>
