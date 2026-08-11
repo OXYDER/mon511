@@ -11,6 +11,10 @@ ARG VITE_API_URL
 ARG VITE_MAPTILER_API_KEY
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_MAPTILER_API_KEY=$VITE_MAPTILER_API_KEY
+# Numéro de version basé sur l'horodatage exact du build — évolue tout
+# seul à chaque déploiement, sans avoir à gérer un compteur séparé. Chargé
+# automatiquement par Vite (fichier .env.production.local, prioritaire).
+RUN echo "VITE_BUILD_VERSION=$(date -u +%Y.%m.%d-%H%M)" > .env.production.local
 RUN npm run build
 
 FROM nginx:alpine
