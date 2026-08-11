@@ -385,6 +385,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .filters-panel-float.collapsed h2 {
   margin-bottom: 0;
 }
+/* Approche plus robuste qu'un simple calcul de hauteur maximale (qui
+   laissait dépasser le haut de la case de recherche de quelques pixels
+   selon le rendu exact des polices) — on cache explicitement tout sauf
+   le titre lui-même en mode replié. */
+.filters-panel-float.collapsed > *:not(h2) {
+  display: none;
+}
 .filters-panel-float h2 {
   font-family: var(--font-display); font-size: 12px; font-weight: 700;
   letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent-signal); margin-bottom: 12px;
