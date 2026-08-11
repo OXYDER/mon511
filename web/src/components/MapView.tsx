@@ -304,12 +304,6 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme, mapType]);
 
-  // Recentrer quand la position change
-  useEffect(() => {
-    if (mapRef.current && center) {
-      mapRef.current.flyTo({ center: [center.lng, center.lat], zoom: center.zoom ?? 13, duration: 800 });
-    }
-  }, [center]);
 
   // Redessiner les pins à chaque changement de liste
   /** Regroupe les pins proches à l'écran (pas en distance réelle — la
