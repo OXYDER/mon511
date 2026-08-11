@@ -307,6 +307,13 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // Recentrer quand la position change
   useEffect(() => {
     if (mapRef.current && center) {
+      // Annule toute animation de caméra encore en vol avant d'en démarrer
+      // une nouvelle — sans ça, deux flyTo() rapprochés (ex. le centrage
+      // initial à la géolocalisation suivi de près par le premier clic sur
+      // un signalement éloigné) peuvent se marcher sur les pieds et
+      // produire un atterrissage décalé, alors que les appels suivants,
+      // eux, partent toujours d'un état stable.
+      mapRef.current.stop();
       // Les panneaux latéraux (recherche à gauche, détail à droite, ~320px
       // chacun) sont des overlays qui recouvrent une partie de la carte
       // sans en réduire la vraie zone de rendu — sans ce padding, le point
