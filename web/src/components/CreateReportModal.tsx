@@ -71,10 +71,21 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   // tout ressaisir depuis zéro.
   useEffect(() => {
     if (!coords) return;
-    api.get<any[]>(`/reports/nearby-archived?lat=${coords.lat}&lng=${coords.lng}`)
+    api.get<any[]>(`/reports/nearby-existing?lat=${coords.lat}&lng=${coords.lng}`)
       .then(setArchivedMatches)
       .catch(() => setArchivedMatches([]));
   }, [coords]);
+
+  async function confirmExistingInstead(reportId: string) {
+    try {
+      await api.post(`/reports/${reportId}/confirm`);
+      setDismissedArchiveMatch(true);
+      onClose();
+    } catch {
+      // Déjà confirmé ou erreur réseau — l'usager peut simplement continuer
+      // avec son propre signalement dans ce cas, pas la peine de bloquer.
+    }
+  }
 
   function useArchivedMatch(match: any) {
     setTypeId(match.problemTypeId);
@@ -273,42 +284,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
           {error && <div className="error-banner">{error}</div>}
 
           <form onSubmit={submit}>
-            {archivedMatches.length > 0 && !dismissedArchiveMatch && (
-              <div style={{
-                marginBottom: 16, padding: 12, borderRadius: 10,
-                background: 'rgba(59,156,255,0.1)', border: '1px solid var(--official-blue)',
-              }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: 'var(--official-blue)' }}>
-                  🗂️ Signalement archivé à proximité
-                </div>
-                {archivedMatches.map((m) => (
-                  <div key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8 }}>
-                    {m.photoUrls?.[0] && (
-                      <img src={m.photoUrls[0]} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 7, flexShrink: 0 }} />
-                    )}
-                    <div style={{ fontSize: 11.5, flex: 1 }}>
-                      <div>{m.problemTypeIcon} {pickName(m.problemTypeNameFr, m.problemTypeNameEn, lang)}{m.authorFirstName ? ` — par ${m.authorFirstName}` : ''}</div>
-                      {m.addressText && <div style={{ color: 'var(--text-muted)' }}>{m.addressText}</div>}
-                    </div>
-                    <button type="button" className="btn-ghost" style={{ fontSize: 11, flexShrink: 0 }} onClick={() => useArchivedMatch(m)}>
-                      Réutiliser
-                    </button>
-                  </div>
-                ))}
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Est-ce que ton signalement concerne le même problème? Réutiliser pré-remplit le type et la description
-                  (les photos archivées restent une référence — ajoute quand même tes propres photos ci-dessous).
-                </div>
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  style={{ fontSize: 10.5, marginTop: 6 }}
-                  onClick={() => setDismissedArchiveMatch(true)}
-                >
-                  Non, c'est différent
-                </button>
-              </div>
-            )}
 
             <div className="field-group">
               <label className="field-label">Type de problème</label>

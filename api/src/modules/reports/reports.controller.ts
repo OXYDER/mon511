@@ -29,11 +29,11 @@ export class ReportsController {
     return this.reportsService.confirmViaToken(token);
   }
 
-  // Idem — recherche d'archives à proximité pour la détection de doublons
-  // à la création d'un signalement.
-  @Get('nearby-archived')
-  findNearbyArchived(@Query('lat') lat: string, @Query('lng') lng: string) {
-    return this.reportsService.findNearbyArchived(Number(lat), Number(lng));
+  // Idem — recherche de signalements existants (actifs ou archivés) à
+  // proximité pour la détection de doublons à la création d'un signalement.
+  @Get('nearby-existing')
+  findNearbyExisting(@Query('lat') lat: string, @Query('lng') lng: string) {
+    return this.reportsService.findNearbyExisting(Number(lat), Number(lng));
   }
 
   @Get(':id')

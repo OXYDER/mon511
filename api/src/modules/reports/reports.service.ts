@@ -72,7 +72,15 @@ export class ReportsService {
    * informations et photos d'un signalement antérieur au même endroit
    * plutôt que de tout ressaisir. Le rayon est configurable dans l'admin
    * (site_settings.lifecycle_days.duplicateDetectionRadiusMeters). */
-  async findNearbyArchived(lat: number, lng: number) {
+  /** Recherche des signalements EXISTANTS à proximité d'un point — utilisé à
+   * la création d'un nouveau signalement pour éviter les vrais doublons :
+   * - actifs (déjà publiés, en cours de traitement) → proposer de confirmer
+   *   celui-là plutôt que d'en créer un nouveau
+   * - archivés → proposer de réutiliser ses informations/photos comme point
+   *   de départ (le problème est peut-être revenu)
+   * Le rayon est configurable dans l'admin
+   * (site_settings.lifecycle_days.duplicateDetectionRadiusMeters). */
+  async findNearbyExisting(lat: number, lng: number) {
     const setting = await this.db
       .selectFrom('site_settings')
       .select('value')
@@ -80,25 +88,28 @@ export class ReportsService {
       .executeTakeFirst();
     const radiusMeters = (setting?.value as any)?.duplicateDetectionRadiusMeters ?? 15;
 
-    return this.db
+    const results = await this.db
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .leftJoin('users', 'users.id', 'reports.user_id')
       .select([
         'reports.id', 'reports.description', 'reports.address_text as addressText',
         'reports.problem_type_id as problemTypeId', 'reports.archived_at as archivedAt',
+        'reports.status',
         'problem_types.name_fr as problemTypeNameFr', 'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',
         'users.first_name as authorFirstName',
         sql<string[]>`(SELECT array_agg(url) FROM report_photos WHERE report_photos.report_id = reports.id)`.as('photoUrls'),
       ])
-      .where('reports.status', '=', 'archived')
+      .where('reports.status', 'in', ['published_unresolved', 'published_resolved', 'archived'])
       .where(
         sql<boolean>`ST_DWithin(reports.location::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusMeters})`,
       )
-      .orderBy('reports.archived_at', 'desc')
+      .orderBy('reports.created_at', 'desc')
       .limit(3)
       .execute();
+
+    return results.map((r) => ({ ...r, matchType: r.status === 'archived' ? 'archived' : 'active' }));
   }
 
   async findOne(id: string) {
