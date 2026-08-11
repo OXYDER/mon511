@@ -336,6 +336,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     navigator.geolocation.getCurrentPosition(
       (pos) => { setLocating(false); apply(pos.coords.latitude, pos.coords.longitude, true); },
       () => { setLocating(false); apply(45.4042, -71.8929, false); },
+      // Sans ce délai, un appel qui reste "en attente" indéfiniment (ex.
+      // invite de permission jamais résolue à temps) bloque `locating` à
+      // `true` pour toujours — le bouton (disabled={locating}) reste alors
+      // désactivé en permanence, sans aucun moyen de réessayer.
+      { timeout: 10000, maximumAge: 0 },
     );
   }
 
