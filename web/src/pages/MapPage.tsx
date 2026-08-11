@@ -17,6 +17,7 @@ const ProfileModal = lazy(() => import('../components/ProfileModal'));
 const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
+const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
 const MyReportsPage = lazy(() => import('./MyReportsPage'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
@@ -161,6 +162,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
+  const [showSupportChat, setShowSupportChat] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -1012,6 +1014,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           >
             📖 {lang === 'fr' ? 'Foire aux questions (FAQ)' : 'Frequently Asked Questions (FAQ)'}
           </div>
+          <div
+            className="search-dropdown-item"
+            style={{ borderRadius: 8, padding: '10px 12px' }}
+            onClick={() => { setShowHelpMenu(false); setShowSupportChat(true); }}
+          >
+            💬 {lang === 'fr' ? 'Clavarder avec le support' : 'Chat with support'}
+          </div>
         </div>
       )}
 
@@ -1102,6 +1111,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
       {showFaq && <FaqModal onClose={() => setShowFaq(false)} lang={lang} />}
+      {showSupportChat && <SupportChatWidget onClose={() => setShowSupportChat(false)} lang={lang} />}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
       </>}
     </div>

@@ -230,6 +230,47 @@ export interface SiteSettingsTable {
   updated_by: string | null;
 }
 
+export interface SupportConversationsTable {
+  id: Generated<string>;
+  user_id: string | null;
+  session_id: string | null;
+  status: Generated<'active' | 'closed'>;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface SupportMessagesTable {
+  id: Generated<string>;
+  conversation_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: Generated<Timestamp>;
+}
+
+export interface SupportTicketsTable {
+  id: Generated<string>;
+  conversation_id: string | null;
+  user_id: string | null;
+  email: string;
+  name: string | null;
+  subject: string;
+  description: string;
+  status: Generated<'open' | 'in_progress' | 'resolved'>;
+  created_by: Generated<'ai' | 'user'>;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+  resolved_at: Timestamp | null;
+}
+
+export interface SupportTicketRepliesTable {
+  id: Generated<string>;
+  ticket_id: string;
+  author_type: 'admin' | 'user';
+  author_id: string | null;
+  message: string;
+  created_at: Generated<Timestamp>;
+}
+
 export interface EmailTemplatesTable {
   key: string;
   subject: string;
@@ -350,4 +391,8 @@ export interface Database {
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;
   email_templates: EmailTemplatesTable;
+  support_conversations: SupportConversationsTable;
+  support_messages: SupportMessagesTable;
+  support_tickets: SupportTicketsTable;
+  support_ticket_replies: SupportTicketRepliesTable;
 }

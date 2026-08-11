@@ -20,6 +20,7 @@ import { SiteSettingsModule } from './modules/site-settings/site-settings.module
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { VerificationModule } from './verification/verification.module';
 import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
+import { SupportModule } from './modules/support/support.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
     ReputationModule,
     VerificationModule,
     LifecycleModule,
+    SupportModule,
   ],
   controllers: [HealthController],
 })
