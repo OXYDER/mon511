@@ -30,6 +30,7 @@ export interface UsersTable {
   password_hash: string | null;
   first_name: string | null;
   last_name: string | null;
+  address_text: string | null;
   avatar_url: string | null;
   locale: Generated<'fr' | 'en'>;
   region_id: string | null;

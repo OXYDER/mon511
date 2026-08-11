@@ -54,7 +54,12 @@ const LANG_KEY = 'mon511_lang';
 
 export function getStoredLang(): Lang {
   const v = localStorage.getItem(LANG_KEY);
-  return v === 'en' ? 'en' : 'fr';
+  if (v === 'en' || v === 'fr') return v;
+  // Aucun choix manuel encore fait — la langue par défaut suit le nom de
+  // domaine utilisé pour visiter le site (my511.ca → anglais, mon511.ca
+  // ou tout autre cas → français). Un choix manuel (via setStoredLang)
+  // prend toujours le dessus par la suite, peu importe le domaine.
+  return window.location.hostname.startsWith('my511.') ? 'en' : 'fr';
 }
 
 export function setStoredLang(lang: Lang) {

@@ -44,6 +44,7 @@ export class AuthService {
         password_hash: passwordHash,
         first_name: dto.firstName ?? null,
         last_name: dto.lastName ?? null,
+        address_text: dto.addressText ?? null,
         region_id: dto.regionId ?? null,
         role_id: defaultRole.id,
         email_verified: false,

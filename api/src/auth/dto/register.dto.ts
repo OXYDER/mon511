@@ -23,6 +23,11 @@ export class RegisterDto {
   lastName?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  addressText?: string;
+
+  @IsOptional()
   @IsUUID()
   regionId?: string;
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, setToken } from '../api';
+import { searchCities, GeocodingResult } from '../geocoding';
 
 interface Props {
   onClose: () => void;
@@ -14,11 +15,29 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [addressText, setAddressText] = useState('');
+  const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  async function onAddressChange(value: string) {
+    setAddressText(value);
+    setShowAddressDropdown(true);
+    if (value.trim().length < 3) { setAddressSuggestions([]); return; }
+    const results = await searchCities(value, 5);
+    setAddressSuggestions(results);
+  }
+
+  function selectAddress(s: GeocodingResult) {
+    setAddressText(s.name);
+    setShowAddressDropdown(false);
+    setAddressSuggestions([]);
+  }
 
   async function submitAuth(e: React.FormEvent) {
     e.preventDefault();
@@ -30,14 +49,13 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
         setToken(result.accessToken);
         onAuthenticated();
       } else {
-        await api.post('/auth/register', { email, password, firstName });
+        await api.post('/auth/register', { email, password, firstName, lastName, addressText });
         setInfo(null);
         setView('verify');
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Une erreur est survenue.';
       setError(message);
-      // Compte existant mais pas encore vérifié — propose directement le code.
       if (view === 'login' && message.toLowerCase().includes('vérifié')) {
         setView('verify');
       }
@@ -150,6 +168,35 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
                   <div className="field-group">
                     <label className="field-label">Prénom</label>
                     <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  </div>
+                )}
+                {view === 'register' && (
+                  <div className="field-group">
+                    <label className="field-label">Nom</label>
+                    <input className="text-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  </div>
+                )}
+                {view === 'register' && (
+                  <div className="field-group" style={{ position: 'relative' }}>
+                    <label className="field-label">Adresse</label>
+                    <input
+                      className="text-input"
+                      value={addressText}
+                      onChange={(e) => onAddressChange(e.target.value)}
+                      onFocus={() => setShowAddressDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
+                      placeholder="Commence à taper ton adresse..."
+                      autoComplete="off"
+                    />
+                    {showAddressDropdown && addressSuggestions.length > 0 && (
+                      <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0 }}>
+                        {addressSuggestions.map((s) => (
+                          <div key={s.name} className="search-dropdown-item" onClick={() => selectAddress(s)}>
+                            📍 {s.name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="field-group">

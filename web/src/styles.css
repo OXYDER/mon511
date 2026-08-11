@@ -380,7 +380,10 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   transition: max-height .2s ease, padding .2s ease;
 }
 .filters-panel-float.collapsed {
-  max-height: 54px; overflow: hidden; padding: 10px 18px;
+  max-height: 44px; overflow: hidden; padding: 10px 18px;
+}
+.filters-panel-float.collapsed h2 {
+  margin-bottom: 0;
 }
 .filters-panel-float h2 {
   font-family: var(--font-display); font-size: 12px; font-weight: 700;
