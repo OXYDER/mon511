@@ -304,6 +304,26 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [theme, mapType]);
 
+  // Recentrer quand la position change
+  useEffect(() => {
+    if (mapRef.current && center) {
+      // Les panneaux latéraux (recherche à gauche, détail à droite, ~320px
+      // chacun) sont des overlays qui recouvrent une partie de la carte
+      // sans en réduire la vraie zone de rendu — sans ce padding, le point
+      // se centre au milieu du CANEVAS COMPLET, donc souvent caché derrière
+      // un des deux panneaux plutôt qu'au milieu de la zone visible entre
+      // les deux. Seulement pertinent en largeur de bureau ; en mobile les
+      // panneaux se comportent tout autrement (plein écran, pas de côte à
+      // côte permanent).
+      const isDesktopLayout = window.innerWidth >= 900;
+      mapRef.current.flyTo({
+        center: [center.lng, center.lat],
+        zoom: center.zoom ?? 13,
+        duration: 800,
+        padding: isDesktopLayout ? { left: 340, right: 360, top: 0, bottom: 0 } : { left: 0, right: 0, top: 0, bottom: 0 },
+      });
+    }
+  }, [center]);
 
   // Redessiner les pins à chaque changement de liste
   /** Regroupe les pins proches à l'écran (pas en distance réelle — la
