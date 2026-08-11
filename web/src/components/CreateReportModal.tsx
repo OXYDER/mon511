@@ -43,6 +43,11 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const [archivedMatches, setArchivedMatches] = useState<any[]>([]);
   const [dismissedArchiveMatch, setDismissedArchiveMatch] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  // Affiche le bouton « Appareil photo » seulement sur mobile — sur PC, un
+  // appareil photo intégré n'a pas vraiment de sens pour ce cas d'usage,
+  // et l'attribut capture n'a de toute façon aucun effet sur ces navigateurs.
+  const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   useEffect(() => {
     api.get<any[]>('/problem-types').then((data) => {
@@ -321,17 +326,33 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                 </div>
               )}
               {photoFiles.length < MAX_PHOTOS && (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    border: '1.5px dashed var(--panel-border)', borderRadius: 10, padding: '20px 10px',
-                    textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
-                  }}
-                >
-                  📷 {photoFiles.length === 0 ? 'Ajouter une photo' : `Ajouter une autre photo (${photoFiles.length}/${MAX_PHOTOS})`}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                      flex: 1, border: '1.5px dashed var(--panel-border)', borderRadius: 10, padding: '20px 10px',
+                      textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+                    }}
+                  >
+                    🖼️ {photoFiles.length === 0 ? 'Sélectionner une photo' : `Sélectionner une autre photo (${photoFiles.length}/${MAX_PHOTOS})`}
+                  </div>
+                  {isMobileDevice && (
+                    <div
+                      onClick={() => cameraInputRef.current?.click()}
+                      style={{
+                        flex: 1, border: '1.5px dashed var(--panel-border)', borderRadius: 10, padding: '20px 10px',
+                        textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
+                      }}
+                    >
+                      📷 Appareil photo
+                    </div>
+                  )}
                 </div>
               )}
               <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handlePhotoSelect} style={{ display: 'none' }} />
+              {isMobileDevice && (
+                <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: 'none' }} />
+              )}
               {checkingExif && <div className="geo-status">Vérification de la position de la photo...</div>}
               {exifMismatch && (
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 9, background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)' }}>

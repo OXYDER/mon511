@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -44,6 +44,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'emailTemplates' ? 'active' : ''}`} onClick={() => setTab('emailTemplates')}>
             Courriels
           </button>
+          <button className={`tab-item ${tab === 'support' ? 'active' : ''}`} onClick={() => setTab('support')}>
+            Support
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -56,6 +59,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'municipalities' && <MunicipalitiesAdmin />}
         {tab === 'allReports' && <AllReportsAdmin />}
         {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
+        {tab === 'support' && <SupportTicketsAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -1214,6 +1218,152 @@ function EmailTemplatesAdmin() {
                 </div>
               </div>
             )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const TICKET_STATUS_LABELS: Record<string, string> = {
+  open: 'Ouvert',
+  in_progress: 'En cours',
+  resolved: 'Résolu',
+};
+
+function SupportTicketsAdmin() {
+  const [tickets, setTickets] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ ticket: any; replies: any[] } | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [sending, setSending] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadList() {
+    try {
+      const params = statusFilter ? `?status=${statusFilter}` : '';
+      const results = await api.get<any[]>(`/support/admin/tickets${params}`);
+      setTickets(results);
+      if (!selectedId && results[0]) setSelectedId(results[0].id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  async function loadDetail(id: string) {
+    const result = await api.get<{ ticket: any; replies: any[] }>(`/support/admin/tickets/${id}`);
+    setDetail(result);
+  }
+
+  useEffect(() => { loadList(); }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId]);
+
+  async function sendReply() {
+    if (!selectedId || !replyText.trim()) return;
+    setSending(true);
+    setFeedback(null);
+    try {
+      await api.post(`/support/admin/tickets/${selectedId}/reply`, { message: replyText });
+      setReplyText('');
+      setFeedback('Réponse envoyée.');
+      loadDetail(selectedId);
+      loadList();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function changeStatus(status: string) {
+    if (!selectedId) return;
+    await api.patch(`/support/admin/tickets/${selectedId}/status`, { status });
+    loadDetail(selectedId);
+    loadList();
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div style={{ display: 'flex', gap: 16 }}>
+      <div style={{ flex: '1 1 280px', minWidth: 260 }}>
+        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+          Tickets de support ({tickets.length})
+        </div>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
+          <option value="">Tous les statuts</option>
+          {Object.entries(TICKET_STATUS_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
+        </select>
+        {tickets.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun ticket.</div>}
+        {tickets.map((t) => (
+          <div
+            key={t.id}
+            className="report-card"
+            style={{ cursor: 'pointer', borderColor: t.id === selectedId ? 'var(--accent-signal)' : undefined }}
+            onClick={() => setSelectedId(t.id)}
+          >
+            <div className="rc-body">
+              <div className="rc-title" style={{ fontSize: 12.5 }}>{t.subject}</div>
+              <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.email} · {new Date(t.created_at).toLocaleDateString('fr-CA')}</div>
+            </div>
+            <span className={`pill ${t.status === 'resolved' ? 'resolved' : t.status === 'in_progress' ? 'unresolved' : ''}`}>
+              {TICKET_STATUS_LABELS[t.status]}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
+        {!detail && <div className="center-msg">Sélectionne un ticket à gauche.</div>}
+        {detail && (
+          <>
+            <div className="detail-title" style={{ fontSize: 17 }}>{detail.ticket.subject}</div>
+            <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
+              <span>✉️ {detail.ticket.email}</span>
+              {detail.ticket.name && <span>👤 {detail.ticket.name}</span>}
+              <span>{detail.ticket.created_by === 'ai' ? '🤖 Créé par le chat IA' : '✍️ Créé manuellement'}</span>
+            </div>
+
+            <div style={{
+              background: 'var(--panel-hover)', border: '1px solid var(--panel-border)', borderRadius: 10,
+              padding: 14, marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: 260, overflowY: 'auto',
+            }}>
+              {detail.ticket.description}
+            </div>
+
+            {detail.replies.length > 0 && (
+              <>
+                <div className="section-label" style={{ fontSize: 13 }}>Réponses</div>
+                {detail.replies.map((r) => (
+                  <div key={r.id} className="comment">
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 3 }}>
+                      {r.author_type === 'admin' ? 'Équipe mon511.ca' : 'Usager'} · {new Date(r.created_at).toLocaleString('fr-CA')}
+                    </div>
+                    {r.message}
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div className="section-label" style={{ fontSize: 13 }}>Répondre</div>
+            <div className="field-group">
+              <textarea rows={3} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Ta réponse (envoyée par courriel à l'usager)..." />
+            </div>
+            <div className="action-row" style={{ flexWrap: 'wrap' }}>
+              <button className="btn-primary" onClick={sendReply} disabled={sending || !replyText.trim()}>
+                {sending ? 'Envoi...' : 'Envoyer la réponse'}
+              </button>
+              {detail.ticket.status !== 'resolved' ? (
+                <button className="btn-ghost" onClick={() => changeStatus('resolved')}>✔ Marquer résolu</button>
+              ) : (
+                <button className="btn-ghost" onClick={() => changeStatus('open')}>↺ Rouvrir</button>
+              )}
+              {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
+            </div>
           </>
         )}
       </div>
