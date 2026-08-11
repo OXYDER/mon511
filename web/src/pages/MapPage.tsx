@@ -15,6 +15,7 @@ const ExternalIncidentPanel = lazy(() => import('../components/ExternalIncidentP
 const ProfileModal = lazy(() => import('../components/ProfileModal'));
 const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
+const FaqModal = lazy(() => import('../components/FaqModal'));
 const MyReportsPage = lazy(() => import('./MyReportsPage'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
@@ -157,6 +158,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [mapType, setMapType] = useState<MapType>('default');
   const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
+  const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [showFaq, setShowFaq] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Ferme automatiquement les panneaux flottants (filtres/légende, détails
@@ -169,6 +172,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       setShowFiltersLegend(false);
       setShowMapDetailsMenu(false);
       setShowMapTypeMenu(false);
+      setShowHelpMenu(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -851,7 +855,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <button
         className={`map-menu-btn ${showFiltersLegend ? 'active' : ''}`}
         style={{ bottom: 264 }}
-        onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); }}
+        onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); setShowHelpMenu(false); }}
         title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
       >
         🎚️
@@ -940,7 +944,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <button
         className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
         style={{ bottom: 208 }}
-        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); }}
+        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
         title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
       >
         🗂️
@@ -976,9 +980,30 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       <button
+        className={`map-menu-btn ${showHelpMenu ? 'active' : ''}`}
+        style={{ bottom: 320 }}
+        onClick={() => { setShowHelpMenu((v) => !v); setShowMapTypeMenu(false); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
+        title={lang === 'fr' ? 'Aide' : 'Help'}
+      >
+        ❓
+      </button>
+      {showHelpMenu && (
+        <div className="map-menu-panel" style={{ bottom: 320 }}>
+          <h3>{lang === 'fr' ? 'Aide' : 'Help'}</h3>
+          <div
+            className="search-dropdown-item"
+            style={{ borderRadius: 8, padding: '10px 12px' }}
+            onClick={() => { setShowHelpMenu(false); setShowFaq(true); }}
+          >
+            📖 {lang === 'fr' ? 'Foire aux questions (FAQ)' : 'Frequently Asked Questions (FAQ)'}
+          </div>
+        </div>
+      )}
+
+      <button
         className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
         style={{ bottom: 152 }}
-        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
+        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
         title={lang === 'fr' ? 'Type de carte' : 'Map type'}
       >
         🗺️
@@ -1061,6 +1086,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
+      {showFaq && <FaqModal onClose={() => setShowFaq(false)} lang={lang} />}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
       </>}
     </div>
