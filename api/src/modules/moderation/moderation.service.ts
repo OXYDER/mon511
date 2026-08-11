@@ -208,12 +208,31 @@ export class ModerationService {
       // premier déploiement plutôt que via une file BullMQ séparée.
       const report = await this.db
         .selectFrom('reports')
-        .select('user_id')
-        .where('id', '=', reportId)
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .leftJoin('users', 'users.id', 'reports.user_id')
+        .leftJoin('regions', 'regions.id', 'reports.region_id')
+        .select([
+          'reports.id', 'reports.user_id', 'reports.address_text', 'reports.created_at',
+          'problem_types.name_fr as problemTypeNameFr',
+          'users.email', 'users.first_name',
+          'regions.name_fr as municipalityName',
+          sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('photoUrl'),
+        ])
+        .where('reports.id', '=', reportId)
         .executeTakeFirst();
 
       if (report?.user_id) {
-        const user = await this.db.selectFrom('users').select('email').where('id', '=', report.user_id).executeTakeFirst();
+        const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+        const reportUrl = `${frontendUrl}/?report=${reportId}`;
+        const commonVars = {
+          firstName: report.first_name ?? '',
+          reportType: report.problemTypeNameFr,
+          reportDate: new Date(report.created_at as any).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
+          reportAddress: report.address_text ?? 'Position GPS',
+          reportMunicipality: report.municipalityName ?? '',
+          reportPhotoUrl: report.photoUrl ?? '',
+          reportUrl,
+        };
 
         if (dto.decision === 'approve') {
           await this.notifications.create({
@@ -223,9 +242,9 @@ export class ModerationService {
             title: 'Ton signalement a été approuvé',
             body: 'Il est maintenant visible publiquement sur la carte.',
           });
-          if (user) {
+          if (report.email) {
             this.email
-              .send(user.email, 'Ton signalement a été approuvé', "Bonne nouvelle ! Ton signalement a été approuvé par notre équipe et est maintenant visible publiquement sur la carte de mon511.ca.")
+              .sendTemplated('report_approved', report.email, commonVars, { ctaLabel: 'Voir mon signalement', ctaUrl: reportUrl })
               .catch(() => {});
           }
           await this.municipalityIntegrations.notifyMunicipality(reportId);
@@ -244,13 +263,12 @@ export class ModerationService {
             title: 'Ton signalement a été refusé',
             body: dto.reason,
           });
-          if (user) {
-            const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+          if (report.email) {
             this.email
-              .send(
-                user.email,
-                'Ton signalement a été refusé',
-                `Ton signalement n'a pas été approuvé par notre équipe.\n\nMotif : ${dto.reason}\n\nTu as ${correctionDays} jours pour le corriger — passé ce délai, il sera automatiquement supprimé. Une fois corrigé, il sera automatiquement soumis à une nouvelle révision.`,
+              .sendTemplated(
+                'report_rejected',
+                report.email,
+                { ...commonVars, rejectReason: dto.reason ?? '', correctionDays: String(correctionDays) },
                 { ctaLabel: 'Corriger mon signalement', ctaUrl: `${frontendUrl}/?editReport=${reportId}` },
               )
               .catch(() => {});

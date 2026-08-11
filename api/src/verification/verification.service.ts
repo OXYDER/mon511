@@ -23,13 +23,14 @@ export class VerificationService {
   }
 
   /**
-   * Crée un code, l'envoie par courriel, et retourne l'id de la ligne créée.
+   * Crée un code, l'envoie par courriel via le gabarit correspondant à
+   * l'objectif, et retourne l'id de la ligne créée. Le prénom est
+   * automatiquement récupéré via userId quand disponible (ex. mot de passe
+   * oublié n'a pas encore d'utilisateur connu au moment de l'appel).
    */
   async createAndSend(
     email: string,
     purpose: Purpose,
-    subject: string,
-    bodyIntro: string,
     userId?: string | null,
     metadata?: Record<string, unknown>,
   ) {
@@ -50,14 +51,20 @@ export class VerificationService {
       .returning('id')
       .executeTakeFirstOrThrow();
 
-    await this.email.send(
-      email,
-      subject,
-      `${bodyIntro}\n\nTon code de vérification : ${code}\n\nCe code expire dans ${TTL_MINUTES} minutes. Si tu n'es pas à l'origine de cette demande, ignore simplement ce courriel.`,
-    );
+    const firstName = userId
+      ? (await this.db.selectFrom('users').select('first_name').where('id', '=', userId).executeTakeFirst())?.first_name
+      : null;
+
+    await this.email.sendTemplated(`verify_${purpose}`, email, {
+      firstName: firstName ?? '',
+      code,
+      expiryMinutes: String(TTL_MINUTES),
+      newEmail: (metadata?.newEmail as string) ?? '',
+    });
 
     return row.id;
   }
+
 
   /**
    * Vérifie un code pour une adresse/objectif donné. Lance une exception

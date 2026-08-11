@@ -97,7 +97,7 @@ export class LifecycleService {
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .leftJoin('users', 'users.id', 'reports.user_id')
-      .select(['reports.id', 'reports.address_text', 'users.email', 'problem_types.name_fr as problemTypeNameFr'])
+      .select(['reports.id', 'reports.address_text', 'reports.created_at', 'users.email', 'users.first_name', 'problem_types.name_fr as problemTypeNameFr'])
       .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
       .where('reports.last_confirmed_at', 'is not', null)
       .where('reports.last_confirmed_at', '<', cutoff as any)
@@ -119,11 +119,20 @@ export class LifecycleService {
         .execute();
 
       if (r.email) {
+        const reportUrl = `${this.frontendUrl()}/?report=${r.id}`;
         this.email
-          .send(
+          .sendTemplated(
+            'staleness_reminder',
             r.email,
-            'Ton signalement est-il toujours valable?',
-            `Ça fait ${days.stalenessWarningDays} jours que ton signalement « ${r.problemTypeNameFr} » (${r.address_text ?? 'position GPS'}) a été confirmé pour la dernière fois.\n\nSi le problème existe toujours, confirme-le en un clic — sinon, il sera automatiquement archivé dans ${days.stalenessDeadlineDays} jours.`,
+            {
+              firstName: r.first_name ?? '',
+              reportType: r.problemTypeNameFr,
+              reportDate: new Date(r.created_at as any).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
+              reportAddress: r.address_text ?? 'Position GPS',
+              warningDays: String(days.stalenessWarningDays),
+              deadlineDays: String(days.stalenessDeadlineDays),
+              reportUrl,
+            },
             { ctaLabel: 'Confirmer que le problème existe toujours', ctaUrl: `${this.frontendUrl()}/api/reports/confirm-via-token/${token}` },
           )
           .catch(() => {});

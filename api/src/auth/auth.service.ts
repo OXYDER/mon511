@@ -54,8 +54,6 @@ export class AuthService {
     await this.verification.createAndSend(
       user.email,
       'signup',
-      'Confirme ton compte mon511.ca',
-      'Bienvenue sur mon511.ca ! Pour activer ton compte, entre ce code dans l\'application.',
       user.id,
     );
 
@@ -81,8 +79,6 @@ export class AuthService {
     await this.verification.createAndSend(
       user.email,
       'signup',
-      'Ton nouveau code mon511.ca',
-      'Voici un nouveau code pour activer ton compte.',
       user.id,
     );
     return { sent: true };
@@ -123,8 +119,6 @@ export class AuthService {
       await this.verification.createAndSend(
         user.email,
         'password_reset',
-        'Réinitialiser ton mot de passe mon511.ca',
-        'Une demande de réinitialisation de mot de passe a été faite pour ce compte.',
         user.id,
       );
     }

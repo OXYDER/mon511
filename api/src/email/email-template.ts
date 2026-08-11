@@ -12,6 +12,7 @@ export function renderEmailHtml(params: {
   ctaUrl?: string;
 }): string {
   const { title, bodyHtml, ctaLabel, ctaUrl } = params;
+  const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -28,17 +29,8 @@ export function renderEmailHtml(params: {
 
           <!-- En-tête avec le logo -->
           <tr>
-            <td style="padding:28px 32px 20px; border-bottom:1px solid #262932;">
-              <table role="presentation" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="background-color:#FF5A1F; border-radius:8px; padding:6px 10px;">
-                    <span style="font-family:Georgia,serif; font-weight:700; font-size:15px; color:#14161B; letter-spacing:0.5px;">511</span>
-                  </td>
-                  <td style="padding-left:10px; font-family:Georgia,serif; font-weight:600; font-size:16px; color:#F5F6F8;">
-                    mon511.ca
-                  </td>
-                </tr>
-              </table>
+            <td style="padding:24px 32px 20px; border-bottom:1px solid #262932; text-align:center;">
+              <img src="${frontendUrl}/brand/logo-full.png" alt="mon511.ca" width="220" style="display:block; margin:0 auto; max-width:220px; height:auto;" />
             </td>
           </tr>
 
@@ -77,6 +69,30 @@ export function renderEmailHtml(params: {
 </body>
 </html>`;
 }
+
+/** Bloc réutilisable affichant les informations d'un signalement (type,
+ * photo, date, statut, position, municipalité) — utilisé dans tous les
+ * courriels liés à un signalement, avec un contenu adapté selon le
+ * destinataire (usager vs municipalité) via les champs fournis. */
+export function renderReportInfoCard(fields: { label: string; value: string }[], photoUrl?: string | null): string {
+  const rows = fields
+    .filter((f) => f.value)
+    .map(
+      (f) => `
+      <tr>
+        <td style="padding:6px 0; font-size:12.5px; color:#6B6E78; width:130px; vertical-align:top;">${f.label}</td>
+        <td style="padding:6px 0; font-size:13px; color:#F5F6F8; vertical-align:top;">${f.value}</td>
+      </tr>`,
+    )
+    .join('');
+
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#1B1E25; border:1px solid #262932; border-radius:12px; padding:16px 18px; margin:18px 0;">
+      ${photoUrl ? `<tr><td colspan="2" style="padding-bottom:12px;"><img src="${photoUrl}" alt="" width="100%" style="display:block; border-radius:8px; max-height:220px; object-fit:cover; width:100%;" /></td></tr>` : ''}
+      ${rows}
+    </table>`;
+}
+
 
 /** Convertit le HTML en texte brut approximatif — repli pour les clients
  * courriel qui n'affichent pas le HTML (rare, mais bonne pratique). */

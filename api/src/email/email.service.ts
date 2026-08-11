@@ -2,13 +2,17 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 import { renderEmailHtml } from './email-template';
+import { EmailTemplatesService } from '../modules/email-templates/email-templates.service';
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly templates: EmailTemplatesService,
+  ) {
     const host = this.config.get<string>('SMTP_HOST');
     if (host) {
       this.transporter = nodemailer.createTransport({
@@ -33,12 +37,7 @@ export class EmailService {
    * côté serveur (pour diagnostiquer), mais on lance une erreur claire côté
    * usager plutôt que de laisser fuir un 'Internal server error' opaque.
    */
-  async send(to: string, subject: string, body: string, options?: { ctaLabel?: string; ctaUrl?: string }) {
-    if (!this.transporter) {
-      this.logger.warn(`SMTP non configuré — courriel simulé à ${to} : "${subject}"`);
-      return { simulated: true };
-    }
-
+  async send(to: string, subject: string, body: string, options?: { ctaLabel?: string; ctaUrl?: string; extraHtml?: string }) {
     // Le texte brut envoyé par les appelants est transformé en paragraphes
     // HTML simples pour habiller le gabarit de marque, tout en gardant le
     // texte original comme repli pour les clients courriel qui n'affichent
@@ -46,7 +45,48 @@ export class EmailService {
     const bodyHtml = body
       .split('\n\n')
       .map((p) => `<p style="margin:0 0 12px;">${p.replace(/\n/g, '<br />')}</p>`)
-      .join('');
+      .join('') + (options?.extraHtml ?? '');
+
+    return this.deliver(to, subject, body, bodyHtml, options);
+  }
+
+  /** Envoie un courriel à partir d'un gabarit modifiable dans l'admin
+   * (email_templates), avec substitution de variables — utilisé pour tous
+   * les courriels riches (signalements, vérification, etc.) plutôt que du
+   * texte brut codé en dur. */
+  async sendTemplated(
+    key: string,
+    to: string,
+    variables: Record<string, string | undefined>,
+    options?: { ctaLabel?: string; ctaUrl?: string },
+  ) {
+    const { subject, bodyHtml } = await this.templates.render(key, variables);
+    const plainTextFallback = bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    return this.deliver(to, subject, plainTextFallback, bodyHtml, options);
+  }
+
+  /**
+   * Si aucun SMTP n'est configuré (variables d'environnement absentes),
+   * le courriel est simplement journalisé plutôt que de faire échouer la
+   * requête — pratique pour tester le reste de l'application sans avoir
+   * de vraies identifiants SMTP dès le départ.
+   *
+   * Si le SMTP EST configuré mais que l'envoi échoue (mauvais identifiants,
+   * serveur injoignable, etc.), on journalise le détail technique complet
+   * côté serveur (pour diagnostiquer), mais on lance une erreur claire côté
+   * usager plutôt que de laisser fuir un 'Internal server error' opaque.
+   */
+  private async deliver(
+    to: string,
+    subject: string,
+    text: string,
+    bodyHtml: string,
+    options?: { ctaLabel?: string; ctaUrl?: string },
+  ) {
+    if (!this.transporter) {
+      this.logger.warn(`SMTP non configuré — courriel simulé à ${to} : "${subject}"`);
+      return { simulated: true };
+    }
 
     const html = renderEmailHtml({ title: subject, bodyHtml, ctaLabel: options?.ctaLabel, ctaUrl: options?.ctaUrl });
 
@@ -55,7 +95,7 @@ export class EmailService {
         from: this.config.get('EMAIL_FROM') ?? 'notifications@mon511.ca',
         to,
         subject,
-        text: body,
+        text,
         html,
       });
       return { simulated: false };

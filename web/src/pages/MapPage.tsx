@@ -194,6 +194,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [searchText, setSearchText] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [currentAreaName, setCurrentAreaName] = useState('');
+
+  // Le titre de l'onglet du navigateur suit la ville actuellement visionnée
+  // — comme le champ de recherche, se remet à 'mon511.ca' si aucune ville
+  // n'est encore connue (ex. tout premier chargement).
+  useEffect(() => {
+    document.title = currentAreaName ? `${currentAreaName} — mon511.ca` : 'mon511.ca';
+  }, [currentAreaName]);
   const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);

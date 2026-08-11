@@ -48,8 +48,6 @@ export class UsersService {
     await this.verification.createAndSend(
       user.email,
       'password_change',
-      'Confirme le changement de mot de passe — mon511.ca',
-      'Une demande de changement de mot de passe a été faite sur ton compte.',
       userId,
       { newPasswordHash: newHash },
     );
@@ -79,8 +77,6 @@ export class UsersService {
     await this.verification.createAndSend(
       newEmail,
       'email_change',
-      'Confirme ta nouvelle adresse — mon511.ca',
-      'Une demande de changement d\'adresse courriel a été faite pour ce compte mon511.ca.',
       userId,
       { newEmail },
     );
@@ -103,7 +99,7 @@ export class UsersService {
 
     // Avis de sécurité à l'ancienne adresse — pas bloquant si l'envoi échoue.
     this.email
-      .send(oldUser.email, 'Ton adresse courriel a été changée — mon511.ca', `L'adresse courriel de ton compte mon511.ca a été changée pour ${newEmail}. Si tu n'es pas à l'origine de ce changement, contacte-nous immédiatement à info@mon511.ca.`)
+      .sendTemplated('email_changed_old_address', oldUser.email, { newEmail })
       .catch(() => {});
 
     return { changed: true };

@@ -320,26 +320,40 @@ export class ReportsService {
     // jamais faire échouer la création d'un signalement si l'envoi du
     // courriel a un problème (SMTP temporairement en panne, etc.).
     if (userId) {
-      this.sendSubmissionConfirmation(userId, dto.problemTypeId).catch(() => {});
+      this.sendSubmissionConfirmation(report.id).catch(() => {});
     }
 
     return report;
   }
 
-  private async sendSubmissionConfirmation(userId: string, problemTypeId: string) {
-    const [user, type] = await Promise.all([
-      this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirst(),
-      this.db.selectFrom('problem_types').select('name_fr').where('id', '=', problemTypeId).executeTakeFirst(),
-    ]);
-    if (!user) return;
+  private async sendSubmissionConfirmation(reportId: string) {
+    const report = await this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
+      .leftJoin('regions', 'regions.id', 'reports.region_id')
+      .select([
+        'reports.id', 'reports.address_text', 'reports.created_at',
+        'problem_types.name_fr as problemTypeNameFr',
+        'users.email', 'users.first_name',
+        'regions.name_fr as municipalityName',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('photoUrl'),
+      ])
+      .where('reports.id', '=', reportId)
+      .executeTakeFirst();
+    if (!report?.email) return;
 
-    await this.email.send(
-      user.email,
-      'Ton signalement a été reçu',
-      `Merci ! Ton signalement (${type?.name_fr ?? 'problème routier'}) a bien été ajouté au système.\n\n` +
-        `Il n'est pas encore visible pour les autres membres — il est en attente de validation par notre équipe de modération.\n\n` +
-        `Tu recevras un prochain courriel dès qu'un changement de statut survient (accepté, refusé, informations manquantes, etc.). Une fois approuvé, il devient visible publiquement sur la carte.`,
-    );
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+    await this.email.sendTemplated('report_received', report.email, {
+      firstName: report.first_name ?? '',
+      reportType: report.problemTypeNameFr,
+      reportDate: new Date(report.created_at as any).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
+      reportStatus: 'En attente de modération',
+      reportAddress: report.address_text ?? 'Position GPS',
+      reportMunicipality: report.municipalityName ?? '',
+      reportPhotoUrl: report.photoUrl ?? '',
+      reportUrl: `${frontendUrl}/?report=${report.id}`,
+    }, { ctaLabel: 'Voir mon signalement', ctaUrl: `${frontendUrl}/?report=${report.id}` });
   }
 
   /**

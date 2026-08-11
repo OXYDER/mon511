@@ -1,9 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { UpsertMunicipalityIntegrationDto } from './dto/upsert-municipality-integration.dto';
 import { EmailService } from '../../email/email.service';
+import { renderReportInfoCard } from '../../email/email-template';
 
 @Injectable()
 export class MunicipalityIntegrationsService {
@@ -131,9 +132,12 @@ export class MunicipalityIntegrationsService {
     const report = await this.db
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('users', 'users.id', 'reports.user_id')
       .select([
         'reports.id', 'reports.region_id', 'reports.description', 'reports.address_text',
         'reports.created_at', 'problem_types.name_fr as problemTypeName',
+        'users.first_name as reporterFirstName',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('photoUrl'),
       ])
       .where('reports.id', '=', reportId)
       .executeTakeFirst();
@@ -157,14 +161,33 @@ export class MunicipalityIntegrationsService {
       .where('id', '=', report.region_id)
       .executeTakeFirstOrThrow();
 
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+    const reportUrl = `${frontendUrl}/?report=${report.id}`;
+    const reportDate = new Date(report.created_at as any).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+
     const { subject, body } = await this.renderEmail(report.region_id, {
       problem_type: report.problemTypeName,
       description: report.description ?? '',
       address: report.address_text ?? '',
       municipality_name: region.name_fr,
-      reported_at: report.created_at.toString(),
-      report_url: `https://mon511.ca/r/${report.id}`,
+      reported_at: reportDate,
+      report_url: reportUrl,
     });
+
+    // Carte d'infos structurée en plus du texte personnalisé de la
+    // municipalité — le meilleur des deux : leur propre gabarit (avec leur
+    // ton, leurs instructions internes, etc.) ET une présentation claire et
+    // uniforme des faits essentiels.
+    const infoCard = renderReportInfoCard(
+      [
+        { label: 'Type', value: report.problemTypeName },
+        { label: 'Date', value: reportDate },
+        { label: 'Position', value: report.address_text ?? 'Position GPS' },
+        { label: 'Municipalité', value: region.name_fr },
+        { label: 'Signalé par', value: report.reporterFirstName ?? 'Anonyme' },
+      ],
+      report.photoUrl,
+    );
 
     const notification = await this.db
       .insertInto('report_notifications')
@@ -173,7 +196,11 @@ export class MunicipalityIntegrationsService {
       .executeTakeFirstOrThrow();
 
     try {
-      await this.emailService.send(integration.contact_email, subject, body);
+      await this.emailService.send(integration.contact_email, subject, body, {
+        ctaLabel: 'Voir le signalement complet',
+        ctaUrl: reportUrl,
+        extraHtml: infoCard,
+      });
       await this.db
         .updateTable('report_notifications')
         .set({ status: 'sent', sent_at: new Date() as any })

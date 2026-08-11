@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -41,6 +41,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'allReports' ? 'active' : ''}`} onClick={() => setTab('allReports')}>
             Tous les signalements
           </button>
+          <button className={`tab-item ${tab === 'emailTemplates' ? 'active' : ''}`} onClick={() => setTab('emailTemplates')}>
+            Courriels
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -52,6 +55,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'users' && <UsersAdmin />}
         {tab === 'municipalities' && <MunicipalitiesAdmin />}
         {tab === 'allReports' && <AllReportsAdmin />}
+        {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -1058,6 +1062,160 @@ function AllReportsAdmin() {
           {total === 0 ? 0 : offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
         </span>
         <button className="btn-ghost" disabled={offset + LIMIT >= total} onClick={() => setOffset(offset + LIMIT)}>Suivant →</button>
+      </div>
+    </div>
+  );
+}
+
+function EmailTemplatesAdmin() {
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [subject, setSubject] = useState('');
+  const [bodyHtml, setBodyHtml] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ subject: string; bodyHtml: string } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+
+  async function load() {
+    try {
+      const results = await api.get<any[]>('/email-templates');
+      setTemplates(results);
+      if (!selectedKey && results[0]) select(results[0]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function select(t: any) {
+    setSelectedKey(t.key);
+    setSubject(t.subject);
+    setBodyHtml(t.body_html);
+    setPreview(null);
+    setFeedback(null);
+  }
+
+  async function save() {
+    if (!selectedKey) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await api.patch(`/email-templates/${selectedKey}`, { subject, bodyHtml });
+      setFeedback('Enregistré.');
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function showPreview() {
+    if (!selectedKey) return;
+    setLoadingPreview(true);
+    try {
+      const result = await api.get<{ subject: string; bodyHtml: string }>(`/email-templates/${selectedKey}/preview`);
+      setPreview(result);
+    } catch {
+      setPreview(null);
+    } finally {
+      setLoadingPreview(false);
+    }
+  }
+
+  const selected = templates.find((t) => t.key === selectedKey);
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div style={{ display: 'flex', gap: 20 }}>
+      <div style={{ flex: '0 0 240px' }}>
+        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+          Gabarits de courriels
+        </div>
+        {templates.map((t) => (
+          <div
+            key={t.key}
+            onClick={() => select(t)}
+            className="report-card"
+            style={{ cursor: 'pointer', borderColor: t.key === selectedKey ? 'var(--accent-signal)' : undefined }}
+          >
+            <div className="rc-body">
+              <div className="rc-title" style={{ fontSize: 12.5 }}>{t.key}</div>
+              <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.description}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {selected && (
+          <>
+            <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+              {selected.key}
+            </div>
+            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14 }}>{selected.description}</p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              {selected.available_variables.map((v: string) => (
+                <span
+                  key={v}
+                  style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 10.5, background: 'var(--panel-hover)',
+                    border: '1px solid var(--panel-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                  }}
+                  title="Cliquer pour copier"
+                  onClick={() => navigator.clipboard.writeText(`{{${v}}}`)}
+                >
+                  {'{{'}{v}{'}}'}
+                </span>
+              ))}
+            </div>
+
+            <div className="field-group">
+              <label className="field-label">Sujet</label>
+              <input className="text-input" value={subject} onChange={(e) => setSubject(e.target.value)} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">Corps (HTML)</label>
+              <textarea rows={10} style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }} value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
+            </div>
+
+            <div className="action-row" style={{ flexWrap: 'wrap' }}>
+              <button className="btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+              <button className="btn-ghost" onClick={showPreview} disabled={loadingPreview}>
+                {loadingPreview ? 'Chargement...' : '👁 Prévisualiser'}
+              </button>
+              {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
+            </div>
+
+            {preview && (
+              <div style={{ marginTop: 20 }}>
+                <div className="section-label">Aperçu (avec des données d'exemple)</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+                  Sujet : <strong style={{ color: 'var(--text-body)' }}>{preview.subject}</strong>
+                </div>
+                <div
+                  style={{
+                    background: '#0A0B0E', border: '1px solid var(--panel-border)', borderRadius: 10,
+                    padding: 20, maxHeight: 500, overflowY: 'auto',
+                  }}
+                >
+                  <iframe
+                    title="Aperçu du courriel"
+                    style={{ width: '100%', height: 480, border: 'none', background: 'white', borderRadius: 6 }}
+                    srcDoc={`<body style="margin:0;background:#0A0B0E;font-family:sans-serif;color:#F5F6F8;padding:20px;">${preview.bodyHtml}</body>`}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

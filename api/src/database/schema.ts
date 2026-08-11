@@ -229,6 +229,16 @@ export interface SiteSettingsTable {
   updated_by: string | null;
 }
 
+export interface EmailTemplatesTable {
+  key: string;
+  subject: string;
+  body_html: string;
+  description: string;
+  available_variables: string[];
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
 export interface ConversationsTable {
   id: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -338,4 +348,5 @@ export interface Database {
   external_data_sources: ExternalDataSourcesTable;
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;
+  email_templates: EmailTemplatesTable;
 }
