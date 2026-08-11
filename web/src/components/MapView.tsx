@@ -307,28 +307,21 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // Recentrer quand la position change
   useEffect(() => {
     if (mapRef.current && center) {
+      const map = mapRef.current;
       // Annule toute animation de caméra encore en vol avant d'en démarrer
-      // une nouvelle — sans ça, deux flyTo() rapprochés (ex. le centrage
-      // initial à la géolocalisation suivi de près par le premier clic sur
-      // un signalement éloigné) peuvent se marcher sur les pieds et
-      // produire un atterrissage décalé, alors que les appels suivants,
-      // eux, partent toujours d'un état stable.
-      mapRef.current.stop();
-      // Les panneaux latéraux (recherche à gauche, détail à droite, ~320px
-      // chacun) sont des overlays qui recouvrent une partie de la carte
-      // sans en réduire la vraie zone de rendu — sans ce padding, le point
-      // se centre au milieu du CANEVAS COMPLET, donc souvent caché derrière
-      // un des deux panneaux plutôt qu'au milieu de la zone visible entre
-      // les deux. Seulement pertinent en largeur de bureau ; en mobile les
-      // panneaux se comportent tout autrement (plein écran, pas de côte à
-      // côte permanent).
-      const isDesktopLayout = window.innerWidth >= 900;
-      mapRef.current.flyTo({
-        center: [center.lng, center.lat],
-        zoom: center.zoom ?? 13,
-        duration: 800,
-        padding: isDesktopLayout ? { left: 340, right: 360, top: 0, bottom: 0 } : { left: 0, right: 0, top: 0, bottom: 0 },
-      });
+      // une nouvelle — sans ça, deux flyTo() rapprochés peuvent se marcher
+      // sur les pieds et produire un atterrissage décalé.
+      map.stop();
+
+      // L'option padding de flyTo() s'est avérée peu fiable dans certains
+      // cas précis (ex. un pin déjà visible près du bord, à un zoom très
+      // différent du zoom cible) — atterrissage décalé au mauvais endroit,
+      // parfois de façon spectaculaire, plutôt que la petite correction
+      // attendue. Les deux panneaux étant presque symétriques (340px vs
+      // 360px), un centrage simple sans padding du tout donne déjà un
+      // résultat pratiquement identique à l'idéal (écart théorique de 10px
+      // à peine, imperceptible) — plus simple et surtout fiable.
+      map.flyTo({ center: [center.lng, center.lat], zoom: center.zoom ?? 13, duration: 800 });
     }
   }, [center]);
 
