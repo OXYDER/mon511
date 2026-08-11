@@ -103,17 +103,14 @@ services:
   web:
     build:
       context: ./web
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_MAPTILER_API_KEY: ${MAPTILER_API_KEY:-}
     container_name: mon511-web
     restart: unless-stopped
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-      VITE_MAPTILER_API_KEY: ${MAPTILER_API_KEY:-}
     ports:
-      - "${WEB_HOST_PORT:-5173}:5173"
-    volumes:
-      - ./web:/app
-      - /app/node_modules
+      - "${WEB_HOST_PORT:-5173}:80"
 
 volumes:
   postgres_data:
