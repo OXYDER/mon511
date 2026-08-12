@@ -26,7 +26,9 @@ export default function SupportChatWidget({ onClose, lang }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [escalateSuggested, setEscalateSuggested] = useState(false);
   const [ticketCreated, setTicketCreated] = useState(false);
+  const [creatingTicket, setCreatingTicket] = useState(false);
   const [needsEmail, setNeedsEmail] = useState(false);
   const [email, setEmail] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -50,24 +52,39 @@ export default function SupportChatWidget({ onClose, lang }: Props) {
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setSending(true);
     try {
-      const result = await api.post<{ reply: string; escalate: boolean; ticketId: string | null }>('/support/chat/message', {
+      const result = await api.post<{ reply: string; escalate: boolean }>('/support/chat/message', {
         sessionId,
         email: email || undefined,
         message: text,
       });
       setMessages((prev) => [...prev, { role: 'assistant', content: result.reply }]);
-      if (result.escalate) {
-        if (result.ticketId) {
-          setTicketCreated(true);
-        } else if (!email) {
-          setNeedsEmail(true);
-        }
-      }
+      // On propose seulement — jamais de création automatique. L'usager
+      // décide lui-même via les boutons Oui/Non ci-dessous.
+      setEscalateSuggested(result.escalate);
     } catch {
       setMessages((prev) => [...prev, { role: 'assistant', content: lang === 'fr' ? "Une erreur est survenue. Réessaie dans un instant." : 'Something went wrong. Please try again in a moment.' }]);
     } finally {
       setSending(false);
     }
+  }
+
+  async function confirmTicket() {
+    if (!email) { setNeedsEmail(true); return; }
+    setCreatingTicket(true);
+    try {
+      await api.post('/support/chat/confirm-ticket', { sessionId, email });
+      setTicketCreated(true);
+      setEscalateSuggested(false);
+      setNeedsEmail(false);
+    } catch {
+      setMessages((prev) => [...prev, { role: 'assistant', content: lang === 'fr' ? "Impossible de créer le ticket pour l'instant — réessaie dans un moment." : 'Could not create the ticket right now — please try again shortly.' }]);
+    } finally {
+      setCreatingTicket(false);
+    }
+  }
+
+  function declineTicket() {
+    setEscalateSuggested(false);
   }
 
   return (
@@ -116,24 +133,47 @@ export default function SupportChatWidget({ onClose, lang }: Props) {
           </div>
         )}
 
+        {escalateSuggested && !ticketCreated && !needsEmail && (
+          <div style={{ margin: '0 20px 12px', padding: 12, borderRadius: 10, background: 'var(--panel-hover)' }}>
+            <div style={{ fontSize: 12, marginBottom: 8 }}>
+              {lang === 'fr'
+                ? "Veux-tu que je crée un ticket pour que notre équipe s'en occupe directement?"
+                : 'Would you like me to create a ticket so our team can help you directly?'}
+            </div>
+            <div className="action-row" style={{ margin: 0 }}>
+              <button className="btn-primary" style={{ width: 'auto' }} onClick={confirmTicket} disabled={creatingTicket}>
+                {creatingTicket ? (lang === 'fr' ? 'Création...' : 'Creating...') : (lang === 'fr' ? 'Oui, créer un ticket' : 'Yes, create a ticket')}
+              </button>
+              <button className="btn-ghost" onClick={declineTicket}>
+                {lang === 'fr' ? 'Non merci' : 'No thanks'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {needsEmail && !ticketCreated && (
           <div style={{ margin: '0 20px 12px' }} className="field-group">
             <label className="field-label">{lang === 'fr' ? 'Ton courriel (pour te répondre)' : 'Your email (so we can reply)'}</label>
-            <input className="text-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="text-input" style={{ flex: 1, minWidth: 0 }} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <button className="btn-primary" style={{ width: 'auto', flexShrink: 0 }} onClick={confirmTicket} disabled={creatingTicket || !email.trim()}>
+                {creatingTicket ? '...' : (lang === 'fr' ? 'Confirmer' : 'Confirm')}
+              </button>
+            </div>
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 8, padding: '0 20px 20px' }}>
           <input
             className="text-input"
-            style={{ flex: 1 }}
+            style={{ flex: 1, minWidth: 0 }}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && send()}
             placeholder={lang === 'fr' ? 'Écris ton message...' : 'Type your message...'}
             disabled={sending}
           />
-          <button className="btn-primary" onClick={send} disabled={sending || !input.trim()}>
+          <button className="btn-primary" style={{ width: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }} onClick={send} disabled={sending || !input.trim()}>
             {lang === 'fr' ? 'Envoyer' : 'Send'}
           </button>
         </div>

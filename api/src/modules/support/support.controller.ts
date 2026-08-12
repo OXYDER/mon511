@@ -27,6 +27,17 @@ export class SupportController {
     return this.service.sendMessage(user?.userId ?? null, user ? null : dto.sessionId ?? null, user?.email ?? dto.email ?? null, dto.message);
   }
 
+  // Créé seulement après confirmation explicite de l'usager dans le chat
+  // (bouton "Oui, créer un ticket") — jamais automatique.
+  @Post('chat/confirm-ticket')
+  @UseGuards(OptionalJwtAuthGuard)
+  confirmCreateTicket(
+    @Body() dto: { sessionId?: string; email?: string },
+    @CurrentUser() user?: CurrentUserPayload,
+  ) {
+    return this.service.confirmCreateTicket(user?.userId ?? null, user ? null : dto.sessionId ?? null, user?.email ?? dto.email ?? null);
+  }
+
   // Ticket créé manuellement (formulaire de contact direct).
   @Post('tickets')
   @UseGuards(OptionalJwtAuthGuard)

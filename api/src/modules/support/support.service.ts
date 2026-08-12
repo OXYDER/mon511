@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -83,13 +83,31 @@ export class SupportService {
     await this.db.insertInto('support_messages').values({ conversation_id: conversation.id, role: 'assistant', content: reply }).execute();
     await this.db.updateTable('support_conversations').set({ updated_at: new Date() as any }).where('id', '=', conversation.id).execute();
 
-    let ticketId: string | null = null;
-    if (escalate) {
-      const ticket = await this.createTicketFromConversation(conversation.id, userId, userEmail, history);
-      ticketId = ticket.id;
-    }
+    // Ne crée plus le ticket automatiquement — seulement une suggestion
+    // (escalate) affichée à l'usager, qui décide lui-même via une
+    // confirmation explicite (voir confirmCreateTicket ci-dessous). Évite
+    // de surcharger l'équipe de tickets que la personne ne voulait pas
+    // vraiment ouvrir.
+    return { conversationId: conversation.id, reply, escalate };
+  }
 
-    return { conversationId: conversation.id, reply, escalate, ticketId };
+  /** Appelée seulement après que l'usager a explicitement confirmé vouloir
+   * un ticket (bouton dans le chat) — jamais automatique. */
+  async confirmCreateTicket(userId: string | null, sessionId: string | null, userEmail: string | null) {
+    const conversation = userId
+      ? await this.db.selectFrom('support_conversations').selectAll().where('user_id', '=', userId).where('status', '=', 'active').executeTakeFirst()
+      : await this.db.selectFrom('support_conversations').selectAll().where('session_id', '=', sessionId).where('status', '=', 'active').executeTakeFirst();
+
+    if (!conversation) throw new NotFoundException('Aucune conversation active à partir de laquelle créer un ticket.');
+
+    const history = await this.db
+      .selectFrom('support_messages')
+      .selectAll()
+      .where('conversation_id', '=', conversation.id)
+      .orderBy('created_at', 'asc')
+      .execute();
+
+    return this.createTicketFromConversation(conversation.id, userId, userEmail, history);
   }
 
   /** Appelle l'API Gemini avec la base de connaissances en instruction
