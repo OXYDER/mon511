@@ -12,6 +12,12 @@ export class MunicipalPortalController {
 
   // ---------- Demande d'accès (tout usager connecté) ----------
 
+  @Get('search-regions')
+  @UseGuards(JwtAuthGuard)
+  searchRegions(@Query('search') search: string) {
+    return this.service.searchRegions(search);
+  }
+
   @Post('request-access')
   @UseGuards(JwtAuthGuard)
   requestAccess(

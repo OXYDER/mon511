@@ -114,6 +114,17 @@ services:
     ports:
       - "${WEB_HOST_PORT:-5173}:80"
 
+  portal-web:
+    build:
+      context: ./portal-web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    container_name: mon511-portal-web
+    restart: unless-stopped
+    ports:
+      - "${PORTAL_WEB_HOST_PORT:-5174}:80"
+
 volumes:
   postgres_data:
   redis_data:

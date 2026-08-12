@@ -13,6 +13,22 @@ export class MunicipalPortalService {
 
   // ---------- Demande d'accès ----------
 
+  /** Recherche publique de municipalités (par nom) — utilisée par le
+   * formulaire de demande d'accès, où n'importe quel usager connecté (pas
+   * nécessairement admin) doit pouvoir trouver sa propre municipalité
+   * parmi les 1281 du Québec. */
+  async searchRegions(search: string) {
+    if (!search || search.trim().length < 2) return [];
+    return this.db
+      .selectFrom('regions')
+      .select(['id as regionId', 'name_fr as regionNameFr'])
+      .where('type', '=', 'municipality')
+      .where('name_fr', 'ilike', `%${search}%`)
+      .orderBy('name_fr', 'asc')
+      .limit(8)
+      .execute();
+  }
+
   async requestAccess(userId: string, regionId: string, jobTitle: string, message: string | undefined) {
     const existing = await this.db
       .selectFrom('municipality_access_requests')
