@@ -137,12 +137,14 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
         setCoords(c);
         setLocating(false);
         setSnappedToRoad(snapped);
-        // Adresse la plus proche auto-remplie, sans écraser une saisie manuelle existante.
-        if (!addressText) {
-          const geo = await reverseGeocodeAddress(c.lat, c.lng);
-          if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
-          if (geo.municipality) setDetectedMunicipality(geo.municipality);
-        }
+        // Ici, contrairement au remplissage automatique à l'ouverture du
+        // formulaire, l'usager vient de cliquer explicitement sur ce
+        // bouton — il s'attend à ce que l'adresse affichée reflète la
+        // position tout juste détectée, même s'il avait déjà tapé
+        // quelque chose manuellement avant.
+        const geo = await reverseGeocodeAddress(c.lat, c.lng);
+        if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
+        if (geo.municipality) setDetectedMunicipality(geo.municipality);
       },
       () => setLocating(false),
       { enableHighAccuracy: true, timeout: 10000 },
@@ -385,8 +387,8 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                     📍 Cette photo semble avoir été prise à <strong>{exifMismatch.exifAddress}</strong>, différent de la position détectée. Utiliser l'emplacement de la photo ?
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="btn-ghost" onClick={useExifLocation} style={{ flex: 1 }}>Utiliser celle-ci</button>
-                    <button type="button" className="btn-ghost" onClick={() => setExifMismatch(null)} style={{ flex: 1 }}>Garder l'actuelle</button>
+                    <button type="button" className="btn-ghost" onClick={useExifLocation} style={{ flex: 1 }}>Oui</button>
+                    <button type="button" className="btn-ghost" onClick={() => setExifMismatch(null)} style={{ flex: 1 }}>Non</button>
                   </div>
                 </div>
               )}
