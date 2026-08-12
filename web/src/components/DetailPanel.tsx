@@ -192,6 +192,13 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             <span>📍 {report.addressText ?? 'Position GPS'}</span>
             <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
           </div>
+          <div
+            style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
+            title={lang === 'fr' ? 'Cliquer pour copier' : 'Click to copy'}
+            onClick={() => navigator.clipboard.writeText(report.id)}
+          >
+            🔗 ID : <code>{report.id}</code>
+          </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             👤 Signalé par{' '}
             {report.authorId ? (

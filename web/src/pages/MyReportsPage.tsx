@@ -191,9 +191,6 @@ export default function MyReportsPage({ onClose, lang }: Props) {
               </div>
               <div className="rc-body">
                 <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
-                <div className="rc-meta">
-                  {r.municipalityName ? `🏛️ ${r.municipalityName} · ` : ''}{r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
-                </div>
               </div>
               <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
                 {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}

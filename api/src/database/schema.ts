@@ -235,6 +235,7 @@ export interface SupportConversationsTable {
   user_id: string | null;
   session_id: string | null;
   status: Generated<'active' | 'closed'>;
+  last_user_seen_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
 }
@@ -257,6 +258,7 @@ export interface SupportTicketsTable {
   description: string;
   status: Generated<'open' | 'in_progress' | 'resolved'>;
   created_by: Generated<'ai' | 'user'>;
+  last_user_seen_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   resolved_at: Timestamp | null;
@@ -269,6 +271,15 @@ export interface SupportTicketRepliesTable {
   author_id: string | null;
   message: string;
   created_at: Generated<Timestamp>;
+}
+
+export interface SupportTicketAttachmentsTable {
+  id: Generated<string>;
+  ticket_id: string;
+  reply_id: string | null;
+  url: string;
+  filename: string;
+  uploaded_at: Generated<Timestamp>;
 }
 
 export interface EmailTemplatesTable {
@@ -395,4 +406,5 @@ export interface Database {
   support_messages: SupportMessagesTable;
   support_tickets: SupportTicketsTable;
   support_ticket_replies: SupportTicketRepliesTable;
+  support_ticket_attachments: SupportTicketAttachmentsTable;
 }

@@ -86,6 +86,26 @@ export class UploadsService {
       .executeTakeFirstOrThrow();
   }
 
+  /** Téléversement générique, sans extraction EXIF ni lien avec un
+   * signalement précis — utilisé pour les pièces jointes des billets de
+   * support (peuvent être n'importe quel type de fichier raisonnable, pas
+   * seulement des photos). */
+  async uploadGenericFile(folder: string, file: Express.Multer.File): Promise<{ url: string; filename: string }> {
+    const key = `${folder}/${randomUUID()}-${file.originalname}`;
+
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      }),
+    );
+
+    const publicUrl = `${this.config.get('STORAGE_PUBLIC_URL') ?? `http://${this.config.get('STORAGE_ENDPOINT')}:${this.config.get('STORAGE_PORT')}`}/${this.bucket}/${key}`;
+    return { url: publicUrl, filename: file.originalname };
+  }
+
   /** Supprime réellement les fichiers du stockage (pas seulement la ligne
    * en base) — utilisé notamment par LifecycleService lors de la
    * suppression définitive d'un signalement archivé expiré. */

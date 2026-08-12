@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Get, MaxFileSizeValidator, Param, ParseFilePipe, Patch, Post, Query,
+  UploadedFile, UseGuards, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SupportService } from './support.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { OptionalJwtAuthGuard } from '../../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -8,7 +13,10 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 
 @Controller('support')
 export class SupportController {
-  constructor(private readonly service: SupportService) {}
+  constructor(
+    private readonly service: SupportService,
+    private readonly uploads: UploadsService,
+  ) {}
 
   // Chat — accessible aux usagers connectés ET anonymes (session_id généré
   // côté client, conservé en localStorage pour garder le fil).
@@ -27,25 +35,83 @@ export class SupportController {
     return this.service.sendMessage(user?.userId ?? null, user ? null : dto.sessionId ?? null, user?.email ?? dto.email ?? null, dto.message);
   }
 
-  // Créé seulement après confirmation explicite de l'usager dans le chat
-  // (bouton "Oui, créer un ticket") — jamais automatique.
-  @Post('chat/confirm-ticket')
+  // Ferme la conversation active — « Réinitialiser le chat ».
+  @Post('chat/reset')
   @UseGuards(OptionalJwtAuthGuard)
-  confirmCreateTicket(
-    @Body() dto: { sessionId?: string; email?: string },
-    @CurrentUser() user?: CurrentUserPayload,
-  ) {
-    return this.service.confirmCreateTicket(user?.userId ?? null, user ? null : dto.sessionId ?? null, user?.email ?? dto.email ?? null);
+  resetConversation(@Body() dto: { sessionId?: string }, @CurrentUser() user?: CurrentUserPayload) {
+    return this.service.resetConversation(user?.userId ?? null, user ? null : dto.sessionId ?? null);
   }
 
-  // Ticket créé manuellement (formulaire de contact direct).
+  // Marque la conversation comme vue — fait taire le flash de l'icône Aide.
+  @Post('chat/seen')
+  @UseGuards(OptionalJwtAuthGuard)
+  markConversationSeen(@Body() dto: { sessionId?: string }, @CurrentUser() user?: CurrentUserPayload) {
+    return this.service.markConversationSeen(user?.userId ?? null, user ? null : dto.sessionId ?? null);
+  }
+
+  // Appelé après confirmation explicite dans le chat ("Oui, créer un
+  // ticket") — prépare seulement un sujet/description suggérés, ne crée
+  // rien. Le frontend redirige ensuite vers le formulaire complet dans
+  // « Billets de support », pré-rempli avec cette suggestion.
+  @Post('chat/prepare-ticket')
+  @UseGuards(OptionalJwtAuthGuard)
+  prepareTicketFromChat(
+    @Body() dto: { sessionId?: string },
+    @CurrentUser() user?: CurrentUserPayload,
+  ) {
+    return this.service.prepareTicketFromChat(user?.userId ?? null, user ? null : dto.sessionId ?? null);
+  }
+
+  // Ticket créé via le formulaire complet (direct, ou pré-rempli depuis le
+  // chat) — avec pièces jointes optionnelles (déjà téléversées au préalable).
   @Post('tickets')
   @UseGuards(OptionalJwtAuthGuard)
   createTicket(
-    @Body() dto: { email: string; name?: string; subject: string; description: string },
+    @Body() dto: { email: string; name?: string; subject: string; description: string; attachments?: { url: string; filename: string }[] },
     @CurrentUser() user?: CurrentUserPayload,
   ) {
-    return this.service.createManualTicket(user?.userId ?? null, dto.email, dto.name, dto.subject, dto.description);
+    return this.service.createManualTicket(user?.userId ?? null, dto.email, dto.name, dto.subject, dto.description, dto.attachments);
+  }
+
+  // « Mes billets » — réservé aux comptes connectés.
+  @Get('tickets/mine')
+  @UseGuards(JwtAuthGuard)
+  findMyTickets(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyTickets(user.userId);
+  }
+
+  @Get('tickets/mine/:id')
+  @UseGuards(JwtAuthGuard)
+  findMyTicketDetail(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyTicketDetail(id, user.userId);
+  }
+
+  @Post('tickets/mine/:id/seen')
+  @UseGuards(JwtAuthGuard)
+  markTicketSeen(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.markTicketSeen(id, user.userId);
+  }
+
+  // Un seul appel : est-ce que l'icône Aide doit flasher (réponse non lue,
+  // billet ou chat)?
+  @Get('unread-status')
+  @UseGuards(OptionalJwtAuthGuard)
+  getUnreadStatus(@Query('sessionId') sessionId: string, @CurrentUser() user?: CurrentUserPayload) {
+    return this.service.getUnreadStatus(user?.userId ?? null, user ? null : sessionId);
+  }
+
+  // Téléversement d'une pièce jointe — accessible aux usagers connectés ET
+  // anonymes (le formulaire de billet peut être rempli sans compte).
+  @Post('attachments')
+  @UseGuards(OptionalJwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  uploadAttachment(
+    @UploadedFile(
+      new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 8 * 1024 * 1024 })] }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.uploads.uploadGenericFile('support-attachments', file);
   }
 
   // ---------- Admin ----------

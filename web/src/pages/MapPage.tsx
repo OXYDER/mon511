@@ -18,6 +18,7 @@ const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
 const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
+const SupportTicketsModal = lazy(() => import('../components/SupportTicketsModal'));
 const MyReportsPage = lazy(() => import('./MyReportsPage'));
 const AdminPage = lazy(() => import('./AdminPage'));
 
@@ -163,6 +164,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showHelpMenu, setShowHelpMenu] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
   const [showSupportChat, setShowSupportChat] = useState(false);
+  const [showSupportTickets, setShowSupportTickets] = useState(false);
+  const [ticketPrefill, setTicketPrefill] = useState<{ subject: string; description: string } | null>(null);
+  const [supportUnread, setSupportUnread] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -421,8 +425,35 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   useEffect(() => {
     locateAndLoad();
     loadAllCabanes();
+
+    // Liens directs venant des courriels (signalement reçu/approuvé/refusé,
+    // rappel de validité) — jusqu'ici jamais lus, le lien n'ouvrait rien.
+    const params = new URLSearchParams(window.location.search);
+    const reportId = params.get('report') ?? params.get('editReport');
+    if (reportId) {
+      openReportById(reportId);
+      // Nettoie l'URL après coup — évite de rouvrir le même signalement à
+      // chaque rafraîchissement de la page.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Sonde périodiquement s'il y a une réponse non lue de l'équipe (billet
+  // ou chat) — fait flasher l'icône Aide. Le sessionId anonyme (même clé
+  // que le widget de chat) permet de couvrir aussi les visiteurs sans
+  // compte.
+  useEffect(() => {
+    function checkUnread() {
+      const sessionId = localStorage.getItem('mon511_support_session') ?? '';
+      api.get<{ hasUnread: boolean }>(`/support/unread-status?sessionId=${sessionId}`)
+        .then((r) => setSupportUnread(r.hasUnread))
+        .catch(() => {});
+    }
+    checkUnread();
+    const interval = setInterval(checkUnread, 60000);
+    return () => clearInterval(interval);
+  }, [showSupportChat, showSupportTickets]);
 
   function openReport(r: Report) {
     setSelection({ type: 'report', id: r.id });
@@ -997,12 +1028,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       )}
 
       <button
-        className={`map-menu-btn ${showHelpMenu ? 'active' : ''}`}
+        className={`map-menu-btn ${showHelpMenu ? 'active' : ''} ${supportUnread ? 'help-btn-flash' : ''}`}
         style={{ bottom: 320 }}
         onClick={() => { setShowHelpMenu((v) => !v); setShowMapTypeMenu(false); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
         title={lang === 'fr' ? 'Aide' : 'Help'}
       >
-        ❓
+        {supportUnread ? '❗' : '❓'}
       </button>
       {showHelpMenu && (
         <div className="map-menu-panel" style={{ bottom: 320, width: 280 }}>
@@ -1020,6 +1051,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             onClick={() => { setShowHelpMenu(false); setShowSupportChat(true); }}
           >
             💬 {lang === 'fr' ? 'Clavarder avec le support' : 'Chat with support'}
+          </div>
+          <div
+            className="search-dropdown-item"
+            style={{ borderRadius: 8, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            onClick={() => { setShowHelpMenu(false); setTicketPrefill(null); setShowSupportTickets(true); }}
+          >
+            <span>🎫 {lang === 'fr' ? 'Billets de support' : 'Support tickets'}</span>
+            {supportUnread && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent-signal)' }} />}
           </div>
         </div>
       )}
@@ -1111,7 +1150,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
       {showFaq && <FaqModal onClose={() => setShowFaq(false)} lang={lang} />}
-      {showSupportChat && <SupportChatWidget onClose={() => setShowSupportChat(false)} lang={lang} />}
+      {showSupportChat && (
+        <SupportChatWidget
+          onClose={() => setShowSupportChat(false)}
+          lang={lang}
+          onOpenTicketForm={(prefill) => { setTicketPrefill(prefill); setShowSupportTickets(true); }}
+        />
+      )}
+      {showSupportTickets && (
+        <SupportTicketsModal onClose={() => setShowSupportTickets(false)} lang={lang} prefill={ticketPrefill} />
+      )}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
       </>}
     </div>
