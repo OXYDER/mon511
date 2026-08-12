@@ -92,6 +92,12 @@ export class SupportController {
     return this.service.markTicketSeen(id, user.userId);
   }
 
+  @Post('tickets/mine/:id/close')
+  @UseGuards(JwtAuthGuard)
+  closeOwnTicket(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.closeOwnTicket(id, user.userId);
+  }
+
   // Un seul appel : est-ce que l'icône Aide doit flasher (réponse non lue,
   // billet ou chat)?
   @Get('unread-status')

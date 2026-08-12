@@ -659,7 +659,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <h2 onClick={() => setPanelCollapsed((v) => !v)}>
           <span>{t('surLaCarte', lang)}</span>
           <button className="panel-collapse-btn" onClick={(e) => { e.stopPropagation(); setPanelCollapsed((v) => !v); }}>
-            {panelCollapsed ? '▸' : '▾'}
+            {panelCollapsed ? '+' : '−'}
           </button>
         </h2>
 
@@ -998,7 +998,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         🗂️
       </button>
       {showMapDetailsMenu && (
-        <div className="map-menu-panel" style={{ bottom: 208 }}>
+        <div className="map-menu-panel" style={{ bottom: 208, width: 280 }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>

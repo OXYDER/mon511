@@ -262,6 +262,18 @@ export class SupportService {
       .execute();
   }
 
+  /** L'usager peut fermer lui-même son billet — évite que l'équipe passe
+   * du temps sur des cas déjà réglés que personne n'a pensé à signaler
+   * comme résolus. */
+  async closeOwnTicket(ticketId: string, userId: string) {
+    await this.db
+      .updateTable('support_tickets')
+      .set({ status: 'resolved', resolved_at: new Date() as any, updated_at: new Date() as any })
+      .where('id', '=', ticketId)
+      .where('user_id', '=', userId)
+      .execute();
+  }
+
   async markConversationSeen(userId: string | null, sessionId: string | null) {
     let query = this.db.updateTable('support_conversations').set({ last_user_seen_at: new Date() as any });
     query = userId ? query.where('user_id', '=', userId) : query.where('session_id', '=', sessionId);

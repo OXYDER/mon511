@@ -58,6 +58,13 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
     api.post(`/support/tickets/mine/${id}/seen`, {}).catch(() => {});
   }
 
+  async function closeTicket() {
+    if (!selectedId) return;
+    await api.post(`/support/tickets/mine/${selectedId}/close`, {}).catch(() => {});
+    await selectTicket(selectedId);
+    await load();
+  }
+
   async function submit() {
     const effectiveEmail = authenticatedEmail ?? email;
     if (!subject.trim() || !description.trim() || !effectiveEmail.trim()) {
@@ -188,6 +195,16 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
                   {lang === 'fr' ? 'Numéro du billet' : 'Ticket ID'} : <code>{detail.ticket.id}</code>
                 </div>
+
+                {detail.ticket.status !== 'resolved' && (
+                  <button
+                    className="btn-ghost"
+                    style={{ fontSize: 11.5, marginBottom: 16 }}
+                    onClick={closeTicket}
+                  >
+                    ✔ {lang === 'fr' ? 'Marquer comme résolu / fermer ce billet' : 'Mark as resolved / close this ticket'}
+                  </button>
+                )}
 
                 {/* Fil de conversation unifié — message initial suivi des
                     réponses, tous présentés de la même façon (auteur +

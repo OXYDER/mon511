@@ -117,7 +117,10 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     setCoords({ lat, lng, accuracy: 15 });
     setSnappedToRoad(snapped);
     setAddressText(result.name);
-    setAddressAutoFilled(true);
+    // Choisir dans la liste déroulante reste un choix de l'usager, pas une
+    // détection GPS — le message affiché doit rester « entrée manuellement »
+    // même dans ce cas, pas « position précise capturée ».
+    setAddressAutoFilled(false);
     if (result.municipality) setDetectedMunicipality(result.municipality);
     setShowAddressDropdown(false);
     setAddressSuggestions([]);
