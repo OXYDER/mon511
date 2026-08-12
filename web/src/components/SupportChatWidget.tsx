@@ -125,19 +125,32 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
             <div
               key={i}
               style={{
+                display: 'flex', gap: 8, alignItems: 'flex-end',
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                background: m.role === 'user' ? 'var(--accent-signal)' : 'var(--panel-hover)',
-                color: m.role === 'user' ? '#14161B' : 'var(--text-body)',
-                borderRadius: 12, padding: '9px 13px', fontSize: 13, lineHeight: 1.5, maxWidth: '85%',
-                whiteSpace: 'pre-wrap',
+                maxWidth: '90%', flexDirection: m.role === 'user' ? 'row-reverse' : 'row',
               }}
             >
-              {m.content}
+              {m.role === 'assistant' && (
+                <img src="/icons/icon-192.png" alt="" style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0 }} />
+              )}
+              <div
+                style={{
+                  background: m.role === 'user' ? 'var(--accent-signal)' : 'var(--panel-hover)',
+                  color: m.role === 'user' ? '#14161B' : 'var(--text-body)',
+                  borderRadius: 12, padding: '9px 13px', fontSize: 13, lineHeight: 1.5,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {m.content}
+              </div>
             </div>
           ))}
           {sending && (
-            <div style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--text-muted)' }}>
-              {lang === 'fr' ? 'Un instant...' : 'One moment...'}
+            <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center' }}>
+              <img src="/icons/icon-192.png" alt="" style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {lang === 'fr' ? 'Un instant...' : 'One moment...'}
+              </span>
             </div>
           )}
           <div ref={bottomRef} />

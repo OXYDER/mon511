@@ -29,7 +29,11 @@ export default function PublicProfileModal({ userId, onClose, lang }: Props) {
           {profile && (
             <>
               <div className="profile-head">
-                <div className="avatar-lg">{(profile.displayName?.[0] ?? '?').toUpperCase()}</div>
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="" className="avatar-lg" style={{ objectFit: 'cover' }} />
+                ) : (
+                  <div className="avatar-lg">{(profile.displayName?.[0] ?? '?').toUpperCase()}</div>
+                )}
                 <div>
                   <div className="profile-name">{profile.displayName}</div>
                   <div className="profile-meta">

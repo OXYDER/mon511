@@ -40,6 +40,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const MAX_PHOTOS = 3;
   const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifMunicipality: string | null; exifCoords: { lat: number; lng: number } } | null>(null);
   const [checkingExif, setCheckingExif] = useState(false);
+  const [photoExifCoords, setPhotoExifCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [archivedMatches, setArchivedMatches] = useState<any[]>([]);
   const [dismissedArchiveMatch, setDismissedArchiveMatch] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -169,20 +170,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     setCheckingExif(true);
     try {
       const exifr = (await import('exifr')).default;
-      const gps = await exifr.gps(file);
-      if (gps?.latitude && gps?.longitude) {
-        const geo = await reverseGeocodeAddress(gps.latitude, gps.longitude);
-        if (geo.address && coords) {
-          // Écart significatif (~500m+) entre la photo et la position détectée.
-          const distance = haversine(coords.lat, coords.lng, gps.latitude, gps.longitude);
-          if (distance > 500) {
-            setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
-          }
-        } else if (geo.address && !coords) {
-          // Aucune position détectée encore — propose directement celle de la photo.
-          setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
-        }
-      }
     } catch {
       // Pas de GPS dans l'EXIF ou format non lisible — pas grave, on continue sans.
     } finally {
@@ -190,8 +177,31 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     }
   }
 
+  // Revérifie l'écart avec la photo à chaque changement de position — pas
+  // seulement au moment d'ajouter la photo. Sans ça, modifier l'adresse
+  // manuellement APRÈS avoir ajouté une photo ne redéclenchait jamais
+  // l'avertissement, même si la nouvelle adresse s'éloigne de la photo.
+  useEffect(() => {
+    if (!photoExifCoords || !coords) return;
+    const distance = haversine(coords.lat, coords.lng, photoExifCoords.lat, photoExifCoords.lng);
+    if (distance > 500) {
+      reverseGeocodeAddress(photoExifCoords.lat, photoExifCoords.lng).then((geo) => {
+        if (geo.address) {
+          setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: photoExifCoords });
+        }
+      });
+    } else {
+      setExifMismatch(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coords, photoExifCoords]);
+
   function removePhoto(index: number) {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoFiles((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) { setPhotoExifCoords(null); setExifMismatch(null); }
+      return next;
+    });
     setPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
   }
 

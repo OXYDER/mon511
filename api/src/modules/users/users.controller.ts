@@ -1,5 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Get, MaxFileSizeValidator, Param, ParseFilePipe, FileTypeValidator,
+  Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { UpdatePrivacyDto } from './dto/update-privacy.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -10,7 +15,10 @@ import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-u
 
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly uploads: UploadsService,
+  ) {}
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
@@ -34,6 +42,25 @@ export class UsersController {
   @UseGuards(JwtAuthGuard)
   updateProfile(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateProfileDto) {
     return this.usersService.updateProfile(user.userId, dto);
+  }
+
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @CurrentUser() user: CurrentUserPayload,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 4 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const { url } = await this.uploads.uploadGenericFile('avatars', file);
+    return this.usersService.setAvatarUrl(user.userId, url);
   }
 
   @Patch('me/password')

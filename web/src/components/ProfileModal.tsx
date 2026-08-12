@@ -36,6 +36,21 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailAwaitingCode, setEmailAwaitingCode] = useState(false);
   const [emailCode, setEmailCode] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  async function uploadAvatar(file: File) {
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const updated = await api.post<any>('/users/me/avatar', formData);
+      setMe(updated);
+    } catch {
+      // Silencieux — l'usager peut simplement réessayer.
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
 
   useEffect(() => {
     api.get<any>('/users/me').then((data) => {
@@ -135,7 +150,27 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
           {me && (
             <>
               <div className="profile-head">
-                <div className="avatar-lg">{initials}</div>
+                <label style={{ position: 'relative', cursor: 'pointer' }} title="Changer la photo de profil">
+                  {me.avatar_url ? (
+                    <img src={me.avatar_url} alt="" className="avatar-lg" style={{ objectFit: 'cover' }} />
+                  ) : (
+                    <div className="avatar-lg">{initials}</div>
+                  )}
+                  <div style={{
+                    position: 'absolute', bottom: -2, right: -2, background: 'var(--accent-signal)',
+                    borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 11, border: '2px solid var(--panel-solid)',
+                  }}>
+                    {uploadingAvatar ? '…' : '✏️'}
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    style={{ display: 'none' }}
+                    disabled={uploadingAvatar}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); }}
+                  />
+                </label>
                 <div>
                   <div className="profile-name">{me.first_name || me.email.split('@')[0]}</div>
                   <div className="profile-meta">

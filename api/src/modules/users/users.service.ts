@@ -30,6 +30,15 @@ export class UsersService {
     return this.findById(userId);
   }
 
+  async setAvatarUrl(userId: string, avatarUrl: string) {
+    await this.db
+      .updateTable('users')
+      .set({ avatar_url: avatarUrl, updated_at: new Date() as any })
+      .where('id', '=', userId)
+      .execute();
+    return this.findById(userId);
+  }
+
   async requestPasswordChange(userId: string, dto: ChangePasswordDto) {
     const user = await this.db
       .selectFrom('users')
