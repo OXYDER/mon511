@@ -56,6 +56,24 @@ export class MunicipalPortalController {
     return this.service.rejectAccessRequest(id, user.userId);
   }
 
+  @Get('admin/municipalities')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  findMunicipalitiesWithAccess() {
+    return this.service.findMunicipalitiesWithAccess();
+  }
+
+  @Patch('admin/municipalities/:regionId/tier')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  setSubscriptionTier(
+    @Param('regionId') regionId: string,
+    @Body('tier') tier: 'free' | 'premium',
+    @CurrentUser() user: CurrentUserPayload,
+  ) {
+    return this.service.setSubscriptionTier(regionId, tier, user.userId);
+  }
+
   // ---------- Portail (employés municipaux approuvés) ----------
 
   @Get('reports')

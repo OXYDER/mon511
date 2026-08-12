@@ -6,7 +6,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'municipalPortal' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -47,6 +47,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'support' ? 'active' : ''}`} onClick={() => setTab('support')}>
             Support
           </button>
+          <button className={`tab-item ${tab === 'municipalPortal' ? 'active' : ''}`} onClick={() => setTab('municipalPortal')}>
+            Portail municipal
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -60,6 +63,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'allReports' && <AllReportsAdmin />}
         {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
         {tab === 'support' && <SupportTicketsAdmin />}
+        {tab === 'municipalPortal' && <MunicipalPortalAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -1367,6 +1371,96 @@ function SupportTicketsAdmin() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function MunicipalPortalAdmin() {
+  const [requests, setRequests] = useState<any[]>([]);
+  const [municipalities, setMunicipalities] = useState<any[]>([]);
+  const [subTab, setSubTab] = useState<'requests' | 'municipalities'>('requests');
+
+  async function load() {
+    const [reqs, munis] = await Promise.all([
+      api.get<any[]>('/municipal-portal/admin/access-requests'),
+      api.get<any[]>('/municipal-portal/admin/municipalities'),
+    ]);
+    setRequests(reqs);
+    setMunicipalities(munis);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function approve(id: string) {
+    await api.post(`/municipal-portal/admin/access-requests/${id}/approve`, {});
+    load();
+  }
+
+  async function reject(id: string) {
+    await api.post(`/municipal-portal/admin/access-requests/${id}/reject`, {});
+    load();
+  }
+
+  async function toggleTier(regionId: string, current: string) {
+    await api.patch(`/municipal-portal/admin/municipalities/${regionId}/tier`, { tier: current === 'premium' ? 'free' : 'premium' });
+    load();
+  }
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Portail municipal
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button className={`tab-item ${subTab === 'requests' ? 'active' : ''}`} onClick={() => setSubTab('requests')}>
+          Demandes d'accès {requests.length > 0 && `(${requests.length})`}
+        </button>
+        <button className={`tab-item ${subTab === 'municipalities' ? 'active' : ''}`} onClick={() => setSubTab('municipalities')}>
+          Municipalités actives
+        </button>
+      </div>
+
+      {subTab === 'requests' && (
+        <>
+          {requests.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucune demande en attente.</p>}
+          {requests.map((r) => (
+            <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+              <div className="rc-body">
+                <div className="rc-title">{r.first_name} {r.last_name} — {r.regionName}</div>
+                <div className="rc-meta">
+                  {r.job_title} · {r.email} · {r.requested_role === 'municipal_admin' ? 'Administrateur municipal' : 'Employé municipal'}
+                </div>
+                {r.message && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>« {r.message} »</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button className="btn-primary" style={{ fontSize: 11.5 }} onClick={() => approve(r.id)}>Approuver</button>
+                <button className="btn-ghost btn-danger" style={{ fontSize: 11.5 }} onClick={() => reject(r.id)}>Refuser</button>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {subTab === 'municipalities' && (
+        <>
+          {municipalities.length === 0 && <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucune municipalité active pour l'instant.</p>}
+          {municipalities.map((m) => (
+            <div key={m.regionId} className="privacy-row">
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{m.regionName}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{m.staffCount} employé(s) avec accès</div>
+              </div>
+              <button
+                className="btn-ghost"
+                style={{ fontSize: 11.5, color: m.tier === 'premium' ? 'var(--accent-signal)' : undefined }}
+                onClick={() => toggleTier(m.regionId, m.tier ?? 'free')}
+              >
+                {m.tier === 'premium' ? '⭐ Premium' : 'Gratuit'} — cliquer pour changer
+              </button>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

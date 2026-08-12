@@ -125,6 +125,34 @@ export class MunicipalPortalService {
     return { rejected: true };
   }
 
+  /** Liste des municipalités ayant au moins un employé approuvé, avec leur
+   * palier actuel — pour la gestion admin (gratuit/premium). */
+  async findMunicipalitiesWithAccess() {
+    return this.db
+      .selectFrom('regions')
+      .innerJoin('users', 'users.region_id', 'regions.id')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .leftJoin('municipality_subscriptions', 'municipality_subscriptions.region_id', 'regions.id')
+      .select([
+        'regions.id as regionId', 'regions.name_fr as regionName',
+        ({ fn }) => fn.count<number>('users.id').as('staffCount'),
+        'municipality_subscriptions.tier',
+      ])
+      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+      .groupBy(['regions.id', 'regions.name_fr', 'municipality_subscriptions.tier'])
+      .orderBy('regions.name_fr', 'asc')
+      .execute();
+  }
+
+  async setSubscriptionTier(regionId: string, tier: 'free' | 'premium', updatedBy: string) {
+    await this.db
+      .insertInto('municipality_subscriptions')
+      .values({ region_id: regionId, tier, updated_by: updatedBy })
+      .onConflict((oc) => oc.column('region_id').doUpdateSet({ tier, updated_at: new Date() as any, updated_by: updatedBy }))
+      .execute();
+    return { updated: true };
+  }
+
   // ---------- Portée par municipalité (aide interne) ----------
 
   /** Renvoie le region_id et le palier d'abonnement de l'usager courant —
