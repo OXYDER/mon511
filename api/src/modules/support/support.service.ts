@@ -5,7 +5,18 @@ import { KYSELY_INSTANCE } from '../../database/database.module';
 import { SUPPORT_KNOWLEDGE_BASE } from './support-knowledge-base';
 import { EmailService } from '../../email/email.service';
 
-const GEMINI_MODEL = 'gemini-2.5-flash-lite';
+// Gemini 3.5 Flash-Lite — génération stable la plus récente (disponibilité
+// générale annoncée début août 2026), explicitement positionnée par Google
+// pour l'automatisation à haut volume et faible coût. gemini-2.5-flash-lite
+// (utilisé avant) n'est déjà plus accessible aux nouveaux projets malgré
+// sa date de retrait officielle encore lointaine — signe que Google pousse
+// activement vers cette nouvelle génération. Aucune date de retrait
+// annoncée pour celle-ci au moment d'écrire ceci.
+const GEMINI_MODEL = 'gemini-3.5-flash-lite';
+// Modèle de secours si le principal devient indisponible — même famille
+// « lite », légèrement plus ancien, réduit le risque que les deux tombent
+// en panne en même temps pour la même raison.
+const GEMINI_FALLBACK_MODEL = 'gemini-2.5-flash';
 const ESCALATE_MARKER = '[ESCALATE]';
 
 @Injectable()
@@ -93,39 +104,48 @@ export class SupportService {
       return { reply: "Le chat automatique n'est pas disponible pour l'instant. Je te propose de créer un ticket — notre équipe va te répondre directement.", escalate: true };
     }
 
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: SUPPORT_KNOWLEDGE_BASE }] },
-            contents: history.map((m) => ({
-              role: m.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: m.content }],
-            })),
-            generationConfig: { temperature: 0.4, maxOutputTokens: 500 },
-          }),
-        },
-      );
+    // Google retire ses modèles Gemini assez fréquemment (parfois avant
+    // même la date de retrait officiellement annoncée pour les NOUVEAUX
+    // projets, comme observé directement avec gemini-2.5-flash-lite) — un
+    // modèle de secours évite qu'un simple changement de disponibilité chez
+    // Google casse le chat le temps qu'on s'en aperçoive et corrige le code.
+    for (const model of [GEMINI_MODEL, GEMINI_FALLBACK_MODEL]) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: SUPPORT_KNOWLEDGE_BASE }] },
+              contents: history.map((m) => ({
+                role: m.role === 'assistant' ? 'model' : 'user',
+                parts: [{ text: m.content }],
+              })),
+              generationConfig: { temperature: 0.4, maxOutputTokens: 500 },
+            }),
+          },
+        );
 
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        this.logger.error(`Gemini a répondu ${res.status} : ${body.slice(0, 300)}`);
-        return { reply: "Notre assistant est temporairement surchargé. Je te propose de créer un ticket — notre équipe va te répondre directement.", escalate: true };
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          this.logger.error(`Gemini (${model}) a répondu ${res.status} : ${body.slice(0, 300)}`);
+          continue; // essaie le modèle suivant, s'il en reste un
+        }
+
+        const data = await res.json();
+        const rawText: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+        const escalate = rawText.includes(ESCALATE_MARKER);
+        const reply = rawText.replace(ESCALATE_MARKER, '').trim() || "Je ne suis pas certain de pouvoir répondre à ça — je te propose de créer un ticket pour que notre équipe s'en occupe directement.";
+
+        return { reply, escalate };
+      } catch (error) {
+        this.logger.error(`Échec de l'appel à Gemini (${model})`, error as Error);
       }
-
-      const data = await res.json();
-      const rawText: string = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      const escalate = rawText.includes(ESCALATE_MARKER);
-      const reply = rawText.replace(ESCALATE_MARKER, '').trim() || "Je ne suis pas certain de pouvoir répondre à ça — je te propose de créer un ticket pour que notre équipe s'en occupe directement.";
-
-      return { reply, escalate };
-    } catch (error) {
-      this.logger.error("Échec de l'appel à Gemini", error as Error);
-      return { reply: "Une erreur technique est survenue. Je te propose de créer un ticket — notre équipe va te répondre directement.", escalate: true };
     }
+
+    // Les deux modèles ont échoué.
+    return { reply: "Notre assistant est temporairement indisponible. Je te propose de créer un ticket — notre équipe va te répondre directement.", escalate: true };
   }
 
   private async createTicketFromConversation(
