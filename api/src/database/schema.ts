@@ -282,6 +282,36 @@ export interface SupportTicketAttachmentsTable {
   uploaded_at: Generated<Timestamp>;
 }
 
+export interface MunicipalityAccessRequestsTable {
+  id: Generated<string>;
+  user_id: string;
+  region_id: string;
+  requested_role: Generated<'municipal_staff' | 'municipal_admin'>;
+  status: Generated<'pending' | 'approved' | 'rejected'>;
+  job_title: string | null;
+  message: string | null;
+  requested_at: Generated<Timestamp>;
+  reviewed_at: Timestamp | null;
+  reviewed_by: string | null;
+}
+
+export interface MunicipalitySubscriptionsTable {
+  region_id: string;
+  tier: Generated<'free' | 'premium'>;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
+export interface ReportMunicipalTrackingTable {
+  report_id: string;
+  region_id: string;
+  internal_status: Generated<'new' | 'acknowledged' | 'in_progress' | 'done'>;
+  assigned_to: string | null;
+  internal_notes: string | null;
+  updated_at: Generated<Timestamp>;
+  updated_by: string | null;
+}
+
 export interface EmailTemplatesTable {
   key: string;
   subject: string;
@@ -407,4 +437,7 @@ export interface Database {
   support_tickets: SupportTicketsTable;
   support_ticket_replies: SupportTicketRepliesTable;
   support_ticket_attachments: SupportTicketAttachmentsTable;
+  municipality_access_requests: MunicipalityAccessRequestsTable;
+  municipality_subscriptions: MunicipalitySubscriptionsTable;
+  report_municipal_tracking: ReportMunicipalTrackingTable;
 }

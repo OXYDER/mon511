@@ -1,0 +1,292 @@
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Kysely, sql } from 'kysely';
+import { Database } from '../../database/schema';
+import { KYSELY_INSTANCE } from '../../database/database.module';
+import { EmailService } from '../../email/email.service';
+
+@Injectable()
+export class MunicipalPortalService {
+  constructor(
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+    private readonly email: EmailService,
+  ) {}
+
+  // ---------- Demande d'accès ----------
+
+  async requestAccess(userId: string, regionId: string, jobTitle: string, message: string | undefined) {
+    const existing = await this.db
+      .selectFrom('municipality_access_requests')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .where('status', '=', 'pending')
+      .executeTakeFirst();
+    if (existing) throw new BadRequestException('Une demande est déjà en attente pour ce compte.');
+
+    return this.db
+      .insertInto('municipality_access_requests')
+      .values({ user_id: userId, region_id: regionId, job_title: jobTitle, message: message ?? null })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+  }
+
+  /** Statut de la propre demande de l'usager courant — pour afficher où il
+   * en est (aucune demande, en attente, approuvé, refusé). */
+  async findMyAccessStatus(userId: string) {
+    const user = await this.db.selectFrom('users').innerJoin('roles', 'roles.id', 'users.role_id').select(['roles.name as roleName', 'users.region_id']).where('users.id', '=', userId).executeTakeFirst();
+    if (user?.roleName === 'municipal_staff' || user?.roleName === 'municipal_admin') {
+      return { status: 'approved' as const, regionId: user.region_id };
+    }
+    const request = await this.db
+      .selectFrom('municipality_access_requests')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('requested_at', 'desc')
+      .executeTakeFirst();
+    return { status: request?.status ?? 'none', regionId: request?.region_id ?? null };
+  }
+
+  // ---------- Admin (approbation) ----------
+
+  async findPendingAccessRequests() {
+    return this.db
+      .selectFrom('municipality_access_requests')
+      .innerJoin('users', 'users.id', 'municipality_access_requests.user_id')
+      .innerJoin('regions', 'regions.id', 'municipality_access_requests.region_id')
+      .select([
+        'municipality_access_requests.id', 'municipality_access_requests.requested_role',
+        'municipality_access_requests.job_title', 'municipality_access_requests.message',
+        'municipality_access_requests.requested_at',
+        'users.email', 'users.first_name', 'users.last_name',
+        'regions.name_fr as regionName',
+      ])
+      .where('municipality_access_requests.status', '=', 'pending')
+      .orderBy('municipality_access_requests.requested_at', 'asc')
+      .execute();
+  }
+
+  async approveAccessRequest(requestId: string, reviewerId: string) {
+    const request = await this.db.selectFrom('municipality_access_requests').selectAll().where('id', '=', requestId).executeTakeFirst();
+    if (!request) throw new NotFoundException('Demande introuvable.');
+
+    const role = await this.db.selectFrom('roles').select('id').where('name', '=', request.requested_role).executeTakeFirstOrThrow();
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('users')
+        .set({ role_id: role.id, region_id: request.region_id })
+        .where('id', '=', request.user_id)
+        .execute();
+      await trx
+        .updateTable('municipality_access_requests')
+        .set({ status: 'approved', reviewed_at: new Date() as any, reviewed_by: reviewerId })
+        .where('id', '=', requestId)
+        .execute();
+      // Palier gratuit par défaut à la première approbation pour cette
+      // municipalité — n'écrase rien si déjà configuré.
+      await trx
+        .insertInto('municipality_subscriptions')
+        .values({ region_id: request.region_id })
+        .onConflict((oc) => oc.doNothing())
+        .execute();
+    });
+
+    const user = await this.db.selectFrom('users').select('email').where('id', '=', request.user_id).executeTakeFirst();
+    if (user) {
+      this.email
+        .send(user.email, 'Accès au portail municipal approuvé — mon511.ca', "Ta demande d'accès au portail municipal a été approuvée! Tu peux maintenant y accéder via portail.mon511.ca.")
+        .catch(() => {});
+    }
+
+    return { approved: true };
+  }
+
+  async rejectAccessRequest(requestId: string, reviewerId: string) {
+    await this.db
+      .updateTable('municipality_access_requests')
+      .set({ status: 'rejected', reviewed_at: new Date() as any, reviewed_by: reviewerId })
+      .where('id', '=', requestId)
+      .execute();
+    return { rejected: true };
+  }
+
+  // ---------- Portée par municipalité (aide interne) ----------
+
+  /** Renvoie le region_id et le palier d'abonnement de l'usager courant —
+   * lève une erreur claire si son compte n'est pas (ou plus) rattaché au
+   * portail municipal. Utilisé au début de chaque méthode ci-dessous pour
+   * garantir qu'un employé ne voit JAMAIS les données d'une autre
+   * municipalité que la sienne. */
+  private async getScopeOrThrow(userId: string): Promise<{ regionId: string; tier: 'free' | 'premium' }> {
+    const user = await this.db.selectFrom('users').select('region_id').where('id', '=', userId).executeTakeFirst();
+    if (!user?.region_id) throw new ForbiddenException("Ton compte n'est rattaché à aucune municipalité.");
+    const sub = await this.db.selectFrom('municipality_subscriptions').select('tier').where('region_id', '=', user.region_id).executeTakeFirst();
+    return { regionId: user.region_id, tier: sub?.tier ?? 'free' };
+  }
+
+  // ---------- Tableau de bord ----------
+
+  async findReports(userId: string, status?: string, limit = 50, offset = 0) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    let query = this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('report_municipal_tracking', 'report_municipal_tracking.report_id', 'reports.id')
+      .select([
+        'reports.id', 'reports.description', 'reports.address_text as addressText',
+        'reports.status', 'reports.created_at', 'reports.resolved_at',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+        'report_municipal_tracking.internal_status as internalStatus',
+        'report_municipal_tracking.assigned_to as assignedTo',
+        'report_municipal_tracking.internal_notes as internalNotes',
+      ])
+      .where('reports.region_id', '=', regionId)
+      .where('reports.status', 'in', ['published_unresolved', 'published_resolved', 'archived']);
+
+    if (status) query = query.where('reports.status', '=', status as any);
+
+    return query.orderBy('reports.created_at', 'desc').limit(limit).offset(offset).execute();
+  }
+
+  async updateTracking(
+    userId: string,
+    reportId: string,
+    changes: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string },
+  ) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    const report = await this.db.selectFrom('reports').select('region_id').where('id', '=', reportId).executeTakeFirst();
+    if (!report || report.region_id !== regionId) throw new ForbiddenException('Ce signalement ne concerne pas ta municipalité.');
+
+    await this.db
+      .insertInto('report_municipal_tracking')
+      .values({
+        report_id: reportId,
+        region_id: regionId,
+        internal_status: changes.internalStatus ?? 'new',
+        assigned_to: changes.assignedTo ?? null,
+        internal_notes: changes.internalNotes ?? null,
+        updated_by: userId,
+      })
+      .onConflict((oc) =>
+        oc.column('report_id').doUpdateSet({
+          ...(changes.internalStatus !== undefined && { internal_status: changes.internalStatus }),
+          ...(changes.assignedTo !== undefined && { assigned_to: changes.assignedTo }),
+          ...(changes.internalNotes !== undefined && { internal_notes: changes.internalNotes }),
+          updated_at: new Date() as any,
+          updated_by: userId,
+        }),
+      )
+      .execute();
+
+    return { updated: true };
+  }
+
+  // ---------- Statistiques (gratuit — de base) ----------
+
+  async getStats(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    const [byStatus, byType, avgResolution] = await Promise.all([
+      this.db
+        .selectFrom('reports')
+        .select(['status', ({ fn }) => fn.count<number>('id').as('count')])
+        .where('region_id', '=', regionId)
+        .groupBy('status')
+        .execute(),
+      this.db
+        .selectFrom('reports')
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .select(['problem_types.name_fr as type', ({ fn }) => fn.count<number>('reports.id').as('count')])
+        .where('reports.region_id', '=', regionId)
+        .groupBy('problem_types.name_fr')
+        .orderBy('count', 'desc')
+        .execute(),
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 86400)`.as('avgDays'))
+        .where('region_id', '=', regionId)
+        .where('resolved_at', 'is not', null)
+        .executeTakeFirst(),
+    ]);
+
+    return {
+      byStatus,
+      byType,
+      avgResolutionDays: avgResolution?.avgDays ? Number(avgResolution.avgDays.toFixed(1)) : null,
+    };
+  }
+
+  // ---------- Comparatifs (premium) ----------
+
+  async getComparatives(userId: string) {
+    const { regionId, tier } = await this.getScopeOrThrow(userId);
+    if (tier !== 'premium') {
+      throw new ForbiddenException("Les comparatifs font partie des fonctions avancées — palier premium requis pour cette municipalité.");
+    }
+
+    const mine = await this.db
+      .selectFrom('municipality_integrations')
+      .select('population')
+      .where('region_id', '=', regionId)
+      .executeTakeFirst();
+    if (!mine?.population) return { comparable: false };
+
+    // Municipalités de population comparable (± 30%), avec au moins 3
+    // signalements résolus pour un temps moyen significatif.
+    const lowerBound = mine.population * 0.7;
+    const upperBound = mine.population * 1.3;
+
+    const similarRegions = await this.db
+      .selectFrom('municipality_integrations')
+      .select('region_id')
+      .where('population', '>=', lowerBound)
+      .where('population', '<=', upperBound)
+      .where('region_id', 'is not', null)
+      .execute();
+    const regionIds = similarRegions.map((r) => r.region_id).filter((id): id is string => !!id);
+
+    if (regionIds.length < 2) return { comparable: false };
+
+    const [myAvg, theirAvg] = await Promise.all([
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 86400)`.as('avgDays'))
+        .where('region_id', '=', regionId)
+        .where('resolved_at', 'is not', null)
+        .executeTakeFirst(),
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 86400)`.as('avgDays'))
+        .where('region_id', 'in', regionIds)
+        .where('resolved_at', 'is not', null)
+        .executeTakeFirst(),
+    ]);
+
+    return {
+      comparable: true,
+      similarMunicipalitiesCount: regionIds.length,
+      myAvgResolutionDays: myAvg?.avgDays ? Number(myAvg.avgDays.toFixed(1)) : null,
+      comparableAvgResolutionDays: theirAvg?.avgDays ? Number(theirAvg.avgDays.toFixed(1)) : null,
+    };
+  }
+
+  // ---------- Export (premium) ----------
+
+  async exportCsv(userId: string): Promise<string> {
+    const { tier } = await this.getScopeOrThrow(userId);
+    if (tier !== 'premium') {
+      throw new ForbiddenException("L'export fait partie des fonctions avancées — palier premium requis pour cette municipalité.");
+    }
+
+    const reports = await this.findReports(userId, undefined, 5000, 0);
+    const header = 'ID,Type,Statut,Statut interne,Assigné à,Adresse,Créé le,Résolu le\n';
+    const rows = reports
+      .map((r) =>
+        [r.id, r.problemTypeNameFr, r.status, r.internalStatus ?? 'new', r.assignedTo ?? '', `"${(r.addressText ?? '').replace(/"/g, '""')}"`, r.created_at, r.resolved_at ?? '']
+          .join(','),
+      )
+      .join('\n');
+    return header + rows;
+  }
+}

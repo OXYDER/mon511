@@ -20,6 +20,7 @@ import { SiteSettingsModule } from './modules/site-settings/site-settings.module
 import { ReputationModule } from './modules/reputation/reputation.module';
 import { VerificationModule } from './verification/verification.module';
 import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
+import { MunicipalPortalModule } from './modules/municipal-portal/municipal-portal.module';
 import { SupportModule } from './modules/support/support.module';
 
 @Module({
@@ -44,6 +45,7 @@ import { SupportModule } from './modules/support/support.module';
     ReputationModule,
     VerificationModule,
     LifecycleModule,
+    MunicipalPortalModule,
     SupportModule,
   ],
   controllers: [HealthController],
