@@ -1005,7 +1005,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         ❓
       </button>
       {showHelpMenu && (
-        <div className="map-menu-panel" style={{ bottom: 320 }}>
+        <div className="map-menu-panel" style={{ bottom: 320, width: 280 }}>
           <h3>{lang === 'fr' ? 'Aide' : 'Help'}</h3>
           <div
             className="search-dropdown-item"
@@ -1048,7 +1048,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button className="fab" onClick={() => (authenticated ? (setCreateModalCoords(null), setShowCreateModal(true)) : onRequireAuth())}>
+      <button className="fab" onClick={() => (authenticated ? (setCreateModalCoords(userLocation ?? queryCenter), setShowCreateModal(true)) : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
         <span>{t('signaler', lang)}</span>
       </button>
