@@ -427,9 +427,15 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               )}
               {coords && (
                 <div className="geo-status ok">
-                  Position précise capturée — précision ±{Math.round(coords.accuracy)} m
-                  {snappedToRoad && ' · alignée sur la route'}
-                  {addressAutoFilled && ' · adresse détectée automatiquement'}
+                  {addressAutoFilled ? (
+                    <>
+                      Position précise capturée — précision ±{Math.round(coords.accuracy)} m
+                      {snappedToRoad && ' · alignée sur la route'}
+                      {' · adresse détectée automatiquement'}
+                    </>
+                  ) : (
+                    'Adresse entrée manuellement — assurez-vous que celle-ci est la plus précise possible.'
+                  )}
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
