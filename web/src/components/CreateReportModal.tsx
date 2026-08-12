@@ -170,6 +170,21 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     setCheckingExif(true);
     try {
       const exifr = (await import('exifr')).default;
+      const gps = await exifr.gps(file);
+      if (gps?.latitude && gps?.longitude) {
+        setPhotoExifCoords({ lat: gps.latitude, lng: gps.longitude });
+        const geo = await reverseGeocodeAddress(gps.latitude, gps.longitude);
+        if (geo.address && coords) {
+          // Écart significatif (~500m+) entre la photo et la position détectée.
+          const distance = haversine(coords.lat, coords.lng, gps.latitude, gps.longitude);
+          if (distance > 500) {
+            setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+          }
+        } else if (geo.address && !coords) {
+          // Aucune position détectée encore — propose directement celle de la photo.
+          setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
+        }
+      }
     } catch {
       // Pas de GPS dans l'EXIF ou format non lisible — pas grave, on continue sans.
     } finally {

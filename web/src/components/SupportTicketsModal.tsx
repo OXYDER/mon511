@@ -9,8 +9,14 @@ interface Props {
 
 const STATUS_LABELS: Record<string, [string, string]> = {
   open: ['Ouvert', 'Open'],
-  in_progress: ['En traitement', 'In progress'],
-  resolved: ['Résolu', 'Resolved'],
+  in_progress: ['En attente de réponse', 'Awaiting reply'],
+  resolved: ['Fermé', 'Closed'],
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  open: 'var(--accent-signal)',
+  in_progress: 'var(--official-blue)',
+  resolved: 'var(--text-muted)',
 };
 
 export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
@@ -21,9 +27,14 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
   const [subject, setSubject] = useState(prefill?.subject ?? '');
   const [description, setDescription] = useState(prefill?.description ?? '');
   const [email, setEmail] = useState('');
+  const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get<any>('/users/me').then((me) => setAuthenticatedEmail(me.email)).catch(() => setAuthenticatedEmail(null));
+  }, []);
 
   async function load() {
     try {
@@ -48,7 +59,8 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
   }
 
   async function submit() {
-    if (!subject.trim() || !description.trim() || !email.trim()) {
+    const effectiveEmail = authenticatedEmail ?? email;
+    if (!subject.trim() || !description.trim() || !effectiveEmail.trim()) {
       setError(lang === 'fr' ? 'Sujet, description et courriel sont requis.' : 'Subject, description, and email are required.');
       return;
     }
@@ -62,7 +74,7 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
         const uploaded = await api.post<{ url: string; filename: string }>('/support/attachments', formData);
         attachments.push(uploaded);
       }
-      await api.post('/support/tickets', { email, subject, description, attachments });
+      await api.post('/support/tickets', { email: effectiveEmail, subject, description, attachments });
       setCreating(false);
       setSubject('');
       setDescription('');
@@ -102,11 +114,21 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
                   border: `1px solid ${t.id === selectedId ? 'var(--accent-signal)' : 'transparent'}`,
                 }}
               >
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {t.subject}
                 </div>
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
-                  {(STATUS_LABELS[t.status] ?? [t.status, t.status])[lang === 'fr' ? 0 : 1]} · {new Date(t.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3,
+                    color: STATUS_COLORS[t.status] ?? 'var(--text-muted)',
+                    border: `1px solid ${STATUS_COLORS[t.status] ?? 'var(--text-muted)'}`,
+                    borderRadius: 5, padding: '1px 6px',
+                  }}>
+                    {(STATUS_LABELS[t.status] ?? [t.status, t.status])[lang === 'fr' ? 0 : 1]}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    {new Date(t.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
+                  </span>
                 </div>
               </div>
             ))}
@@ -119,10 +141,12 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
                   {lang === 'fr' ? 'Nouveau billet' : 'New ticket'}
                 </div>
                 {error && <div className="error-banner">{error}</div>}
-                <div className="field-group">
-                  <label className="field-label">{lang === 'fr' ? 'Ton courriel' : 'Your email'}</label>
-                  <input className="text-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
+                {!authenticatedEmail && (
+                  <div className="field-group">
+                    <label className="field-label">{lang === 'fr' ? 'Ton courriel' : 'Your email'}</label>
+                    <input className="text-input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                )}
                 <div className="field-group">
                   <label className="field-label">{lang === 'fr' ? 'Sujet' : 'Subject'}</label>
                   <input className="text-input" value={subject} onChange={(e) => setSubject(e.target.value)} />
@@ -151,28 +175,52 @@ export default function SupportTicketsModal({ onClose, lang, prefill }: Props) {
                 <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
                   {detail.ticket.subject}
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3,
+                    color: STATUS_COLORS[detail.ticket.status] ?? 'var(--text-muted)',
+                    border: `1px solid ${STATUS_COLORS[detail.ticket.status] ?? 'var(--text-muted)'}`,
+                    borderRadius: 5, padding: '2px 7px',
+                  }}>
+                    {(STATUS_LABELS[detail.ticket.status] ?? [detail.ticket.status, detail.ticket.status])[lang === 'fr' ? 0 : 1]}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16 }}>
                   {lang === 'fr' ? 'Numéro du billet' : 'Ticket ID'} : <code>{detail.ticket.id}</code>
                 </div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14 }}>
-                  {(STATUS_LABELS[detail.ticket.status] ?? [detail.ticket.status, detail.ticket.status])[lang === 'fr' ? 0 : 1]}
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap', marginBottom: 16 }}>
-                  {detail.ticket.description}
-                </div>
-                {detail.attachments.length > 0 && (
-                  <div style={{ marginBottom: 16 }}>
-                    {detail.attachments.map((a) => (
-                      <a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 12, color: 'var(--accent-signal)', marginBottom: 4 }}>
-                        📎 {a.filename}
-                      </a>
-                    ))}
+
+                {/* Fil de conversation unifié — message initial suivi des
+                    réponses, tous présentés de la même façon (auteur +
+                    date/heure précise), pour bien distinguer chaque
+                    échange dans l'ordre. */}
+                <div style={{ padding: 12, borderRadius: 10, background: 'var(--panel-hover)', marginBottom: 10, borderLeft: '3px solid var(--accent-signal)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 4 }}>
+                    {lang === 'fr' ? 'Toi' : 'You'} — {new Date(detail.ticket.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
                   </div>
-                )}
+                  <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                    {detail.ticket.description}
+                  </div>
+                  {detail.attachments.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      {detail.attachments.map((a) => (
+                        <a key={a.id} href={a.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: 12, color: 'var(--accent-signal)', marginBottom: 4 }}>
+                          📎 {a.filename}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {detail.replies.map((r) => (
-                  <div key={r.id} style={{ padding: 12, borderRadius: 10, background: 'var(--panel-hover)', marginBottom: 10 }}>
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      {r.author_type === 'admin' ? (lang === 'fr' ? "Équipe mon511.ca" : 'mon511.ca team') : (lang === 'fr' ? 'Toi' : 'You')} — {new Date(r.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
+                  <div
+                    key={r.id}
+                    style={{
+                      padding: 12, borderRadius: 10, marginBottom: 10,
+                      background: r.author_type === 'admin' ? 'rgba(255,90,31,0.08)' : 'var(--panel-hover)',
+                      borderLeft: `3px solid ${r.author_type === 'admin' ? 'var(--accent-signal)' : 'var(--panel-border)'}`,
+                    }}
+                  >
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 4, fontWeight: r.author_type === 'admin' ? 700 : 400 }}>
+                      {r.author_type === 'admin' ? (lang === 'fr' ? "🛟 Équipe mon511.ca" : '🛟 mon511.ca team') : (lang === 'fr' ? 'Toi' : 'You')} — {new Date(r.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
                     </div>
                     <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{r.message}</div>
                   </div>
