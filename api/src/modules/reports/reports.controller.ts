@@ -93,6 +93,12 @@ export class ReportsController {
     return this.reportsService.updateOwn(id, user.userId, changes);
   }
 
+  @Post(':id/owner-confirm-resolved')
+  @UseGuards(JwtAuthGuard)
+  ownerConfirmResolved(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.ownerConfirmResolved(id, user.userId);
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   withdrawOwn(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {

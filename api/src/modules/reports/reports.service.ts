@@ -227,6 +227,43 @@ export class ReportsService {
     return this.findOwnDetail(reportId, userId);
   }
 
+  /** Le propriétaire confirme directement que son signalement est résolu —
+   * indépendant du seuil de poids communautaire (report_resolution_suggestions),
+   * qui reste le mécanisme pour les AUTRES membres. Le propriétaire, lui,
+   * n'a pas besoin d'attendre ce seuil : sa propre confirmation suffit. */
+  async ownerConfirmResolved(reportId: string, userId: string) {
+    const report = await this.db.selectFrom('reports').select(['user_id', 'status']).where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+    if (report.status === 'published_resolved') return { alreadyResolved: true };
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('reports')
+        .set({ status: 'published_resolved', resolved_at: new Date() as any })
+        .where('id', '=', reportId)
+        .execute();
+      await trx
+        .updateTable('report_resolution_suggestions')
+        .set({ status: 'accepted' })
+        .where('report_id', '=', reportId)
+        .where('status', '=', 'pending')
+        .execute();
+      await trx
+        .insertInto('report_status_history')
+        .values({
+          report_id: reportId,
+          old_status: report.status as any,
+          new_status: 'published_resolved',
+          changed_by: userId,
+          reason: 'Confirmé résolu directement par le propriétaire du signalement.',
+        })
+        .execute();
+    });
+
+    return { alreadyResolved: false };
+  }
+
   async withdrawOwn(reportId: string, userId: string) {
     const report = await this.db.selectFrom('reports').select(['user_id']).where('id', '=', reportId).executeTakeFirst();
     if (!report) throw new NotFoundException('Signalement introuvable.');

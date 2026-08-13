@@ -93,6 +93,13 @@ export default function MyReportsPage({ onClose, lang }: Props) {
     }
   }
 
+  async function confirmResolved() {
+    if (!expandedId) return;
+    await api.post(`/reports/${expandedId}/owner-confirm-resolved`, {}).catch(() => {});
+    loadDetail(expandedId);
+    loadList();
+  }
+
   async function withdraw() {
     if (!expandedId) return;
     if (!window.confirm(lang === 'fr' ? 'Retirer ce signalement ? Cette action est définitive.' : 'Withdraw this report? This cannot be undone.')) return;
@@ -233,10 +240,15 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                         </div>
                       )}
                       {pendingSuggestions.length > 0 && (
-                        <div className="success-banner">
-                          ✔ {lang === 'fr'
-                            ? `${pendingSuggestions.length} personne(s) ont suggéré que c'est résolu.`
-                            : `${pendingSuggestions.length} people suggested this is resolved.`}
+                        <div className="success-banner" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+                          <span>
+                            ✔ {lang === 'fr'
+                              ? `${pendingSuggestions.length} personne(s) ont suggéré que c'est résolu.`
+                              : `${pendingSuggestions.length} people suggested this is resolved.`}
+                          </span>
+                          <button className="btn-primary" style={{ width: 'auto', fontSize: 12 }} onClick={confirmResolved}>
+                            {lang === 'fr' ? '✔ Confirmer que c\'est résolu' : '✔ Confirm this is resolved'}
+                          </button>
                         </div>
                       )}
 
