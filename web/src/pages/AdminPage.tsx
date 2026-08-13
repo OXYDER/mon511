@@ -205,7 +205,10 @@ function ModerationQueue() {
               onClick={() => toggleExpand(r.id)}
             >
               {r.thumbnailUrl ? (
-                <img src={r.thumbnailUrl} alt="" className="rc-icon-hex rc-thumb" />
+                <div className="rc-thumb-wrap">
+                  <img src={r.thumbnailUrl} alt="" className="rc-icon-hex rc-thumb" />
+                  <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+                </div>
               ) : (
                 <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
               )}
@@ -1071,7 +1074,10 @@ function AllReportsAdmin() {
       {results.map((r) => (
         <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
           {r.thumbnailUrl ? (
-            <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+            <div className="rc-thumb-wrap">
+              <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+              <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+            </div>
           ) : (
             <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
               {r.problemTypeIcon ?? '📍'}
