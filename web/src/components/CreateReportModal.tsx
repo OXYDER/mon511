@@ -407,6 +407,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                   className="text-input"
                   placeholder="Adresse ou repère"
                   value={addressText}
+                  onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); setUsedPhotoLocation(false); setShowAddressDropdown(true); }}
                   onFocus={() => setShowAddressDropdown(true)}
                   onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
                 />
