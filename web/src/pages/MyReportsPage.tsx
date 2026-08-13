@@ -93,6 +93,14 @@ export default function MyReportsPage({ onClose, lang }: Props) {
     }
   }
 
+  /** Confirmation rapide directement depuis la bulle de la liste — pas
+   * besoin d'ouvrir la carte pour confirmer une résolution suggérée. */
+  async function quickConfirmResolved(id: string) {
+    await api.post(`/reports/${id}/owner-confirm-resolved`, {}).catch(() => {});
+    loadList();
+    if (expandedId === id) loadDetail(id);
+  }
+
   async function confirmResolved() {
     if (!expandedId) return;
     await api.post(`/reports/${expandedId}/owner-confirm-resolved`, {}).catch(() => {});
@@ -217,6 +225,25 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                 <span className={`pill ${statusPillClass(r.status)}`}>
                   {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
                 </span>
+                {r.pendingResolutionSuggestionsCount > 0 && (
+                  <span
+                    title={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}
+                    className="badge-dot"
+                    style={{ position: 'static', background: 'var(--status-resolved)', cursor: 'pointer' }}
+                    onClick={(e) => { e.stopPropagation(); quickConfirmResolved(r.id); }}
+                  >
+                    ✔{r.pendingResolutionSuggestionsCount}
+                  </span>
+                )}
+                {r.pendingFlagsCount > 0 && (
+                  <span
+                    title={lang === 'fr' ? `${r.pendingFlagsCount} signalement(s) d'abus reçu(s)` : `${r.pendingFlagsCount} abuse report(s) received`}
+                    className="badge-dot"
+                    style={{ position: 'static', background: 'var(--status-danger, #FF4D5E)' }}
+                  >
+                    🚩{r.pendingFlagsCount}
+                  </span>
+                )}
                 <span style={{ marginLeft: 8, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
                   {isExpanded ? '−' : '+'}
                 </span>

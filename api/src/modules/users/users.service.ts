@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import * as bcrypt from 'bcrypt';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -226,6 +226,11 @@ export class UsersService {
         'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',
         'regions.name_fr as municipalityName',
+        // Bulles visibles directement sur la carte de la liste, sans avoir
+        // à ouvrir chaque signalement un par un — suggestions de résolution
+        // en attente ET signalements d'abus non traités.
+        sql<number>`(SELECT COUNT(*) FROM report_resolution_suggestions WHERE report_resolution_suggestions.report_id = reports.id AND report_resolution_suggestions.status = 'pending')`.as('pendingResolutionSuggestionsCount'),
+        sql<number>`(SELECT COUNT(*) FROM report_flags WHERE report_flags.report_id = reports.id AND report_flags.handled_at IS NULL)`.as('pendingFlagsCount'),
       ])
       .where('reports.user_id', '=', userId)
       .orderBy('reports.created_at', 'desc')
