@@ -274,7 +274,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   cursor: pointer; font-size: 14px; color: var(--text-muted); position: relative;
 }
 .panel-icon-btn.active { border-color: var(--accent-signal); color: var(--accent-signal); background: var(--accent-signal-dim); }
-.panel-icon-btn .badge-dot {
+.badge-dot {
   position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px; padding: 0 3px;
   border-radius: 8px; background: var(--accent-signal); border: 2px solid var(--panel-solid);
   font-size: 9px; font-weight: 700; color: #14161B; display: flex; align-items: center; justify-content: center;
