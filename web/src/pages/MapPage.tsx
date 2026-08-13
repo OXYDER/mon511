@@ -910,7 +910,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
       </button>
       {showFiltersLegend && (
-        <div className="map-menu-panel" style={{ bottom: 264, width: 280, maxHeight: '60vh', overflowY: 'auto' }}>
+        <div className="map-menu-panel" style={{ bottom: 264, width: 280 }}>
           <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
 
           <div className="filter-legend-group-title">{lang === 'fr' ? '🔧 Filtres' : '🔧 Filters'}</div>

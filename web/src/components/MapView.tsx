@@ -308,6 +308,13 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   useEffect(() => {
     if (mapRef.current && center) {
       const map = mapRef.current;
+      // Force MapLibre à relire les vraies dimensions actuelles du
+      // conteneur avant de centrer — sans ça, le tout premier flyTo() après
+      // le chargement de la page peut se baser sur des dimensions pas
+      // encore stabilisées (mise en page encore en cours de finalisation),
+      // produisant un atterrissage décalé qui ne se reproduit plus aux
+      // appels suivants (une fois les dimensions réellement à jour).
+      map.resize();
       // Annule toute animation de caméra encore en vol avant d'en démarrer
       // une nouvelle — sans ça, deux flyTo() rapprochés peuvent se marcher
       // sur les pieds et produire un atterrissage décalé.
