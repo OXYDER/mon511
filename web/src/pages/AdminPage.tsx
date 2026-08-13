@@ -1084,14 +1084,16 @@ function AllReportsAdmin() {
             </div>
           )}
           <div className="rc-body">
-            <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
+            <div className="rc-title-row">
+              <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
+              <span className={`pill ${statusPillClass(r.status)}`}>
+                {STATUS_LABELS_ALL[r.status] ?? r.status}
+              </span>
+            </div>
             <div className="rc-meta">
               {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}
             </div>
           </div>
-          <span className={`pill ${statusPillClass(r.status)}`}>
-            {STATUS_LABELS_ALL[r.status] ?? r.status}
-          </span>
         </div>
       ))}
 

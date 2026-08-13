@@ -226,12 +226,14 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                   </div>
                 )}
                 <div className="rc-body">
-                  <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                  <div className="rc-title-row">
+                    <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                    <span className={`pill ${statusPillClass(r.status)}`}>
+                      {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
+                    </span>
+                  </div>
                   <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                 </div>
-                <span className={`pill ${statusPillClass(r.status)}`}>
-                  {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
-                </span>
                 {r.pendingResolutionSuggestionsCount > 0 && (
                   <span
                     title={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}

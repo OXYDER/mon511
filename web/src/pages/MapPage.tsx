@@ -813,12 +813,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                       </div>
                     )}
                     <div className="rc-body">
-                      <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                      <div className="rc-title-row">
+                        <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                        <span className={`pill ${statusPillClass(r.status)}`}>
+                          {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
+                        </span>
+                      </div>
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                     </div>
-                    <span className={`pill ${statusPillClass(r.status)}`}>
-                      {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
-                    </span>
                   </div>
                 ))}
               </div>
