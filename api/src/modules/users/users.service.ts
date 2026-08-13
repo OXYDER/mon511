@@ -226,6 +226,7 @@ export class UsersService {
         'problem_types.name_en as problemTypeNameEn',
         'problem_types.icon as problemTypeIcon',
         'regions.name_fr as municipalityName',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
         // Bulles visibles directement sur la carte de la liste, sans avoir
         // à ouvrir chaque signalement un par un — suggestions de résolution
         // en attente ET signalements d'abus non traités.

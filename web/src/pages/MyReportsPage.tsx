@@ -215,9 +215,13 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                 style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
                 onClick={() => toggleExpand(r.id)}
               >
-                <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                  {r.problemTypeIcon ?? '📍'}
-                </div>
+                {r.thumbnailUrl ? (
+                  <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                ) : (
+                  <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                    {r.problemTypeIcon ?? '📍'}
+                  </div>
+                )}
                 <div className="rc-body">
                   <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                   <div className="rc-meta">{r.addressText ?? 'GPS'}</div>

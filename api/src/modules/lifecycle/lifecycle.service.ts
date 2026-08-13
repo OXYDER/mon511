@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { randomBytes } from 'crypto';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -97,7 +97,9 @@ export class LifecycleService {
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .leftJoin('users', 'users.id', 'reports.user_id')
-      .select(['reports.id', 'reports.address_text', 'reports.created_at', 'users.email', 'users.first_name', 'problem_types.name_fr as problemTypeNameFr'])
+      .select(['reports.id', 'reports.address_text', 'reports.created_at', 'users.email', 'users.first_name', 'problem_types.name_fr as problemTypeNameFr',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('photoUrl'),
+      ])
       .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
       .where('reports.last_confirmed_at', 'is not', null)
       .where('reports.last_confirmed_at', '<', cutoff as any)
@@ -129,6 +131,7 @@ export class LifecycleService {
               reportType: r.problemTypeNameFr,
               reportDate: new Date(r.created_at as any).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' }),
               reportAddress: r.address_text ?? 'Position GPS',
+              reportPhotoUrl: r.photoUrl ?? '',
               warningDays: String(days.stalenessWarningDays),
               deadlineDays: String(days.stalenessDeadlineDays),
               reportUrl,

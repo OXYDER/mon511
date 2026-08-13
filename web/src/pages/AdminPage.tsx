@@ -204,7 +204,11 @@ function ModerationQueue() {
               style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
               onClick={() => toggleExpand(r.id)}
             >
-              <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+              {r.thumbnailUrl ? (
+                <img src={r.thumbnailUrl} alt="" className="rc-icon-hex rc-thumb" />
+              ) : (
+                <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+              )}
               <div className="rc-body">
                 <div className="rc-title">{r.problemTypeNameFr}</div>
                 <div className="rc-meta">{r.address_text ?? 'Position GPS'}</div>
@@ -1066,9 +1070,13 @@ function AllReportsAdmin() {
       {results.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement pour ces filtres.</div>}
       {results.map((r) => (
         <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-            {r.problemTypeIcon ?? '📍'}
-          </div>
+          {r.thumbnailUrl ? (
+            <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+          ) : (
+            <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+              {r.problemTypeIcon ?? '📍'}
+            </div>
+          )}
           <div className="rc-body">
             <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
             <div className="rc-meta">

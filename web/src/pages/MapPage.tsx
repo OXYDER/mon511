@@ -213,7 +213,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [filterTypeIds, setFilterTypeIds] = useState<Set<string>>(new Set());
-  const [filterStatus, setFilterStatus] = useState<'all' | 'unresolved' | 'resolved'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'unresolved' | 'resolved'>('unresolved');
 
   const role = getUserRole();
   const isModerator = role !== null && MODERATOR_ROLES.includes(role);
@@ -802,9 +802,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     onMouseEnter={() => setHoveredPinId(r.id)}
                     onMouseLeave={() => setHoveredPinId(null)}
                   >
-                    <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                      {r.problemTypeIcon ?? '📍'}
-                    </div>
+                    {r.thumbnailUrl ? (
+                      <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                    ) : (
+                      <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                        {r.problemTypeIcon ?? '📍'}
+                      </div>
+                    )}
                     <div className="rc-body">
                       <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
@@ -952,7 +956,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
       </button>
       {showFiltersLegend && (
-        <div className="map-menu-panel" style={{ bottom: 264, width: 280 }}>
+        <div className="map-menu-panel" style={{ bottom: 264, width: 280, maxHeight: 'calc(100vh - 354px)' }}>
           <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
 
           <div className="filter-legend-group-title">{lang === 'fr' ? '🔧 Filtres' : '🔧 Filters'}</div>
@@ -1048,7 +1052,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         🗂️
       </button>
       {showMapDetailsMenu && (
-        <div className="map-menu-panel" style={{ bottom: 208, width: 280 }}>
+        <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: 'calc(100vh - 298px)' }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
@@ -1086,7 +1090,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         {supportUnread ? '❗' : '❓'}
       </button>
       {showHelpMenu && (
-        <div className="map-menu-panel" style={{ bottom: 320, width: 280 }}>
+        <div className="map-menu-panel" style={{ bottom: 320, width: 280, maxHeight: 'calc(100vh - 410px)' }}>
           <h3>{lang === 'fr' ? 'Aide' : 'Help'}</h3>
           <div
             className="search-dropdown-item"
@@ -1122,7 +1126,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         🗺️
       </button>
       {showMapTypeMenu && (
-        <div className="map-menu-panel" style={{ bottom: 152 }}>
+        <div className="map-menu-panel" style={{ bottom: 152, maxHeight: 'calc(100vh - 242px)' }}>
           <h3>{lang === 'fr' ? 'Type de carte' : 'Map type'}</h3>
           <div className="map-type-grid">
             <div className={`map-type-option ${mapType === 'default' ? 'active' : ''}`} onClick={() => setMapType('default')}>
@@ -1146,6 +1150,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--status-resolved)' }} />
         <strong>{filteredReports.length}</strong>
         <span>{lang === 'fr' ? 'signalements visibles' : 'visible reports'}</span>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 5, marginLeft: 10, paddingLeft: 10, borderLeft: '1px solid var(--panel-border)', cursor: 'pointer', fontSize: 11 }}>
+          <input
+            type="checkbox"
+            checked={filterStatus === 'all'}
+            onChange={(e) => setFilterStatus(e.target.checked ? 'all' : 'unresolved')}
+            style={{ accentColor: 'var(--accent-signal)', width: 13, height: 13, cursor: 'pointer' }}
+          />
+          {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
+        </label>
       </div>
 
       {showCreateModal && (

@@ -29,6 +29,7 @@ export class ModerationService {
         'reports.municipality_notified', 'reports.created_at',
         'problem_types.name_fr as problemTypeNameFr',
         'problem_types.icon as problemTypeIcon',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
       ])
       .where('reports.status', '=', 'pending_moderation')
       .orderBy('reports.created_at', 'asc');
@@ -63,6 +64,7 @@ export class ModerationService {
         'problem_types.icon as problemTypeIcon',
         'regions.name_fr as municipalityName',
         'users.email as authorEmail',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
       ]);
 
     let countQuery = this.db
