@@ -401,6 +401,10 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 @media (max-width: 700px) {
   .topbar-float .topbar-actions { display: none; }
   .topbar-mobile-menu-btn { display: flex; }
+  /* Le contrôle de zoom +/- de MapLibre (coin haut-droit) chevauchait
+     directement le bouton ☰ — redondant sur mobile de toute façon, où le
+     pincement pour zoomer est le geste attendu. */
+  .maplibregl-ctrl-top-right { display: none; }
 }
 
 .filters-panel-float {
