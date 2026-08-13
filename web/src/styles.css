@@ -563,11 +563,14 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* Panneau flottant responsive : sur petit écran, prend toute la largeur en bas */
 @media (max-width: 760px) {
-  .filters-panel-float, .detail-panel-float {
+  .filters-panel-float, .detail-panel-float, .map-menu-panel {
     /* La pile d'icônes occupe l'espace de right:28px à right:72px environ
        (44px de large) — sans en tenir compte ici, les icônes se
        retrouvaient littéralement par-dessus le contenu du panneau plutôt
-       qu'à côté. */
+       qu'à côté. Position basse et fixe (bottom:90px, top:auto) plutôt
+       que la position d'origine (calquée sur le bouton déclencheur) —
+       sans ça, un panneau avec beaucoup de contenu pouvait avoir son haut
+       carrément coupé au-dessus de l'écran, invisible.  */
     left: 12px; right: 84px; width: auto; top: auto; bottom: 90px; max-height: 55vh;
     display: flex; flex-direction: column;
   }
