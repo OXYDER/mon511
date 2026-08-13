@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
-import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
+import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import SiteBanner from '../components/SiteBanner';
@@ -128,6 +128,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [allCabanes, setAllCabanes] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
   const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
+    signalements_mon511: true,
     travaux_routiers: false,
     conditions_hivernales: false,
     avertissements: false,
@@ -238,7 +239,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   useEffect(() => {
     if (authenticated) {
       api.get<any>('/users/me').then((me) => {
-        if (me.map_layer_preferences) setLayerPrefs(me.map_layer_preferences);
+        // Fusion avec les défauts plutôt que remplacement direct — les
+        // préférences côté serveur ne couvrent historiquement que 2 des
+        // couches (travaux_routiers, conditions_hivernales), un
+        // remplacement direct aurait fait perdre le défaut "activé" des
+        // autres couches (dont signalements_mon511) pour tout usager
+        // connecté.
+        if (me.map_layer_preferences) setLayerPrefs({ ...DEFAULT_LAYER_PREFS, ...me.map_layer_preferences });
         setCurrentUserId(me.id);
       });
     } else {
@@ -497,7 +504,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const reportSuggestions = liveSearchLower
     ? reports.filter((r) => `${r.problemTypeNameFr} ${r.problemTypeNameEn ?? ''} ${r.addressText ?? ''}`.toLowerCase().includes(liveSearchLower)).slice(0, 5)
     : [];
+
   const filteredReports = useMemo(() => {
+    if (!layerPrefs.signalements_mon511) return [];
     return reports.filter((r) => {
       if (!withinBounds(r.latitude, r.longitude)) return false;
       if (filterTypeIds.size > 0 && r.problemTypeId && !filterTypeIds.has(r.problemTypeId)) return false;
@@ -506,7 +515,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       if (searchLower && !`${r.problemTypeNameFr} ${r.problemTypeNameEn ?? ''} ${r.addressText ?? ''} ${r.description ?? ''}`.toLowerCase().includes(searchLower)) return false;
       return true;
     });
-  }, [reports, filterTypeIds, filterStatus, searchLower, viewBounds]);
+  }, [reports, filterTypeIds, filterStatus, searchLower, viewBounds, layerPrefs.signalements_mon511]);
 
   const visibleTravauxAll = externalIncidents.filter(
     (inc) => inc.feedKey === 'mtmd_travaux_routiers' && layerPrefs.travaux_routiers && withinBounds(inc.latitude, inc.longitude),
@@ -1057,10 +1066,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
       >
         🗂️
+        {Object.values(layerPrefs).filter(Boolean).length > 0 && (
+          <span className="badge-dot">{Object.values(layerPrefs).filter(Boolean).length}</span>
+        )}
       </button>
       {showMapDetailsMenu && (
         <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: 'calc(100vh - 298px)' }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>📍 {lang === 'fr' ? 'Signalements mon511' : 'mon511 reports'}</span>
+            <ToggleSwitch on={layerPrefs.signalements_mon511} onToggle={() => toggleLayer('signalements_mon511')} />
+          </div>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
             <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />

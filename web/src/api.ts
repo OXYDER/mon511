@@ -16,6 +16,7 @@ export function clearToken() {
 const LAYER_PREFS_KEY = 'mon511_layer_prefs';
 
 export interface LayerPrefs {
+  signalements_mon511: boolean;
   travaux_routiers: boolean;
   conditions_hivernales: boolean;
   avertissements: boolean;
@@ -24,7 +25,11 @@ export interface LayerPrefs {
   cabanes_a_sucre: boolean;
 }
 
-const DEFAULT_LAYER_PREFS: LayerPrefs = {
+export const DEFAULT_LAYER_PREFS: LayerPrefs = {
+  // Activé par défaut au chargement du site — contrairement aux autres
+  // couches (travaux, feux, etc.), les signalements communautaires sont
+  // le cœur du site, ils doivent être visibles d'entrée de jeu.
+  signalements_mon511: true,
   travaux_routiers: false,
   conditions_hivernales: false,
   avertissements: false,
