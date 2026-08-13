@@ -72,6 +72,17 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
     }
   }
 
+  async function ownerConfirmResolved() {
+    try {
+      await api.post(`/reports/${reportId}/owner-confirm-resolved`, {});
+      setFeedback(lang === 'fr' ? 'Ton signalement est maintenant marqué résolu.' : 'Your report is now marked as resolved.');
+      load();
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action impossible.');
+    }
+  }
+
   async function suggestResolved() {
     if (!authenticated) return onRequireAuth();
     try {
@@ -151,6 +162,19 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             >
               ✏️ {lang === 'fr' ? 'Modifier' : 'Edit'}
             </button>
+          )}
+
+          {!editing && report.authorId && currentUserId === report.authorId && report.pendingResolutionSuggestionsCount > 0 && (
+            <div className="success-banner" style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start', marginBottom: 12 }}>
+              <span>
+                ✔ {lang === 'fr'
+                  ? `${report.pendingResolutionSuggestionsCount} personne(s) ont suggéré que ton signalement est résolu.`
+                  : `${report.pendingResolutionSuggestionsCount} people suggested your report is resolved.`}
+              </span>
+              <button className="btn-primary" style={{ width: 'auto', fontSize: 12 }} onClick={ownerConfirmResolved}>
+                {lang === 'fr' ? "✔ Confirmer que c'est résolu" : '✔ Confirm this is resolved'}
+              </button>
+            </div>
           )}
 
           {editing && (

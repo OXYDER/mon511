@@ -144,12 +144,29 @@ export class ReportsService {
       .where('report_id', '=', id)
       .executeTakeFirst();
 
+    // Nombre de suggestions de résolution en attente — permet au
+    // propriétaire (vérifié côté frontend via authorId === currentUserId)
+    // de voir directement sur la carte que d'autres membres pensent que
+    // c'est résolu, sans devoir passer par « Mes signalements ».
+    const pendingResolutionSuggestions = await this.db
+      .selectFrom('report_resolution_suggestions')
+      .select(({ fn }) => fn.count<number>('id').as('count'))
+      .where('report_id', '=', id)
+      .where('status', '=', 'pending')
+      .executeTakeFirst();
+
     const authorSettings = report.authorPrivacySettings as any;
     const authorDisplayName = report.authorId
       ? formatDisplayName(report.authorFirstName, report.authorLastName, authorSettings?.last_name_display, report.authorEmail ?? '')
       : null;
 
-    return { ...report, photos, confirmationsCount: confirmationsCount?.count ?? 0, authorDisplayName };
+    return {
+      ...report,
+      photos,
+      confirmationsCount: confirmationsCount?.count ?? 0,
+      pendingResolutionSuggestionsCount: pendingResolutionSuggestions?.count ?? 0,
+      authorDisplayName,
+    };
   }
 
   /** Détail enrichi pour l'auteur seulement — inclut ce qui n'est pas
