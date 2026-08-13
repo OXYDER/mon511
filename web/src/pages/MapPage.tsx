@@ -197,7 +197,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   function toggleSection(key: string) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(window.innerWidth <= 760);
 
   const [searchText, setSearchText] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -699,7 +699,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''} ${panelCollapsed ? 'collapsed' : ''}`}>
         <h2 onClick={() => setPanelCollapsed((v) => !v)}>
-          <span>{t('surLaCarte', lang)}</span>
+          <span>🔍 {t('surLaCarte', lang)}</span>
           <button className="panel-collapse-btn" onClick={(e) => { e.stopPropagation(); setPanelCollapsed((v) => !v); }}>
             {panelCollapsed ? '+' : '−'}
           </button>
@@ -980,6 +980,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           </div>
 
           <div className="filter-legend-group-title">{lang === 'fr' ? '🗺️ Légende' : '🗺️ Legend'}</div>
+          <div className="legend-section">
+            <div className="legend-section-title">{lang === 'fr' ? 'Groupes de pins' : 'Pin clusters'}</div>
+            <div className="legend-row"><div className="legend-swatch" style={{ background: 'var(--accent-signal)', borderRadius: '50%' }} /><span>{lang === 'fr' ? 'Signalements citoyens seulement' : 'Community reports only'}</span></div>
+            <div className="legend-row"><div className="legend-swatch" style={{ background: 'var(--official-blue)', borderRadius: 3 }} /><span>{lang === 'fr' ? 'Données officielles seulement' : 'Official data only'}</span></div>
+            <div className="legend-row"><div className="legend-swatch" style={{ background: '#A56CFF', borderRadius: '50%' }} /><span>{lang === 'fr' ? 'Mélange des deux' : 'Mix of both'}</span></div>
+          </div>
           <div className="legend-section">
             <div className="legend-section-title">{lang === 'fr' ? 'Signalements communautaires' : 'Community reports'}</div>
             {problemTypes.map((pt) => (

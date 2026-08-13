@@ -468,11 +468,23 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       }
 
       // Groupe non déployé — un seul pin avec le nombre d'éléments regroupés.
+      // La couleur et la forme reflètent la composition du groupe, pour
+      // qu'on ne pense pas que ce sont tous des signalements citoyens
+      // quand plusieurs couches officielles sont activées en même temps :
+      // - uniquement des signalements (résolus ou non) → cercle orange
+      // - uniquement des données officielles (feux, cabanes, travaux...) →
+      //   carré arrondi bleu (couleur "officielle" déjà utilisée ailleurs)
+      // - un mélange des deux → cercle violet, pour signaler clairement
+      //   que ce n'est pas qu'une seule catégorie
+      const hasCommunity = cluster.pins.some((p) => p.colorVar !== 'official');
+      const hasOfficial = cluster.pins.some((p) => p.colorVar === 'official');
+      const isMixed = hasCommunity && hasOfficial;
+
       const el = document.createElement('div');
       el.style.width = '36px';
       el.style.height = '36px';
-      el.style.borderRadius = '50%';
-      el.style.background = 'var(--accent-signal, #FF5A1F)';
+      el.style.borderRadius = isMixed ? '50%' : hasOfficial && !hasCommunity ? '10px' : '50%';
+      el.style.background = isMixed ? '#A56CFF' : hasOfficial && !hasCommunity ? 'var(--official-blue)' : 'var(--accent-signal, #FF5A1F)';
       el.style.border = '3px solid #14161B';
       el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.5)';
       el.style.display = 'flex';
