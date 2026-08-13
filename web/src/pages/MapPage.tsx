@@ -795,7 +795,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && visibleCabanes.length === 0 && !error && (
               Object.values(layerPrefs).every((v) => !v) ? (
                 <div className="center-msg">
-                  {lang === 'fr' ? 'Pour afficher des signalements/résultats veuillez sélectionner au moins un détail de carte.' : 'To display reports/results, please select at least one map detail.'}
+                  {lang === 'fr' ? 'Aucun résultat possible sans sélectionner un détail de carte.' : 'No results possible without selecting a map detail.'}
                   <br />
                   <a
                     href="#"
