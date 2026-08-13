@@ -41,6 +41,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifMunicipality: string | null; exifCoords: { lat: number; lng: number } } | null>(null);
   const [checkingExif, setCheckingExif] = useState(false);
   const [photoExifCoords, setPhotoExifCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [usedPhotoLocation, setUsedPhotoLocation] = useState(false);
   const [archivedMatches, setArchivedMatches] = useState<any[]>([]);
   const [dismissedArchiveMatch, setDismissedArchiveMatch] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,7 +67,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
       setCoords({ lat, lng, accuracy: 15 });
       setSnappedToRoad(snapped);
       const geo = await reverseGeocodeAddress(lat, lng);
-      if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
+      if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); setUsedPhotoLocation(false); }
       if (geo.municipality) setDetectedMunicipality(geo.municipality);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,6 +122,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     // détection GPS — le message affiché doit rester « entrée manuellement »
     // même dans ce cas, pas « position précise capturée ».
     setAddressAutoFilled(false);
+    setUsedPhotoLocation(false);
     if (result.municipality) setDetectedMunicipality(result.municipality);
     setShowAddressDropdown(false);
     setAddressSuggestions([]);
@@ -146,7 +148,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
         // position tout juste détectée, même s'il avait déjà tapé
         // quelque chose manuellement avant.
         const geo = await reverseGeocodeAddress(c.lat, c.lng);
-        if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); }
+        if (geo.address) { setAddressText(geo.address); setAddressAutoFilled(true); setUsedPhotoLocation(false); }
         if (geo.municipality) setDetectedMunicipality(geo.municipality);
       },
       () => setLocating(false),
@@ -232,6 +234,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     setSnappedToRoad(snapped);
     setAddressText(exifMismatch.exifAddress);
     setAddressAutoFilled(true);
+    setUsedPhotoLocation(true);
     if (exifMismatch.exifMunicipality) setDetectedMunicipality(exifMismatch.exifMunicipality);
     setExifMismatch(null);
   }
@@ -404,7 +407,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                   className="text-input"
                   placeholder="Adresse ou repère"
                   value={addressText}
-                  onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); setShowAddressDropdown(true); }}
                   onFocus={() => setShowAddressDropdown(true)}
                   onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
                 />
@@ -430,7 +432,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               )}
               {coords && (
                 <div className="geo-status ok">
-                  {addressAutoFilled ? (
+                  {usedPhotoLocation ? (
+                    "Position adaptée aux données GPS d'où la photo a été prise."
+                  ) : addressAutoFilled ? (
                     <>
                       Position précise capturée — précision ±{Math.round(coords.accuracy)} m
                       {snappedToRoad && ' · alignée sur la route'}
