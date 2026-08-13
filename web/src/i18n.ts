@@ -65,3 +65,23 @@ export function getStoredLang(): Lang {
 export function setStoredLang(lang: Lang) {
   localStorage.setItem(LANG_KEY, lang);
 }
+
+/** Temps écoulé depuis une date, en jours/mois/années — affiché à côté de
+ * la date elle-même partout où l'âge d'un signalement importe (ex.
+ * "il y a 12 jours"). */
+export function timeAgo(dateStr: string, lang: Lang): string {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const days = Math.floor(diffMs / 86400000);
+
+  if (days <= 0) return lang === 'fr' ? "aujourd'hui" : 'today';
+  if (days === 1) return lang === 'fr' ? 'il y a 1 jour' : '1 day ago';
+  if (days < 30) return lang === 'fr' ? `il y a ${days} jours` : `${days} days ago`;
+
+  const months = Math.floor(days / 30);
+  if (months === 1) return lang === 'fr' ? 'il y a 1 mois' : '1 month ago';
+  if (months < 12) return lang === 'fr' ? `il y a ${months} mois` : `${months} months ago`;
+
+  const years = Math.floor(months / 12);
+  if (years === 1) return lang === 'fr' ? 'il y a 1 an' : '1 year ago';
+  return lang === 'fr' ? `il y a ${years} ans` : `${years} years ago`;
+}

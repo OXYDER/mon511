@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import Lightbox from './Lightbox';
 import PublicProfileModal from './PublicProfileModal';
-import { pickName } from '../i18n';
+import { pickName, timeAgo } from '../i18n';
 
 interface Props {
   reportId: string;
@@ -190,7 +190,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
           <div className="detail-meta-row" style={{ marginBottom: 6 }}>
             <span>📍 {report.addressText ?? 'Position GPS'}</span>
-            <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')}</span>
+            <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
           </div>
           <div
             style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
@@ -227,7 +227,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
           {feedback && <div className="success-banner">{feedback}</div>}
 
           <div className="action-row" style={{ margin: '14px 0' }}>
-            <button className="btn-ghost" onClick={confirm}>👍 Confirmer</button>
+            <button className="btn-ghost" onClick={confirm}>👍 Présent</button>
             <button className="btn-ghost" onClick={suggestResolved}>✔ Résolu</button>
             <button className="btn-ghost btn-danger" onClick={flag}>🚩</button>
           </div>

@@ -194,7 +194,7 @@ const SECTIONS: Section[] = [
       {
         q: "Comment confirmer qu'un problème existe toujours?",
         qEn: 'How do I confirm a problem still exists?',
-        a: "Ouvre le signalement sur la carte et clique sur « 👍 Confirmer ». Chaque confirmation aide la communauté et rapporte un peu de réputation — à toi et à l'auteur du signalement.",
+        a: "Ouvre le signalement sur la carte et clique sur « 👍 Présent ». Chaque confirmation aide la communauté et rapporte un peu de réputation — à toi et à l'auteur du signalement.",
         aEn: 'Open the report on the map and click "👍 Confirm". Each confirmation helps the community and grants a bit of reputation — to you and to the report\'s author.',
       },
       {
@@ -272,7 +272,7 @@ const SECTIONS: Section[] = [
       {
         q: 'Comment éviter que mon signalement soit archivé?',
         qEn: 'How do I prevent my report from being archived?',
-        a: "Confirme-le toi-même de temps en temps (bouton « Confirmer » dans son détail), ou demande à d'autres membres de le faire s'ils constatent que le problème existe toujours. Chaque confirmation remet le compte à rebours à zéro.",
+        a: "Confirme-le toi-même de temps en temps (bouton « Présent » dans son détail), ou demande à d'autres membres de le faire s'ils constatent que le problème existe toujours. Chaque confirmation remet le compte à rebours à zéro.",
         aEn: 'Confirm it yourself from time to time (the "Confirm" button in its details), or ask other members to do so if they notice the problem still exists. Each confirmation resets the countdown.',
       },
     ],
