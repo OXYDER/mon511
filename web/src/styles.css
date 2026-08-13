@@ -37,7 +37,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
+html, body { height: 100%; overflow: hidden; }
 body {
   font-family: var(--font-body);
   background: var(--bg-asphalt);
@@ -563,14 +563,11 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 
 /* Panneau flottant responsive : sur petit écran, prend toute la largeur en bas */
 @media (max-width: 760px) {
-  .filters-panel-float, .detail-panel-float, .map-menu-panel {
+  .filters-panel-float, .detail-panel-float {
     /* La pile d'icônes occupe l'espace de right:28px à right:72px environ
        (44px de large) — sans en tenir compte ici, les icônes se
        retrouvaient littéralement par-dessus le contenu du panneau plutôt
-       qu'à côté. Position basse et fixe (bottom:90px, top:auto) plutôt
-       que la position d'origine (calquée sur le bouton déclencheur) —
-       sans ça, un panneau avec beaucoup de contenu pouvait avoir son haut
-       carrément coupé au-dessus de l'écran, invisible.  */
+       qu'à côté. */
     left: 12px; right: 84px; width: auto; top: auto; bottom: 90px; max-height: 55vh;
     display: flex; flex-direction: column;
   }
@@ -580,4 +577,15 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   .detail-panel-float { display: none; }
   .detail-panel-float.mobile-visible { display: flex; }
   .filters-panel-float.mobile-hidden { display: none; }
+
+  /* Menus déroulants (Filtres&légende, Détails de la carte, Aide, Type de
+     carte) : SEULEMENT un ajustement vertical, jamais horizontal — ils
+     restent ancrés à droite (right: 80px) comme sur bureau, juste avec
+     une position/hauteur qui garantit que le haut du contenu n'est plus
+     jamais coupé au-dessus de l'écran. !important nécessaire : chaque
+     panneau définit son propre bottom en style en ligne (JSX), qui
+     l'emporterait sinon sur cette règle externe. */
+  .map-menu-panel {
+    top: 90px !important; bottom: 90px !important; max-height: none !important;
+  }
 }
