@@ -32,12 +32,13 @@ export class NotificationsService {
   }
 
   async markAllRead(userId: string) {
-    return this.db
+    await this.db
       .updateTable('notifications')
       .set({ read_at: new Date() as any })
       .where('user_id', '=', userId)
       .where('read_at', 'is', null)
       .execute();
+    return { success: true };
   }
 
   async unreadCount(userId: string) {
@@ -51,12 +52,13 @@ export class NotificationsService {
   }
 
   async markRead(id: string, userId: string) {
-    return this.db
+    await this.db
       .updateTable('notifications')
       .set({ read_at: new Date() as any })
       .where('id', '=', id)
       .where('user_id', '=', userId)
       .execute();
+    return { success: true };
   }
 
   /** Créée par les autres services (résolution suggérée, refus, réponse modérateur...). */

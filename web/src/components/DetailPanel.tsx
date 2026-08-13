@@ -75,11 +75,13 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
   async function suggestResolved() {
     if (!authenticated) return onRequireAuth();
     try {
-      const result = await api.post<{ autoResolved: boolean }>(`/reports/${reportId}/suggest-resolution`, {});
+      const result = await api.post<{ autoResolved: boolean; alreadySuggested: boolean }>(`/reports/${reportId}/suggest-resolution`, {});
       setFeedback(
-        result.autoResolved
-          ? 'Merci ! Le signalement est maintenant marqué résolu.'
-          : "Suggestion envoyée à la modération et à l'auteur.",
+        result.alreadySuggested
+          ? 'Tu avais déjà suggéré que ce signalement est résolu.'
+          : result.autoResolved
+            ? 'Merci ! Le signalement est maintenant marqué résolu.'
+            : "Suggestion envoyée à la modération et à l'auteur.",
       );
       load();
       onChanged();

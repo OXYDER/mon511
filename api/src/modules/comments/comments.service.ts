@@ -36,10 +36,11 @@ export class CommentsService {
 
   /** Masquage par un modérateur — pas de suppression physique, pour traçabilité (§13). */
   async hide(commentId: string) {
-    return this.db
+    await this.db
       .updateTable('report_comments')
       .set({ status: 'hidden' })
       .where('id', '=', commentId)
       .execute();
+    return { hidden: true };
   }
 }

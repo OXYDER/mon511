@@ -108,10 +108,11 @@ export class MessagingService {
   }
 
   async blockUser(blockerId: string, blockedId: string) {
-    return this.db
+    await this.db
       .insertInto('user_blocks')
       .values({ blocker_id: blockerId, blocked_id: blockedId })
       .onConflict((oc) => oc.doNothing())
       .execute();
+    return { blocked: true };
   }
 }

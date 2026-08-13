@@ -408,10 +408,16 @@ export class ReportsService {
 
       const weight = 1 + Math.min(Math.floor(user.reputation_score / 50), 2);
 
-      await trx
+      // Une contrainte unique (report_id, suggested_by) empêche déjà les
+      // doublons en base — sans onConflict, une deuxième tentative du même
+      // usager faisait planter toute la requête (erreur 500 opaque) au
+      // lieu d'être simplement ignorée proprement.
+      const insertResult = await trx
         .insertInto('report_resolution_suggestions')
         .values({ report_id: reportId, suggested_by: userId, comment: comment ?? null, weight })
-        .execute();
+        .onConflict((oc) => oc.doNothing())
+        .executeTakeFirst();
+      const alreadySuggested = !insertResult.numInsertedOrUpdatedRows || insertResult.numInsertedOrUpdatedRows === 0n;
 
       const totalWeight = await trx
         .selectFrom('report_resolution_suggestions')
@@ -455,7 +461,7 @@ export class ReportsService {
           .execute();
       }
 
-      return { weight, autoResolved };
+      return { weight, autoResolved, alreadySuggested };
     });
 
     // Notification à l'auteur — dans tous les cas une suggestion arrive,
@@ -483,6 +489,8 @@ export class ReportsService {
   }
 
   /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
+
+  /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
   async confirm(reportId: string, userId: string) {
     const result = await this.db
       .insertInto('report_confirmations')
@@ -491,7 +499,8 @@ export class ReportsService {
       .executeTakeFirst();
 
     // Seulement si c'est une vraie nouvelle confirmation (pas un doublon ignoré).
-    if (result.numInsertedOrUpdatedRows && result.numInsertedOrUpdatedRows > 0n) {
+    const isNew = !!result.numInsertedOrUpdatedRows && result.numInsertedOrUpdatedRows > 0n;
+    if (isNew) {
       const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
       await this.reputationService.award(userId, 'gave_confirmation', reportId);
       if (report?.user_id) await this.reputationService.award(report.user_id, 'report_confirmed_by_other', reportId, userId);
@@ -505,7 +514,11 @@ export class ReportsService {
         .execute();
     }
 
-    return result;
+    // Ne jamais retourner l'objet brut de Kysely — il contient un compteur
+    // de type BigInt (numInsertedOrUpdatedRows) qu'Express/JSON.stringify
+    // ne sait pas sérialiser, ce qui faisait planter la requête avec une
+    // erreur 500 opaque côté client.
+    return { confirmed: isNew };
   }
 
   /** Confirmation via le lien reçu par courriel (rappel à 30 jours) — pas
