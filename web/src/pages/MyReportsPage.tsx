@@ -211,51 +211,54 @@ export default function MyReportsPage({ onClose, lang }: Props) {
           return (
             <div key={r.id} style={{ marginBottom: 8 }}>
               <div
-                className="report-card"
+                className="report-card rc-report-card"
                 style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
                 onClick={() => toggleExpand(r.id)}
               >
-                {r.thumbnailUrl ? (
-                  <div className="rc-thumb-wrap">
-                    <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
-                    <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
-                  </div>
-                ) : (
-                  <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                    {r.problemTypeIcon ?? '📍'}
-                  </div>
-                )}
-                <div className="rc-body">
-                  <div className="rc-title-row">
-                    <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                <div className="rc-report-top-row">
+                  <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <span className={`pill ${statusPillClass(r.status)}`}>
                       {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
                     </span>
+                    {r.pendingResolutionSuggestionsCount > 0 && (
+                      <span
+                        title={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}
+                        className="badge-dot"
+                        style={{ position: 'static', background: 'var(--status-resolved)', cursor: 'pointer' }}
+                        onClick={(e) => { e.stopPropagation(); quickConfirmResolved(r.id); }}
+                      >
+                        ✔{r.pendingResolutionSuggestionsCount}
+                      </span>
+                    )}
+                    {r.pendingFlagsCount > 0 && (
+                      <span
+                        title={lang === 'fr' ? `${r.pendingFlagsCount} signalement(s) d'abus reçu(s)` : `${r.pendingFlagsCount} abuse report(s) received`}
+                        className="badge-dot"
+                        style={{ position: 'static', background: 'var(--status-danger, #FF4D5E)' }}
+                      >
+                        🚩{r.pendingFlagsCount}
+                      </span>
+                    )}
+                    <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>
+                      {isExpanded ? '−' : '+'}
+                    </span>
                   </div>
+                </div>
+                <div className="rc-report-mid-row">
+                  {r.thumbnailUrl ? (
+                    <div className="rc-thumb-wrap">
+                      <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                      <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+                    </div>
+                  ) : (
+                    <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                      {r.problemTypeIcon ?? '📍'}
+                    </div>
+                  )}
                   <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                 </div>
-                {r.pendingResolutionSuggestionsCount > 0 && (
-                  <span
-                    title={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}
-                    className="badge-dot"
-                    style={{ position: 'static', background: 'var(--status-resolved)', cursor: 'pointer' }}
-                    onClick={(e) => { e.stopPropagation(); quickConfirmResolved(r.id); }}
-                  >
-                    ✔{r.pendingResolutionSuggestionsCount}
-                  </span>
-                )}
-                {r.pendingFlagsCount > 0 && (
-                  <span
-                    title={lang === 'fr' ? `${r.pendingFlagsCount} signalement(s) d'abus reçu(s)` : `${r.pendingFlagsCount} abuse report(s) received`}
-                    className="badge-dot"
-                    style={{ position: 'static', background: 'var(--status-danger, #FF4D5E)' }}
-                  >
-                    🚩{r.pendingFlagsCount}
-                  </span>
-                )}
-                <span style={{ marginLeft: 8, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-                  {isExpanded ? '−' : '+'}
-                </span>
+                <div className="rc-report-time">{timeAgo(r.created_at, lang)}</div>
               </div>
 
               {/* Agrandissement — l'édition s'ouvre directement sous la

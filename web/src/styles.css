@@ -157,6 +157,19 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   display: flex; align-items: center; justify-content: center; font-size: 9.5px; line-height: 1;
 }
 .rc-body { flex: 1; min-width: 0; }
+.rc-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; }
+.rc-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+/* Agencement dédié aux cartes de signalement (pas les 18 autres usages
+   génériques de .report-card) — titre en gras pleine largeur avec statut
+   à droite tout en haut, icône/image + adresse complète (non tronquée)
+   en dessous, temps écoulé aligné en bas à droite. */
+.rc-report-card { display: flex; flex-direction: column; gap: 8px; }
+.rc-report-top-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rc-report-top-row .rc-title { font-weight: 700; margin-bottom: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-report-mid-row { display: flex; align-items: center; gap: 12px; }
+.rc-report-mid-row .rc-meta { white-space: normal; }
+.rc-report-time { font-size: 10.5px; color: var(--text-muted); text-align: right; }
 
 .pill {
   font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 10px;

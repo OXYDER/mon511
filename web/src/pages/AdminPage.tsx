@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { statusPillClass } from '../i18n';
+import { statusPillClass, timeAgo } from '../i18n';
 import ToggleSwitch from '../components/ToggleSwitch';
 
 interface Props {
@@ -200,25 +200,28 @@ function ModerationQueue() {
         return (
           <div key={r.id} style={{ marginBottom: 8 }}>
             <div
-              className="report-card"
+              className="report-card rc-report-card"
               style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
               onClick={() => toggleExpand(r.id)}
             >
-              {r.thumbnailUrl ? (
-                <div className="rc-thumb-wrap">
-                  <img src={r.thumbnailUrl} alt="" className="rc-icon-hex rc-thumb" />
-                  <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
-                </div>
-              ) : (
-                <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
-              )}
-              <div className="rc-body">
+              <div className="rc-report-top-row">
                 <div className="rc-title">{r.problemTypeNameFr}</div>
+                <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
+                  {isExpanded ? '−' : '+'}
+                </span>
+              </div>
+              <div className="rc-report-mid-row">
+                {r.thumbnailUrl ? (
+                  <div className="rc-thumb-wrap">
+                    <img src={r.thumbnailUrl} alt="" className="rc-icon-hex rc-thumb" />
+                    <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+                  </div>
+                ) : (
+                  <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+                )}
                 <div className="rc-meta">{r.address_text ?? 'Position GPS'}</div>
               </div>
-              <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
-                {isExpanded ? '−' : '+'}
-              </span>
+              <div className="rc-report-time">{timeAgo(r.created_at, 'fr')}</div>
             </div>
 
             {/* Agrandissement — le détail et la décision s'ouvrent
@@ -1072,28 +1075,29 @@ function AllReportsAdmin() {
 
       {results.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement pour ces filtres.</div>}
       {results.map((r) => (
-        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
-          {r.thumbnailUrl ? (
-            <div className="rc-thumb-wrap">
-              <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
-              <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
-            </div>
-          ) : (
-            <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-              {r.problemTypeIcon ?? '📍'}
-            </div>
-          )}
-          <div className="rc-body">
-            <div className="rc-title-row">
-              <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
-              <span className={`pill ${statusPillClass(r.status)}`}>
-                {STATUS_LABELS_ALL[r.status] ?? r.status}
-              </span>
-            </div>
+        <div key={r.id} className="report-card rc-report-card" style={{ cursor: 'default' }}>
+          <div className="rc-report-top-row">
+            <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
+            <span className={`pill ${statusPillClass(r.status)}`}>
+              {STATUS_LABELS_ALL[r.status] ?? r.status}
+            </span>
+          </div>
+          <div className="rc-report-mid-row">
+            {r.thumbnailUrl ? (
+              <div className="rc-thumb-wrap">
+                <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+              </div>
+            ) : (
+              <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                {r.problemTypeIcon ?? '📍'}
+              </div>
+            )}
             <div className="rc-meta">
-              {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}
+              {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'}
             </div>
           </div>
+          <div className="rc-report-time">{timeAgo(r.created_at, 'fr')}</div>
         </div>
       ))}
 

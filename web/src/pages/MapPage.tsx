@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
-import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass } from '../i18n';
+import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import SiteBanner from '../components/SiteBanner';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
@@ -34,6 +34,7 @@ interface Report {
   latitude: number;
   longitude: number;
   thumbnailUrl?: string | null;
+  created_at: string;
 }
 
 interface ExternalIncident {
@@ -796,31 +797,32 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 {openSections.reports && filteredReports.map((r) => (
                   <div
                     key={r.id}
-                    className="report-card"
+                    className="report-card rc-report-card"
                     style={{ borderColor: selection?.type === 'report' && selection.id === r.id ? 'var(--accent-signal)' : undefined }}
                     onClick={() => openReport(r)}
                     onMouseEnter={() => setHoveredPinId(r.id)}
                     onMouseLeave={() => setHoveredPinId(null)}
                   >
-                    {r.thumbnailUrl ? (
-                      <div className="rc-thumb-wrap">
-                        <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
-                        <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
-                      </div>
-                    ) : (
-                      <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                        {r.problemTypeIcon ?? '📍'}
-                      </div>
-                    )}
-                    <div className="rc-body">
-                      <div className="rc-title-row">
-                        <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
-                        <span className={`pill ${statusPillClass(r.status)}`}>
-                          {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
-                        </span>
-                      </div>
+                    <div className="rc-report-top-row">
+                      <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
+                      <span className={`pill ${statusPillClass(r.status)}`}>
+                        {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
+                      </span>
+                    </div>
+                    <div className="rc-report-mid-row">
+                      {r.thumbnailUrl ? (
+                        <div className="rc-thumb-wrap">
+                          <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                          <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+                        </div>
+                      ) : (
+                        <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                          {r.problemTypeIcon ?? '📍'}
+                        </div>
+                      )}
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                     </div>
+                    <div className="rc-report-time">{timeAgo(r.created_at, lang)}</div>
                   </div>
                 ))}
               </div>
