@@ -913,6 +913,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <div className="map-menu-panel" style={{ bottom: 264, width: 280, maxHeight: '60vh', overflowY: 'auto' }}>
           <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
 
+          <div className="filter-legend-group-title">{lang === 'fr' ? '🔧 Filtres' : '🔧 Filters'}</div>
           <div className="legend-section">
             <div className="legend-section-title">{t('statut', lang)}</div>
             <div className="filter-chip-row">
@@ -936,6 +937,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             </div>
           </div>
 
+          <div className="filter-legend-group-title">{lang === 'fr' ? '🗺️ Légende' : '🗺️ Legend'}</div>
           <div className="legend-section">
             <div className="legend-section-title">{lang === 'fr' ? 'Signalements communautaires' : 'Community reports'}</div>
             {problemTypes.map((pt) => (
