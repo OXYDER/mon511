@@ -163,7 +163,13 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       style: styleUrlFor(theme, mapType),
       center: center ? [center.lng, center.lat] : [-71.8929, 45.4042],
       zoom: 12,
+      // Désactive l'attribution par défaut (toujours dépliée) pour la
+      // remplacer par une version compacte — juste le bouton "i", qui se
+      // déplie seulement au clic, plutôt que le texte complet affiché en
+      // permanence dès le chargement.
+      attributionControl: false,
     });
+    mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }));
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
     mapRef.current.on('style.load', ensureSpiderfyLinesLayer);
