@@ -623,11 +623,15 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   }
 }
 
-/* MapLibre garde parfois le contenu de l'attribution visible en
-   permanence via son propre CSS, peu importe l'état réel de la balise
-   <details> (repliée/dépliée) — on force explicitement le comportement
-   attendu ici plutôt que de se fier uniquement au comportement natif de
-   <details>. */
-.maplibregl-ctrl-attrib:not([open]) .maplibregl-ctrl-attrib-inner {
+/* MapLibre gère lui-même l'ouverture/fermeture (attribut open + classe
+   maplibregl-compact-show) selon sa propre logique interne (largeur du
+   conteneur, entre autres) — impossible de s'y fier pour garder le
+   contrôle sur l'état au chargement. On cache le contenu inconditionnellement
+   par défaut, et on prend le relais nous-mêmes via une classe dédiée
+   (voir MapView.tsx) plutôt que de dépendre de l'attribut open natif. */
+.maplibregl-ctrl-attrib-inner {
   display: none !important;
+}
+.maplibregl-ctrl-attrib.mon511-attrib-open .maplibregl-ctrl-attrib-inner {
+  display: block !important;
 }

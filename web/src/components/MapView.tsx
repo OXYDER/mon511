@@ -170,6 +170,20 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       attributionControl: false,
     });
     mapRef.current.addControl(new maplibregl.AttributionControl({ compact: true }));
+    // Le CSS cache maintenant .maplibregl-ctrl-attrib-inner de façon
+    // inconditionnelle (voir styles.css) — on gère nous-mêmes le clic sur
+    // le bouton "i" pour basculer une classe qu'on contrôle entièrement,
+    // plutôt que de dépendre de l'attribut open/classe interne de
+    // MapLibre, qui s'ouvrait de lui-même au chargement selon sa propre
+    // logique (largeur du conteneur).
+    setTimeout(() => {
+      const attribEl = containerRef.current?.querySelector('.maplibregl-ctrl-attrib');
+      const summaryEl = attribEl?.querySelector('summary');
+      summaryEl?.addEventListener('click', (e) => {
+        e.preventDefault();
+        attribEl?.classList.toggle('mon511-attrib-open');
+      });
+    }, 0);
     mapRef.current.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     mapRef.current.on('style.load', ensureLinesLayer);
     mapRef.current.on('style.load', ensureSpiderfyLinesLayer);
