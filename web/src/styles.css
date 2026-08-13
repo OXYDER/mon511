@@ -379,6 +379,27 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .topbar-float .brand-row, .topbar-float .topbar-actions { pointer-events: auto; }
 .topbar-float .topbar-actions { display: flex; align-items: center; gap: 10px; margin-right: 56px; }
 
+/* Menu ☰ regroupant toutes les actions — caché par défaut, visible
+   seulement en très petite résolution (voir media query plus bas), où la
+   rangée normale d'icônes ne tient plus sans déborder. */
+.topbar-mobile-menu-btn {
+  display: none; position: relative; pointer-events: auto;
+  width: 38px; height: 38px; border-radius: 50%; background: var(--panel-solid);
+  border: 1px solid var(--panel-border); align-items: center; justify-content: center;
+  cursor: pointer; font-size: 17px; color: var(--text-primary); margin-right: 12px;
+}
+.topbar-mobile-menu {
+  position: absolute; top: 62px; right: 12px; z-index: 60; pointer-events: auto;
+  width: 230px; background: var(--panel-solid); border: 1px solid var(--panel-border);
+  border-radius: 14px; box-shadow: var(--shadow-panel); padding: 8px;
+  max-height: calc(100vh - 90px); overflow-y: auto;
+}
+
+@media (max-width: 480px) {
+  .topbar-actions { display: none; }
+  .topbar-mobile-menu-btn { display: flex; }
+}
+
 .filters-panel-float {
   position: absolute; top: calc(var(--banner-h, 0px) + 84px); left: 24px; z-index: 30;
   width: 300px; max-height: calc(100vh - 180px);

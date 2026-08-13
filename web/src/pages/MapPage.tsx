@@ -162,6 +162,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMapDetailsMenu, setShowMapDetailsMenu] = useState(false);
   const [showMapTypeMenu, setShowMapTypeMenu] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showFaq, setShowFaq] = useState(false);
   const [showSupportChat, setShowSupportChat] = useState(false);
   const [showSupportTickets, setShowSupportTickets] = useState(false);
@@ -181,6 +182,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       setShowMapDetailsMenu(false);
       setShowMapTypeMenu(false);
       setShowHelpMenu(false);
+      if (!target.closest('.topbar-mobile-menu-btn, .topbar-mobile-menu')) setShowMobileMenu(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -622,6 +624,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <div className="brand-row">
           <img src="/brand/header.png" alt="mon511.ca" style={{ height: 54, width: 'auto' }} />
         </div>
+
+        {/* Barre normale — icônes individuelles, cachée seulement en très
+            petite résolution (voir media query) au profit du menu ☰. */}
         <div className="topbar-actions">
           {authenticated ? (
             <>
@@ -653,6 +658,43 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             ℹ️
           </button>
         </div>
+
+        {/* Menu ☰ — seul visible en très petite résolution (media query),
+            regroupe exactement les mêmes actions avec leur libellé. */}
+        <button className="topbar-mobile-menu-btn" onClick={() => setShowMobileMenu((v) => !v)} title={lang === 'fr' ? 'Menu' : 'Menu'}>
+          ☰
+          {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
+        </button>
+        {showMobileMenu && (
+          <div className="topbar-mobile-menu">
+            {authenticated ? (
+              <>
+                {isModerator && (
+                  <div className="search-dropdown-item" onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }}>🛡️ {t('administration', lang)}</div>
+                )}
+                <div className="search-dropdown-item" onClick={() => { setShowMyReports(true); setShowMobileMenu(false); }}>📋 {lang === 'fr' ? 'Mes signalements' : 'My reports'}</div>
+                <div className="search-dropdown-item" onClick={() => { setShowNotifications(true); setShowMobileMenu(false); }}>
+                  🔔 {lang === 'fr' ? 'Notifications' : 'Notifications'}{unreadCount > 0 ? ` (${unreadCount})` : ''}
+                </div>
+                <div className="search-dropdown-item" onClick={() => { setShowProfileModal(true); setShowMobileMenu(false); }}>👤 {t('monProfil', lang)}</div>
+              </>
+            ) : (
+              <>
+                <div className="search-dropdown-item" onClick={() => { onRequireAuth('login'); setShowMobileMenu(false); }}>🔑 {t('connexion', lang)}</div>
+                <div className="search-dropdown-item" onClick={() => { onRequireAuth('register'); setShowMobileMenu(false); }}>✍️ {t('sinscrire', lang)}</div>
+              </>
+            )}
+            <div className="search-dropdown-item" onClick={() => { toggleLang(); setShowMobileMenu(false); }}>
+              🌐 {lang === 'fr' ? 'Passer en anglais' : 'Switch to French'}
+            </div>
+            <div className="search-dropdown-item" onClick={() => { onToggleTheme(); setShowMobileMenu(false); }}>
+              {theme === 'dark' ? '🌙' : '☀️'} {t('changerTheme', lang)}
+            </div>
+            <div className="search-dropdown-item" onClick={() => { setShowAbout(true); setShowMobileMenu(false); }}>
+              ℹ️ {lang === 'fr' ? 'À propos' : 'About'}
+            </div>
+          </div>
+        )}
       </header>
 
       <aside className={`filters-panel-float ${selection ? 'mobile-hidden' : ''} ${panelCollapsed ? 'collapsed' : ''}`}>
