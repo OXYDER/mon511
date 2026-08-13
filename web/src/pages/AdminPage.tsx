@@ -73,7 +73,7 @@ export default function AdminPage({ onClose }: Props) {
 
 function ModerationQueue() {
   const [queue, setQueue] = useState<any[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [reason, setReason] = useState('');
   const [reply, setReply] = useState('');
@@ -94,7 +94,6 @@ function ModerationQueue() {
     try {
       const results = await api.get<any[]>('/moderation/queue');
       setQueue(results);
-      if (!selectedId && results[0]) setSelectedId(results[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Impossible de charger la file — accès réservé aux modérateurs.');
     }
@@ -113,6 +112,18 @@ function ModerationQueue() {
     }
   }
 
+  /** Clique sur une carte de la file — l'ouvre juste en dessous d'elle-même
+   * (accordéon), pas dans un cadre séparé. Recliquer referme. */
+  function toggleExpand(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      setDetail(null);
+      return;
+    }
+    setExpandedId(id);
+    loadDetail(id);
+  }
+
   async function searchMunicipalities(q: string) {
     setMunicipalitySearch(q);
     if (q.trim().length < 2) { setMunicipalityResults([]); return; }
@@ -125,8 +136,8 @@ function ModerationQueue() {
   }
 
   async function applyMunicipality(regionId: string, name: string) {
-    if (!selectedId) return;
-    await api.patch(`/moderation/${selectedId}/region`, { regionId });
+    if (!expandedId) return;
+    await api.patch(`/moderation/${expandedId}/region`, { regionId });
     setEditingMunicipality(false);
     setMunicipalitySearch('');
     setMunicipalityResults([]);
@@ -134,23 +145,20 @@ function ModerationQueue() {
   }
 
   useEffect(() => { loadQueue(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId]);
 
   async function decide(decision: 'approve' | 'reject') {
-    if (!selectedId) return;
+    if (!expandedId) return;
     if (decision === 'reject' && !reason.trim()) {
       setError('Un motif est obligatoire pour refuser un signalement.');
       return;
     }
     try {
-      await api.patch(`/moderation/${selectedId}/decision`, { decision, reason: reason || undefined });
-      // La confirmation reste attachée à CE signalement — on ne vide pas la
-      // sélection ni le détail, et on ne saute pas automatiquement au
-      // suivant (ça faisait apparaître le message sur le mauvais
-      // signalement, celui sélectionné automatiquement après coup). La
-      // liste se met à jour en arrière-plan (le signalement traité en
-      // disparaît) ; le modérateur clique lui-même sur le prochain quand il
-      // est prêt.
+      await api.patch(`/moderation/${expandedId}/decision`, { decision, reason: reason || undefined });
+      // La confirmation reste attachée à CE signalement — on ne referme pas
+      // le tiroir ni ne saute au suivant automatiquement (ça faisait
+      // apparaître le message sur le mauvais signalement). La liste se met
+      // à jour en arrière-plan (le signalement traité en disparaît) ; le
+      // modérateur ouvre lui-même le prochain quand il est prêt.
       setDecidedFeedback(decision === 'approve' ? 'Signalement approuvé.' : 'Signalement refusé.');
       setReason('');
       loadQueue();
@@ -160,11 +168,11 @@ function ModerationQueue() {
   }
 
   async function sendReply() {
-    if (!selectedId || !reply.trim()) return;
+    if (!expandedId || !reply.trim()) return;
     try {
-      await api.post(`/moderation/${selectedId}/reply`, { message: reply });
+      await api.post(`/moderation/${expandedId}/reply`, { message: reply });
       setReply('');
-      loadDetail(selectedId);
+      loadDetail(expandedId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Envoi impossible.');
     }
@@ -174,166 +182,174 @@ function ModerationQueue() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 28 }}>
-        <div style={{ flex: '1 1 280px', minWidth: 260 }}>
-          <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-            En attente d'approbation ({queue.length})
-          </div>
-          <button
-            className="btn-ghost"
-            style={{ marginBottom: 12, fontSize: 11.5 }}
-            onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-          >
-            {sortDir === 'asc' ? '↓ Ascendant (plus ancien d\'abord)' : '↑ Descendant (plus récent d\'abord)'}
-          </button>
-          {queue.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement en attente.</div>}
-          {sortedQueue.map((r) => (
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        En attente d'approbation ({queue.length})
+      </div>
+      <button
+        className="btn-ghost"
+        style={{ marginBottom: 12, fontSize: 11.5 }}
+        onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+      >
+        {sortDir === 'asc' ? '↓ Ascendant (plus ancien d\'abord)' : '↑ Descendant (plus récent d\'abord)'}
+      </button>
+      {queue.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement en attente.</div>}
+      {feedback && <div className="success-banner">{feedback}</div>}
+
+      {sortedQueue.map((r) => {
+        const isExpanded = expandedId === r.id;
+        return (
+          <div key={r.id} style={{ marginBottom: 8 }}>
             <div
-              key={r.id}
               className="report-card"
-              style={{ borderColor: selectedId === r.id ? 'var(--accent-signal)' : undefined }}
-              onClick={() => setSelectedId(r.id)}
+              style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
+              onClick={() => toggleExpand(r.id)}
             >
               <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
               <div className="rc-body">
                 <div className="rc-title">{r.problemTypeNameFr}</div>
                 <div className="rc-meta">{r.address_text ?? 'Position GPS'}</div>
               </div>
+              <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>
+                {isExpanded ? '−' : '+'}
+              </span>
             </div>
-          ))}
-        </div>
 
-        <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
-          {!detail && <div className="center-msg">Sélectionne un signalement à gauche.</div>}
-          {detail && (
-            <>
-              {feedback && <div className="success-banner">{feedback}</div>}
-              {decidedFeedback && (
-                <div className="success-banner" style={{ fontSize: 14, fontWeight: 600 }}>
-                  ✓ {decidedFeedback}
-                </div>
-              )}
-              <div className="detail-title" style={{ fontSize: 17 }}>{detail.report.description || 'Signalement'}</div>
-              <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
-                <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
-                <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
-              </div>
+            {/* Agrandissement — le détail et la décision s'ouvrent
+                directement sous la carte cliquée. */}
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                {!detail && <div className="center-msg">Chargement...</div>}
+                {detail && (
+                  <>
+                    {decidedFeedback && (
+                      <div className="success-banner" style={{ fontSize: 14, fontWeight: 600 }}>
+                        ✓ {decidedFeedback}
+                      </div>
+                    )}
+                    <div className="detail-title" style={{ fontSize: 17 }}>{detail.report.description || 'Signalement'}</div>
+                    <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
+                      <span>📍 {detail.report.address_text ?? 'Position GPS'}</span>
+                      <span>🏛️ Municipalité avisée : {detail.report.municipality_notified}</span>
+                    </div>
 
-              {detail.authenticity && (
-                <div style={{
-                  marginBottom: 16, padding: 12, borderRadius: 10,
-                  background: !detail.authenticity.verifiable ? 'var(--panel-hover)'
-                    : detail.authenticity.confidencePercent >= 70 ? 'rgba(47,191,113,0.12)'
-                    : detail.authenticity.confidencePercent >= 40 ? 'rgba(245,179,1,0.12)'
-                    : 'rgba(255,45,59,0.12)',
-                  border: `1px solid ${!detail.authenticity.verifiable ? 'var(--panel-border)'
-                    : detail.authenticity.confidencePercent >= 70 ? 'var(--status-resolved)'
-                    : detail.authenticity.confidencePercent >= 40 ? 'var(--status-unresolved)'
-                    : '#FF2D3B'}`,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 16 }}>{!detail.authenticity.verifiable ? '❔' : detail.authenticity.confidencePercent >= 70 ? '✅' : detail.authenticity.confidencePercent >= 40 ? '⚠️' : '🚩'}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>
-                      {!detail.authenticity.verifiable
-                        ? 'Vérification photo : non vérifiable'
-                        : `Vérification photo : ${detail.authenticity.confidencePercent}% de confiance`}
-                    </span>
-                  </div>
-                  {detail.authenticity.details.map((d: string, i: number) => (
-                    <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 3, lineHeight: 1.5 }}>• {d}</div>
-                  ))}
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
-                    Aide à la décision, pas un verdict — le jugement final reste humain.
-                  </div>
-                </div>
-              )}
+                    {detail.authenticity && (
+                      <div style={{
+                        marginBottom: 16, padding: 12, borderRadius: 10,
+                        background: !detail.authenticity.verifiable ? 'var(--panel-hover)'
+                          : detail.authenticity.confidencePercent >= 70 ? 'rgba(47,191,113,0.12)'
+                          : detail.authenticity.confidencePercent >= 40 ? 'rgba(245,179,1,0.12)'
+                          : 'rgba(255,45,59,0.12)',
+                        border: `1px solid ${!detail.authenticity.verifiable ? 'var(--panel-border)'
+                          : detail.authenticity.confidencePercent >= 70 ? 'var(--status-resolved)'
+                          : detail.authenticity.confidencePercent >= 40 ? 'var(--status-unresolved)'
+                          : '#FF2D3B'}`,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <span style={{ fontSize: 16 }}>{!detail.authenticity.verifiable ? '❔' : detail.authenticity.confidencePercent >= 70 ? '✅' : detail.authenticity.confidencePercent >= 40 ? '⚠️' : '🚩'}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600 }}>
+                            {!detail.authenticity.verifiable
+                              ? 'Vérification photo : non vérifiable'
+                              : `Vérification photo : ${detail.authenticity.confidencePercent}% de confiance`}
+                          </span>
+                        </div>
+                        {detail.authenticity.details.map((d: string, i: number) => (
+                          <div key={i} style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 3, lineHeight: 1.5 }}>• {d}</div>
+                        ))}
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6, fontStyle: 'italic' }}>
+                          Aide à la décision, pas un verdict — le jugement final reste humain.
+                        </div>
+                      </div>
+                    )}
 
-              {detail.photos?.length > 0 && (
-                <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-                  {detail.photos.map((p: any) => (
-                    <div key={p.id} style={{ width: 130 }}>
-                      <img src={p.url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, marginBottom: 6 }} />
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                        {p.exif_latitude ? (
-                          <div>📍 {p.exif_latitude.toFixed(5)}, {p.exif_longitude.toFixed(5)}</div>
-                        ) : (
-                          <div>📍 Aucune position GPS</div>
-                        )}
-                        <div>🕓 {p.exif_captured_at ? new Date(p.exif_captured_at).toLocaleString('fr-CA') : 'Date inconnue'}</div>
-                        {(p.exif_camera_make || p.exif_camera_model) && (
-                          <div>📷 {[p.exif_camera_make, p.exif_camera_model].filter(Boolean).join(' ')}</div>
+                    {detail.photos?.length > 0 && (
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+                        {detail.photos.map((p: any) => (
+                          <div key={p.id} style={{ width: 130 }}>
+                            <img src={p.url} alt="" style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 8, marginBottom: 6 }} />
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                              {p.exif_latitude ? (
+                                <div>📍 {p.exif_latitude.toFixed(5)}, {p.exif_longitude.toFixed(5)}</div>
+                              ) : (
+                                <div>📍 Aucune position GPS</div>
+                              )}
+                              <div>🕓 {p.exif_captured_at ? new Date(p.exif_captured_at).toLocaleString('fr-CA') : 'Date inconnue'}</div>
+                              {(p.exif_camera_make || p.exif_camera_model) && (
+                                <div>📷 {[p.exif_camera_make, p.exif_camera_model].filter(Boolean).join(' ')}</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--panel-hover)', borderRadius: 9 }}>
+                      <span style={{ fontSize: 12 }}>
+                        🏛️ Municipalité détectée : <strong>{detail.report.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>
+                      </span>
+                      <button className="btn-ghost" style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => setEditingMunicipality((v: boolean) => !v)}>
+                        {editingMunicipality ? 'Fermer' : 'Corriger'}
+                      </button>
+                    </div>
+                    {editingMunicipality && (
+                      <div style={{ marginBottom: 14, position: 'relative' }}>
+                        <input
+                          className="text-input"
+                          placeholder="Rechercher une municipalité..."
+                          value={municipalitySearch}
+                          onChange={(e) => searchMunicipalities(e.target.value)}
+                        />
+                        {municipalityResults.length > 0 && (
+                          <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10 }}>
+                            {municipalityResults.map((m: any) => (
+                              <div key={m.region_id} className="search-dropdown-item" onClick={() => applyMunicipality(m.region_id, m.regionNameFr)}>
+                                <span>🏛️</span><span>{m.regionNameFr}</span>
+                              </div>
+                            ))}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    )}
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '8px 12px', background: 'var(--panel-hover)', borderRadius: 9 }}>
-                <span style={{ fontSize: 12 }}>
-                  🏛️ Municipalité détectée : <strong>{detail.report.regionNameFr ?? 'Aucune — à sélectionner manuellement'}</strong>
-                </span>
-                <button className="btn-ghost" style={{ marginLeft: 'auto', fontSize: 11 }} onClick={() => setEditingMunicipality((v: boolean) => !v)}>
-                  {editingMunicipality ? 'Fermer' : 'Corriger'}
-                </button>
-              </div>
-              {editingMunicipality && (
-                <div style={{ marginBottom: 14, position: 'relative' }}>
-                  <input
-                    className="text-input"
-                    placeholder="Rechercher une municipalité..."
-                    value={municipalitySearch}
-                    onChange={(e) => searchMunicipalities(e.target.value)}
-                  />
-                  {municipalityResults.length > 0 && (
-                    <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10 }}>
-                      {municipalityResults.map((m: any) => (
-                        <div key={m.region_id} className="search-dropdown-item" onClick={() => applyMunicipality(m.region_id, m.regionNameFr)}>
-                          <span>🏛️</span><span>{m.regionNameFr}</span>
+                    {detail.flags?.length > 0 && (
+                      <div className="error-banner">
+                        {detail.flags.length} signalement(s) d'abus — motif : {detail.flags[0].reason}
+                      </div>
+                    )}
+
+                    <div className="section-label" style={{ fontSize: 13 }}>Échange avec l'usager</div>
+                    {detail.messages.map((m: any) => (
+                      <div key={m.id} className="comment">
+                        <div className="comment-author">{m.author_role === 'moderator' ? 'Modération' : m.authorEmail?.split('@')[0]}</div>
+                        {m.message}
+                      </div>
+                    ))}
+                    <div className="comment-row">
+                      <input className="text-input" placeholder="Répondre à l'usager..." value={reply} onChange={(e) => setReply(e.target.value)} />
+                      <button className="btn-ghost" onClick={sendReply}>Envoyer</button>
+                    </div>
+
+                    {!decidedFeedback && (
+                      <>
+                        <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
+                        <div className="field-group">
+                          <label className="field-label">Motif (obligatoire pour un refus)</label>
+                          <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {detail.flags?.length > 0 && (
-                <div className="error-banner">
-                  {detail.flags.length} signalement(s) d'abus — motif : {detail.flags[0].reason}
-                </div>
-              )}
-
-              <div className="section-label" style={{ fontSize: 13 }}>Échange avec l'usager</div>
-              {detail.messages.map((m: any) => (
-                <div key={m.id} className="comment">
-                  <div className="comment-author">{m.author_role === 'moderator' ? 'Modération' : m.authorEmail?.split('@')[0]}</div>
-                  {m.message}
-                </div>
-              ))}
-              <div className="comment-row">
-                <input className="text-input" placeholder="Répondre à l'usager..." value={reply} onChange={(e) => setReply(e.target.value)} />
-                <button className="btn-ghost" onClick={sendReply}>Envoyer</button>
+                        <div className="action-row">
+                          <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
+                            ✔ Approuver
+                          </button>
+                          <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
               </div>
-
-              {!decidedFeedback && (
-                <>
-                  <div className="section-label" style={{ fontSize: 13 }}>Décision</div>
-                  <div className="field-group">
-                    <label className="field-label">Motif (obligatoire pour un refus)</label>
-                    <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} />
-                  </div>
-                  <div className="action-row">
-                    <button className="btn-primary" style={{ background: 'var(--status-resolved)' }} onClick={() => decide('approve')}>
-                      ✔ Approuver
-                    </button>
-                    <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        );
+      })}
 
       <FlaggedReportsAdmin />
       <ResolutionSuggestionsAdmin />
