@@ -1247,6 +1247,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <SupportTicketsModal onClose={() => setShowSupportTickets(false)} lang={lang} prefill={ticketPrefill} />
       )}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
+
+      {/* Mention de droits d'auteur, discrète — même esprit que l'attribution
+          MapLibre/MapTiler déjà présente (en bas à droite), mais placée à
+          gauche pour ne jamais se chevaucher ni gêner quoi que ce soit. */}
+      <div
+        style={{
+          position: 'absolute', bottom: 4, left: 8, zIndex: 20, pointerEvents: 'none',
+          fontSize: 9.5, color: 'rgba(245,246,248,0.35)', fontFamily: 'var(--font-mono)',
+        }}
+      >
+        © mon511 — {lang === 'fr' ? 'Tous droits réservés' : 'All rights reserved'}
+      </div>
       </>}
     </div>
     </Suspense>
