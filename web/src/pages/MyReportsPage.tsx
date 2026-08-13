@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
-import { pickName, timeAgo } from '../i18n';
+import { pickName, timeAgo, statusPillClass } from '../i18n';
 
 interface Props {
   onClose: () => void;
@@ -207,7 +207,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                   <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                   <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                 </div>
-                <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
+                <span className={`pill ${statusPillClass(r.status)}`}>
                   {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
                 </span>
                 <span style={{ marginLeft: 8, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16, flexShrink: 0 }}>

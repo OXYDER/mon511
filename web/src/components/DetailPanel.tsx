@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import Lightbox from './Lightbox';
 import PublicProfileModal from './PublicProfileModal';
-import { pickName, timeAgo } from '../i18n';
+import { pickName, timeAgo, statusPillClass } from '../i18n';
 
 interface Props {
   reportId: string;
@@ -128,7 +128,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
       {report && (
         <>
-          <span className={`pill ${report.status === 'published_resolved' ? 'resolved' : report.status === 'pending_moderation' ? 'official' : 'unresolved'}`} style={{ marginBottom: 10, display: 'inline-block' }}>
+          <span className={`pill ${statusPillClass(report.status)}`} style={{ marginBottom: 10, display: 'inline-block' }}>
             {report.status === 'published_resolved' ? 'Résolu' : report.status === 'pending_moderation' ? '⏳ En attente d\'approbation' : 'Non résolu'}
           </span>
           {report.status === 'pending_moderation' && (

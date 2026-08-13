@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs } from '../api';
-import { t, Lang, getStoredLang, setStoredLang, pickName } from '../i18n';
+import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import SiteBanner from '../components/SiteBanner';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
@@ -809,7 +809,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                       <div className="rc-title">{pickName(r.problemTypeNameFr, r.problemTypeNameEn, lang)}</div>
                       <div className="rc-meta">{r.addressText ?? 'GPS'}</div>
                     </div>
-                    <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'pending_moderation' ? 'official' : 'unresolved'}`}>
+                    <span className={`pill ${statusPillClass(r.status)}`}>
                       {r.status === 'published_resolved' ? t('resolu', lang) : r.status === 'pending_moderation' ? (lang === 'fr' ? '⏳ En attente' : '⏳ Pending') : t('nonResolu', lang)}
                     </span>
                   </div>

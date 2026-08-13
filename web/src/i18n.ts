@@ -85,3 +85,17 @@ export function timeAgo(dateStr: string, lang: Lang): string {
   if (years === 1) return lang === 'fr' ? 'il y a 1 an' : '1 year ago';
   return lang === 'fr' ? `il y a ${years} ans` : `${years} years ago`;
 }
+
+/** Classe CSS de pastille selon le statut d'un signalement — centralisé
+ * pour que les couleurs restent cohérentes partout où un statut
+ * s'affiche, plutôt que de réécrire la même logique à chaque endroit. */
+export function statusPillClass(status: string): string {
+  switch (status) {
+    case 'published_resolved': return 'resolved';
+    case 'published_unresolved': return 'unresolved';
+    case 'pending_moderation': return 'pending_moderation';
+    case 'rejected': return 'rejected';
+    case 'withdrawn': return 'withdrawn';
+    default: return '';
+  }
+}

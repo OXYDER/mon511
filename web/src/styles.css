@@ -154,12 +154,18 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .rc-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 
 .pill {
-  font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 10px;
+  font-size: 10px; font-weight: 700; padding: 3px 9px; border-radius: 10px;
   text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; flex-shrink: 0;
 }
-.pill.unresolved { background: rgba(245,179,1,0.14); color: var(--status-unresolved); }
-.pill.resolved { background: rgba(47,191,113,0.14); color: var(--status-resolved); }
-.pill.official { background: rgba(59,156,255,0.14); color: var(--official-blue); }
+/* Palette bien distincte façon feu de circulation — chaque statut a sa
+   propre couleur franche et saturée, pas de teintes qui se ressemblent
+   entre elles, pour qu'on distingue le statut d'un coup d'œil. */
+.pill.unresolved { background: #E8433B; color: #FFFFFF; }
+.pill.resolved { background: #2FBF71; color: #14161B; }
+.pill.pending_moderation { background: #F5B301; color: #14161B; }
+.pill.rejected { background: #8A2BE2; color: #FFFFFF; }
+.pill.withdrawn { background: #5A5D68; color: #FFFFFF; }
+.pill.official { background: var(--official-blue); color: #14161B; }
 
 /* ---------- LAYER TOGGLE ---------- */
 .layer-toggle {
@@ -452,12 +458,16 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   padding: 8px 2px; font-size: 12px; font-weight: 600; font-family: var(--font-body);
 }
 .list-section-count {
-  font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted);
-  background: var(--panel-hover); border-radius: 10px; padding: 1px 8px;
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: #14161B;
+  background: var(--accent-signal); border-radius: 10px; padding: 1px 8px;
 }
 
 .detail-panel-float {
-  position: absolute; top: calc(var(--banner-h, 0px) + 84px); right: 24px; z-index: 35;
+  /* right: 96px (plutôt que 24px) — la pile d'icônes occupe l'espace de
+     right:28px à right:72px environ ; sans en tenir compte, le panneau de
+     détail chevauchait directement le contenu des icônes sur bureau,
+     exactement comme le même bug déjà corrigé sur mobile. */
+  position: absolute; top: calc(var(--banner-h, 0px) + 84px); right: 96px; z-index: 35;
   width: 320px; max-height: calc(100vh - 180px); overflow-y: auto;
   background: var(--panel); backdrop-filter: blur(14px);
   border: 1px solid var(--panel-border); border-radius: 14px; padding: 18px;

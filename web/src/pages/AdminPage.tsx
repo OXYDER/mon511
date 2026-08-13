@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { statusPillClass } from '../i18n';
 import ToggleSwitch from '../components/ToggleSwitch';
 
 interface Props {
@@ -1058,7 +1059,7 @@ function AllReportsAdmin() {
               {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'} · {new Date(r.created_at).toLocaleDateString('fr-CA')}
             </div>
           </div>
-          <span className={`pill ${r.status === 'published_resolved' ? 'resolved' : r.status === 'withdrawn' || r.status === 'rejected' ? '' : 'unresolved'}`}>
+          <span className={`pill ${statusPillClass(r.status)}`}>
             {STATUS_LABELS_ALL[r.status] ?? r.status}
           </span>
         </div>
