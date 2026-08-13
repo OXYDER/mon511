@@ -399,7 +399,7 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
    de largeur logique dans bien des cas, ce qui laissait passer la rangée
    normale d'icônes sur des écrans clairement trop étroits pour elle. */
 @media (max-width: 700px) {
-  .topbar-actions { display: none; }
+  .topbar-float .topbar-actions { display: none; }
   .topbar-mobile-menu-btn { display: flex; }
 }
 
