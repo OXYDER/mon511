@@ -793,7 +793,21 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <div className="report-list-scroll">
           {loading && <div className="center-msg">{t('chargement', lang)}</div>}
             {!loading && filteredReports.length === 0 && visibleTravaux.length === 0 && visibleAvertissements.length === 0 && visibleFeux.length === 0 && visibleCabanes.length === 0 && !error && (
-              <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
+              Object.values(layerPrefs).every((v) => !v) ? (
+                <div className="center-msg">
+                  {lang === 'fr' ? 'Pour afficher des signalements/résultats veuillez sélectionner au moins un détail de carte.' : 'To display reports/results, please select at least one map detail.'}
+                  <br />
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); setShowMapDetailsMenu(true); setShowMapTypeMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
+                    style={{ color: 'var(--accent-signal)', textDecoration: 'underline', cursor: 'pointer' }}
+                  >
+                    {lang === 'fr' ? 'Afficher les détails de carte' : 'Show map details'}
+                  </a>
+                </div>
+              ) : (
+                <div className="center-msg">{t('aucunSignalement', lang)}<br />{t('soisLePremier', lang)}</div>
+              )
             )}
 
             {/* Signalements communautaires — priorité au but premier de l'app */}
