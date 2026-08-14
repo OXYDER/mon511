@@ -542,8 +542,19 @@ function ExternalDataAdmin() {
 
 function ProblemTypesAdmin() {
   const [types, setTypes] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editNameFr, setEditNameFr] = useState('');
+  const [editNameEn, setEditNameEn] = useState('');
+  const [editIcon, setEditIcon] = useState('');
+  const [editCategoryId, setEditCategoryId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Dérivées de la liste des types elle-même — pas d'endpoint dédié pour
+  // lister les catégories, mais chaque type porte déjà sa catégorie.
+  const categories = Array.from(
+    new Map(types.map((t) => [t.category_id, { id: t.category_id, name: t.categoryNameFr }])).values(),
+  );
 
   async function load() {
     try {
@@ -561,6 +572,30 @@ function ProblemTypesAdmin() {
     load();
   }
 
+  function toggleExpand(t: any) {
+    if (expandedId === t.id) { setExpandedId(null); return; }
+    setExpandedId(t.id);
+    setEditNameFr(t.name_fr ?? '');
+    setEditNameEn(t.name_en ?? '');
+    setEditIcon(t.icon ?? '');
+    setEditCategoryId(t.category_id ?? '');
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    try {
+      await api.patch(`/problem-types/${id}`, {
+        nameFr: editNameFr, nameEn: editNameEn, icon: editIcon, categoryId: editCategoryId,
+      });
+      setExpandedId(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
@@ -568,16 +603,60 @@ function ProblemTypesAdmin() {
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Types de problèmes ({types.length})
       </div>
-      {types.map((t) => (
-        <div key={t.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex">{t.icon ?? '📍'}</div>
-          <div className="rc-body">
-            <div className="rc-title">{t.name_fr}</div>
-            <div className="rc-meta">{t.categoryNameFr}</div>
+      {types.map((t) => {
+        const isExpanded = expandedId === t.id;
+        return (
+          <div key={t.id} style={{ marginBottom: 8 }}>
+            <div
+              className="report-card"
+              style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
+              onClick={() => toggleExpand(t)}
+            >
+              <div className="rc-icon-hex">{t.icon ?? '📍'}</div>
+              <div className="rc-body">
+                <div className="rc-title">{t.name_fr}</div>
+                <div className="rc-meta">{t.categoryNameFr}</div>
+              </div>
+              <div onClick={(e) => e.stopPropagation()}>
+                <ToggleSwitch on={t.active} onToggle={() => toggleActive(t.id, t.active)} title={t.active ? 'Actif' : 'Inactif'} />
+              </div>
+              <span style={{ marginLeft: 10, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>{isExpanded ? '−' : '+'}</span>
+            </div>
+
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Nom (français)</label>
+                    <input className="text-input" value={editNameFr} onChange={(e) => setEditNameFr(e.target.value)} />
+                  </div>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Nom (anglais)</label>
+                    <input className="text-input" value={editNameEn} onChange={(e) => setEditNameEn(e.target.value)} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div className="field-group" style={{ width: 100 }}>
+                    <label className="field-label">Icône</label>
+                    <input className="text-input" value={editIcon} onChange={(e) => setEditIcon(e.target.value)} style={{ fontSize: 18, textAlign: 'center' }} />
+                  </div>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Catégorie</label>
+                    <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)}>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <button className="btn-primary" onClick={() => saveEdit(t.id)} disabled={saving}>
+                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            )}
           </div>
-          <ToggleSwitch on={t.active} onToggle={() => toggleActive(t.id, t.active)} title={t.active ? 'Actif' : 'Inactif'} />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

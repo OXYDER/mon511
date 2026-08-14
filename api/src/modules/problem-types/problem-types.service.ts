@@ -33,7 +33,7 @@ export class ProblemTypesService {
       .innerJoin('problem_categories', 'problem_categories.id', 'problem_types.category_id')
       .select([
         'problem_types.id', 'problem_types.name_fr', 'problem_types.name_en',
-        'problem_types.icon', 'problem_types.active',
+        'problem_types.icon', 'problem_types.active', 'problem_types.category_id',
         'problem_categories.name_fr as categoryNameFr',
       ])
       .orderBy('problem_categories.sort_order')
