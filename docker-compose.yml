@@ -84,10 +84,18 @@ services:
       NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgres://${POSTGRES_USER:-mon511}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-mon511}
       REDIS_URL: redis://redis:6379
-      STORAGE_ENDPOINT: minio
-      STORAGE_PORT: 9000
-      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-mon511}
-      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Configurable via .env — permet de pointer vers un stockage S3
+      # externe (ex. MinIO sur un autre serveur/NAS) plutôt que le MinIO
+      # local du docker-compose. Les 4 variables doivent être définies
+      # ENSEMBLE dans le .env pour basculer (pas de repli imbriqué sur
+      # MINIO_ROOT_USER/PASSWORD — la substitution de variables imbriquées
+      # n'est pas fiable selon les versions de Docker Compose). Sans ces
+      # 4 lignes dans le .env, le comportement reste exactement celui
+      # d'avant (MinIO local).
+      STORAGE_ENDPOINT: ${STORAGE_ENDPOINT:-minio}
+      STORAGE_PORT: ${STORAGE_PORT:-9000}
+      STORAGE_ACCESS_KEY: ${STORAGE_ACCESS_KEY:-mon511}
+      STORAGE_SECRET_KEY: ${STORAGE_SECRET_KEY:-changeme}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-http://localhost:${MINIO_API_HOST_PORT:-9000}}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
