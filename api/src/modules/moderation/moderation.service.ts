@@ -153,6 +153,24 @@ export class ModerationService {
     return { deleted: true };
   }
 
+  /** Suppression en lot — même logique que adminDeleteReport() mais pour
+   * plusieurs signalements sélectionnés à la fois. Traite chacun
+   * individuellement (plutôt qu'une seule requête groupée) pour que
+   * l'échec d'un seul n'empêche pas les autres d'être supprimés. */
+  async adminDeleteReportsBulk(reportIds: string[]) {
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const id of reportIds) {
+      try {
+        await this.adminDeleteReport(id);
+        deleted++;
+      } catch {
+        failed.push(id);
+      }
+    }
+    return { deleted, failed };
+  }
+
   async findDetail(reportId: string) {
     const report = await this.db
       .selectFrom('reports')

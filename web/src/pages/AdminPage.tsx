@@ -3,6 +3,7 @@ import { api } from '../api';
 import { statusPillClass, timeAgo } from '../i18n';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { compressImage } from '../imageCompression';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface Props {
   onClose: () => void;
@@ -1186,6 +1187,9 @@ function AllReportsAdmin() {
   const [photos, setPhotos] = useState<any[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmingDeleteIds, setConfirmingDeleteIds] = useState<string[] | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const LIMIT = 30;
 
   async function load() {
@@ -1259,11 +1263,49 @@ function AllReportsAdmin() {
     }
   }
 
-  async function deleteReport(id: string) {
-    if (!window.confirm('Supprimer définitivement ce signalement (et ses photos) ? Cette action est irréversible.')) return;
-    await api.post(`/moderation/all-reports/${id}/delete`, {});
-    setExpandedId(null);
-    load();
+  /** Ouvre la modale de confirmation personnalisée — jamais window.confirm(),
+   * qui peut être désactivé définitivement par l'usager (case "ne plus
+   * afficher"), ce qui ferait alors passer une suppression irréversible
+   * sans aucune confirmation. */
+  function requestDelete(id: string) {
+    setConfirmingDeleteIds([id]);
+  }
+
+  function requestBulkDelete() {
+    if (selectedIds.size === 0) return;
+    setConfirmingDeleteIds(Array.from(selectedIds));
+  }
+
+  async function confirmDelete() {
+    if (!confirmingDeleteIds) return;
+    setDeleting(true);
+    try {
+      if (confirmingDeleteIds.length === 1) {
+        await api.post(`/moderation/all-reports/${confirmingDeleteIds[0]}/delete`, {});
+      } else {
+        await api.post('/moderation/all-reports/bulk-delete', { ids: confirmingDeleteIds });
+      }
+      setExpandedId(null);
+      setSelectedIds(new Set());
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la suppression.');
+    } finally {
+      setDeleting(false);
+      setConfirmingDeleteIds(null);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.size === results.length ? new Set() : new Set(results.map((r) => r.id))));
   }
 
   if (error) return <div className="error-banner">{error}</div>;
@@ -1302,11 +1344,32 @@ function AllReportsAdmin() {
         </button>
       </div>
 
+      {results.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={selectedIds.size === results.length} onChange={toggleSelectAll} style={{ width: 14, height: 14 }} />
+            Tout sélectionner
+          </label>
+          {selectedIds.size > 0 && (
+            <button className="btn-ghost btn-danger" style={{ fontSize: 11.5 }} onClick={requestBulkDelete}>
+              🗑️ Supprimer la sélection ({selectedIds.size})
+            </button>
+          )}
+        </div>
+      )}
       {results.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement pour ces filtres.</div>}
       {results.map((r) => {
         const isExpanded = expandedId === r.id;
         return (
-          <div key={r.id} style={{ marginBottom: 8 }}>
+          <div key={r.id} style={{ marginBottom: 8, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.has(r.id)}
+              onChange={() => toggleSelect(r.id)}
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: 15, height: 15, marginTop: 16, flexShrink: 0 }}
+            />
+            <div style={{ flex: 1 }}>
             <div
               className="report-card rc-report-card"
               style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
@@ -1409,15 +1472,27 @@ function AllReportsAdmin() {
                   <button className="btn-primary" onClick={() => saveEdit(r.id)} disabled={saving}>
                     {saving ? 'Enregistrement...' : 'Enregistrer'}
                   </button>
-                  <button className="btn-ghost btn-danger" onClick={() => deleteReport(r.id)}>
+                  <button className="btn-ghost btn-danger" onClick={() => requestDelete(r.id)}>
                     🗑️ Supprimer définitivement
                   </button>
                 </div>
               </div>
             )}
+            </div>
           </div>
         );
       })}
+
+      {confirmingDeleteIds && (
+        <ConfirmModal
+          title={confirmingDeleteIds.length > 1 ? `Supprimer ${confirmingDeleteIds.length} signalements ?` : 'Supprimer ce signalement ?'}
+          message={`Cette action supprimera définitivement ${confirmingDeleteIds.length > 1 ? 'ces signalements' : 'ce signalement'} et toutes leurs photos. Impossible d'annuler après coup.`}
+          confirmLabel={deleting ? 'Suppression...' : 'Supprimer définitivement'}
+          danger
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmingDeleteIds(null)}
+        />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
         <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>

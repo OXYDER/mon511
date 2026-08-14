@@ -3,6 +3,7 @@ import { api } from '../api';
 import { pickName, timeAgo, statusPillClass } from '../i18n';
 import { compressImage } from '../imageCompression';
 import Lightbox from '../components/Lightbox';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface Props {
   onClose: () => void;
@@ -23,6 +24,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
   const [description, setDescription] = useState('');
   const [addressText, setAddressText] = useState('');
   const [problemTypeId, setProblemTypeId] = useState('');
@@ -122,10 +124,15 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
   async function withdraw() {
     if (!expandedId) return;
-    if (!window.confirm(lang === 'fr' ? 'Retirer ce signalement ? Cette action est définitive.' : 'Withdraw this report? This cannot be undone.')) return;
+    setConfirmingWithdraw(true);
+  }
+
+  async function confirmWithdraw() {
+    if (!expandedId) return;
     await api.delete(`/reports/${expandedId}`);
     setExpandedId(null);
     setDetail(null);
+    setConfirmingWithdraw(false);
     loadList();
   }
 
@@ -413,6 +420,18 @@ export default function MyReportsPage({ onClose, lang }: Props) {
           );
         })}
       </div>
+
+      {confirmingWithdraw && (
+        <ConfirmModal
+          title={lang === 'fr' ? 'Retirer ce signalement ?' : 'Withdraw this report?'}
+          message={lang === 'fr' ? 'Cette action est définitive et ne peut pas être annulée.' : 'This action is permanent and cannot be undone.'}
+          confirmLabel={lang === 'fr' ? 'Retirer' : 'Withdraw'}
+          cancelLabel={lang === 'fr' ? 'Annuler' : 'Cancel'}
+          danger
+          onConfirm={confirmWithdraw}
+          onCancel={() => setConfirmingWithdraw(false)}
+        />
+      )}
     </div>
   );
 }

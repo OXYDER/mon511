@@ -80,6 +80,12 @@ export class ModerationController {
     return this.moderationService.adminDeleteReport(id);
   }
 
+  @Post('all-reports/bulk-delete')
+  @Roles('admin', 'super_admin')
+  adminDeleteReportsBulk(@Body('ids') ids: string[]) {
+    return this.moderationService.adminDeleteReportsBulk(ids);
+  }
+
   @Post('all-reports/photos/:photoId/delete')
   @Roles('admin', 'super_admin')
   adminDeletePhoto(@Param('photoId') photoId: string) {
