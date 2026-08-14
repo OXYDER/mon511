@@ -473,12 +473,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
    * (requireLocationThenCreate), puisque le GPS d'un téléphone est
    * généralement fiable et reste la meilleure protection contre les
    * fausses positions. */
+  /** Toujours essayer le vrai GPS d'abord, peu importe l'appareil — un
+   * ordinateur de bureau équipé d'une puce cellulaire/GPS réelle (rare
+   * mais ça existe) doit pouvoir s'en servir tout comme un téléphone.
+   * Seulement si le GPS échoue ou est trop imprécis (locationCheckStatus
+   * passe à 'denied'/'imprecise'), un bouton "Choisir sur la carte"
+   * apparaît pour se rabattre sur l'outil de placement manuel. */
   function startReporting() {
-    if (window.innerWidth <= 760) {
-      requireLocationThenCreate();
-      return;
-    }
-    setPlacementMode(true);
+    requireLocationThenCreate();
   }
 
 
@@ -1360,9 +1362,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     ? "mon511.ca exige une position GPS précise pour signaler un problème, afin de garantir des signalements fiables pour la communauté. Active la localisation dans les réglages de ton navigateur ou de ton appareil, puis réessaie."
                     : 'mon511.ca requires a precise GPS location to submit a report, to keep reports reliable for the community. Enable location in your browser or device settings, then try again.'}
                 </p>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button className="btn-primary" onClick={() => retryLocationCheck()}>
                     {lang === 'fr' ? 'Réessayer' : 'Try again'}
+                  </button>
+                  <button className="btn-ghost" onClick={() => { setLocationCheckStatus(null); setPlacementMode(true); }}>
+                    {lang === 'fr' ? 'Choisir sur la carte' : 'Choose on map'}
                   </button>
                   <button className="btn-ghost" onClick={() => setLocationCheckStatus(null)}>
                     {lang === 'fr' ? 'Annuler' : 'Cancel'}
@@ -1381,9 +1386,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     ? `Ta position actuelle n'est précise qu'à environ ${Math.round(lastAccuracy ?? 0)} m — probablement une estimation par réseau plutôt que le GPS réel de ton appareil. Assure-toi que la localisation "précise" (pas juste approximative) est activée, idéalement à l'extérieur ou près d'une fenêtre, puis réessaie.`
                     : `Your current location is only accurate to about ${Math.round(lastAccuracy ?? 0)} m — likely a network estimate rather than your device's real GPS. Make sure "precise" (not just approximate) location is enabled, ideally outdoors or near a window, then try again.`}
                 </p>
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button className="btn-primary" onClick={() => retryLocationCheck()}>
                     {lang === 'fr' ? 'Réessayer' : 'Try again'}
+                  </button>
+                  <button className="btn-ghost" onClick={() => { setLocationCheckStatus(null); setPlacementMode(true); }}>
+                    {lang === 'fr' ? 'Choisir sur la carte' : 'Choose on map'}
                   </button>
                   <button className="btn-ghost" onClick={() => setLocationCheckStatus(null)}>
                     {lang === 'fr' ? 'Annuler' : 'Cancel'}
