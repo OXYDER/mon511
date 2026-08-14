@@ -41,6 +41,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
   const MAX_PHOTOS = 3;
   const [exifMismatch, setExifMismatch] = useState<{ exifAddress: string; exifMunicipality: string | null; exifCoords: { lat: number; lng: number } } | null>(null);
+  const [noExifDataFound, setNoExifDataFound] = useState(false);
   const [checkingExif, setCheckingExif] = useState(false);
   const [photoExifCoords, setPhotoExifCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [usedPhotoLocation, setUsedPhotoLocation] = useState(false);
@@ -170,6 +171,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     setPhotoFiles((prev) => [...prev, ...accepted]);
     setPhotoPreviews((prev) => [...prev, ...accepted.map((f) => URL.createObjectURL(f))]);
     setExifMismatch(null);
+    setNoExifDataFound(false);
 
     // Vérification EXIF seulement sur la toute première photo ajoutée —
     // pas la peine de re-vérifier à chaque photo supplémentaire.
@@ -193,9 +195,19 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
           // Aucune position détectée encore — propose directement celle de la photo.
           setExifMismatch({ exifAddress: geo.address, exifMunicipality: geo.municipality, exifCoords: { lat: gps.latitude, lng: gps.longitude } });
         }
+      } else {
+        // La photo n'a AUCUNE donnée de localisation exploitable — rien à
+        // comparer. Ça arrive souvent sur mobile : le système retire les
+        // métadonnées EXIF de localisation quand une appli web (pas une
+        // appli native) accède à une photo via le sélecteur de galerie,
+        // par mesure de confidentialité. Signalé clairement plutôt que de
+        // rester silencieux, pour ne pas laisser croire à un bug alors que
+        // rien n'était comparable au départ.
+        setNoExifDataFound(true);
       }
     } catch {
       // Pas de GPS dans l'EXIF ou format non lisible — pas grave, on continue sans.
+      setNoExifDataFound(true);
     } finally {
       setCheckingExif(false);
     }
@@ -400,6 +412,11 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: 'none' }} />
               )}
               {checkingExif && <div className="geo-status">Vérification de la position de la photo...</div>}
+              {!checkingExif && noExifDataFound && (
+                <div className="geo-status" style={{ color: 'var(--text-muted)' }}>
+                  ℹ️ Cette photo ne contient pas de données de localisation exploitables (fréquent sur mobile — le système retire souvent cette information par mesure de confidentialité). Vérifie que la position ci-dessus est bien la bonne.
+                </div>
+              )}
               {exifMismatch && (
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 9, background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)' }}>
                   <div style={{ fontSize: 11.5, marginBottom: 8, lineHeight: 1.5 }}>
