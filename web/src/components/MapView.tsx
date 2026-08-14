@@ -371,6 +371,22 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       // 360px), un centrage simple sans padding du tout donne déjà un
       // résultat pratiquement identique à l'idéal (écart théorique de 10px
       // à peine, imperceptible) — plus simple et surtout fiable.
+
+      // Clic sur un pin : ne jamais dézoomer si on est déjà assez proche —
+      // seulement centrer sur le pin. Si le zoom actuel est trop éloigné
+      // pour bien voir le pin, on zoome à un niveau raisonnable (17),
+      // comme avant. Le seuil de 15 correspond à peu près à l'échelle
+      // d'un quartier/une rue — en dessous, un pin isolé serait difficile
+      // à distinguer sans se rapprocher.
+      const MIN_CLOSE_ZOOM = 15;
+      const DEFAULT_CLOSE_ZOOM = 17;
+      let targetZoom = center.zoom ?? 13;
+      if (center.preserveZoomIfClose) {
+        const currentZoom = map.getZoom();
+        targetZoom = currentZoom >= MIN_CLOSE_ZOOM ? currentZoom : DEFAULT_CLOSE_ZOOM;
+      }
+
+      map.flyTo({ center: [center.lng, center.lat], zoom: targetZoom, duration: 800 });
     }
   }, [center]);
 
