@@ -8,6 +8,7 @@ import { MunicipalityIntegrationsService } from '../municipality-integrations/mu
 import { ReputationService } from '../reputation/reputation.service';
 import { EmailService } from '../../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UploadsService } from '../uploads/uploads.service';
 
 @Injectable()
 export class ModerationService {
@@ -17,6 +18,7 @@ export class ModerationService {
     private readonly notifications: NotificationsService,
     private readonly reputationService: ReputationService,
     private readonly email: EmailService,
+    private readonly uploadsService: UploadsService,
   ) {}
 
   /** File d'attente — signalements en attente de modération, plus récents en premier. */
@@ -103,6 +105,41 @@ export class ModerationService {
     ]);
 
     return { results, total: total?.count ?? 0 };
+  }
+
+  /** Édition admin — plus large que updateOwn() du propriétaire (peut
+   * aussi changer le statut, contrairement au propriétaire lui-même). */
+  async adminUpdateReport(
+    reportId: string,
+    changes: { description?: string; addressText?: string; problemTypeId?: string; status?: string },
+  ) {
+    const report = await this.db.selectFrom('reports').select('id').where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+
+    await this.db
+      .updateTable('reports')
+      .set({
+        ...(changes.description !== undefined && { description: changes.description }),
+        ...(changes.addressText !== undefined && { address_text: changes.addressText }),
+        ...(changes.problemTypeId !== undefined && { problem_type_id: changes.problemTypeId }),
+        ...(changes.status !== undefined && { status: changes.status as any }),
+      })
+      .where('id', '=', reportId)
+      .execute();
+
+    return { updated: true };
+  }
+
+  /** Suppression admin — définitive, contrairement au retrait par le
+   * propriétaire qui passe par un statut. Supprime aussi les photos
+   * associées sur le stockage S3 avant d'effacer la ligne en base. */
+  async adminDeleteReport(reportId: string) {
+    const photos = await this.db.selectFrom('report_photos').select(['storage_key']).where('report_id', '=', reportId).execute();
+    if (photos.length > 0) {
+      await this.uploadsService.deleteObjects(photos.map((p) => p.storage_key)).catch(() => {});
+    }
+    await this.db.deleteFrom('reports').where('id', '=', reportId).execute();
+    return { deleted: true };
   }
 
   async findDetail(reportId: string) {

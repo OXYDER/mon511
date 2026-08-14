@@ -65,6 +65,21 @@ export class ModerationController {
     });
   }
 
+  @Patch('all-reports/:id')
+  @Roles('admin', 'super_admin')
+  adminUpdateReport(
+    @Param('id') id: string,
+    @Body() changes: { description?: string; addressText?: string; problemTypeId?: string; status?: string },
+  ) {
+    return this.moderationService.adminUpdateReport(id, changes);
+  }
+
+  @Post('all-reports/:id/delete')
+  @Roles('admin', 'super_admin')
+  adminDeleteReport(@Param('id') id: string) {
+    return this.moderationService.adminDeleteReport(id);
+  }
+
   @Get(':id')
   detail(@Param('id') id: string) {
     return this.moderationService.findDetail(id);

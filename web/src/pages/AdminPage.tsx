@@ -1019,6 +1019,13 @@ function AllReportsAdmin() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [types, setTypes] = useState<any[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editDescription, setEditDescription] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editTypeId, setEditTypeId] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [saving, setSaving] = useState(false);
   const LIMIT = 30;
 
   async function load() {
@@ -1037,6 +1044,38 @@ function AllReportsAdmin() {
   useEffect(() => { load(); }, [offset, status, sortBy, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setOffset(0); }, [search, status]);
   useEffect(() => { if (offset === 0) load(); }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api.get<any[]>('/problem-types').then(setTypes).catch(() => {}); }, []);
+
+  function toggleExpand(r: any) {
+    if (expandedId === r.id) { setExpandedId(null); return; }
+    setExpandedId(r.id);
+    setEditDescription(r.description ?? '');
+    setEditAddress(r.addressText ?? '');
+    setEditTypeId(r.problem_type_id ?? types.find((t) => t.name_fr === r.problemTypeNameFr)?.id ?? '');
+    setEditStatus(r.status);
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    try {
+      await api.patch(`/moderation/all-reports/${id}`, {
+        description: editDescription, addressText: editAddress, problemTypeId: editTypeId, status: editStatus,
+      });
+      setExpandedId(null);
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteReport(id: string) {
+    if (!window.confirm('Supprimer définitivement ce signalement (et ses photos) ? Cette action est irréversible.')) return;
+    await api.post(`/moderation/all-reports/${id}/delete`, {});
+    setExpandedId(null);
+    load();
+  }
 
   if (error) return <div className="error-banner">{error}</div>;
 
@@ -1047,7 +1086,8 @@ function AllReportsAdmin() {
       </div>
       <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
         Vue d'ensemble de TOUS les signalements de TOUS les usagers, peu importe le statut —
-        pour la file d'approbation active, voir l'onglet « File de modération ».
+        pour la file d'approbation active, voir l'onglet « File de modération ». Cliquer sur un
+        signalement pour l'éditer ou le supprimer.
       </p>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -1074,32 +1114,81 @@ function AllReportsAdmin() {
       </div>
 
       {results.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun signalement pour ces filtres.</div>}
-      {results.map((r) => (
-        <div key={r.id} className="report-card rc-report-card" style={{ cursor: 'default' }}>
-          <div className="rc-report-top-row">
-            <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
-            <span className={`pill ${statusPillClass(r.status)}`}>
-              {STATUS_LABELS_ALL[r.status] ?? r.status}
-            </span>
-          </div>
-          <div className="rc-report-mid-row">
-            {r.thumbnailUrl ? (
-              <div className="rc-thumb-wrap">
-                <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
-                <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+      {results.map((r) => {
+        const isExpanded = expandedId === r.id;
+        return (
+          <div key={r.id} style={{ marginBottom: 8 }}>
+            <div
+              className="report-card rc-report-card"
+              style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
+              onClick={() => toggleExpand(r)}
+            >
+              <div className="rc-report-top-row">
+                <div className="rc-title">{r.problemTypeNameFr} {r.municipalityName ? `— ${r.municipalityName}` : ''}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`pill ${statusPillClass(r.status)}`}>
+                    {STATUS_LABELS_ALL[r.status] ?? r.status}
+                  </span>
+                  <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>{isExpanded ? '−' : '+'}</span>
+                </div>
               </div>
-            ) : (
-              <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
-                {r.problemTypeIcon ?? '📍'}
+              <div className="rc-report-mid-row">
+                {r.thumbnailUrl ? (
+                  <div className="rc-thumb-wrap">
+                    <img src={r.thumbnailUrl} alt="" className={`rc-icon-hex rc-thumb ${r.status === 'published_resolved' ? 'resolved' : ''}`} />
+                    <span className="rc-type-badge">{r.problemTypeIcon ?? '📍'}</span>
+                  </div>
+                ) : (
+                  <div className={`rc-icon-hex ${r.status === 'published_resolved' ? 'resolved' : ''}`}>
+                    {r.problemTypeIcon ?? '📍'}
+                  </div>
+                )}
+                <div className="rc-meta">
+                  {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'}
+                </div>
+              </div>
+              <div className="rc-report-time">{timeAgo(r.created_at, 'fr')}</div>
+            </div>
+
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }} onClick={(e) => e.stopPropagation()}>
+                <div className="field-group">
+                  <label className="field-label">Type de problème</label>
+                  <select value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}>
+                    {types.map((t) => (
+                      <option key={t.id} value={t.id}>{t.icon} {t.name_fr}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Statut</label>
+                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                    {Object.entries(STATUS_LABELS_ALL).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Description</label>
+                  <textarea rows={3} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Adresse</label>
+                  <input className="text-input" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+                </div>
+                <div className="action-row">
+                  <button className="btn-primary" onClick={() => saveEdit(r.id)} disabled={saving}>
+                    {saving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                  <button className="btn-ghost btn-danger" onClick={() => deleteReport(r.id)}>
+                    🗑️ Supprimer définitivement
+                  </button>
+                </div>
               </div>
             )}
-            <div className="rc-meta">
-              {r.authorEmail ?? 'Anonyme'} · {r.addressText ?? 'GPS'}
-            </div>
           </div>
-          <div className="rc-report-time">{timeAgo(r.created_at, 'fr')}</div>
-        </div>
-      ))}
+        );
+      })}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14 }}>
         <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>
