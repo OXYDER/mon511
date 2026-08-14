@@ -1272,6 +1272,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: 'calc(100vh - 298px)' }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>📍 {lang === 'fr' ? 'Signalements mon511' : 'mon511 reports'}</span>
+            <ToggleSwitch on={layerPrefs.signalements_mon511} onToggle={() => toggleLayer('signalements_mon511')} />
+          </div>
+          {authenticated && (
+            <div className="layer-toggle" style={{ marginBottom: 8 }}>
+              <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>💜 {lang === 'fr' ? 'Signalements de mes amis' : "My friends' reports"}</span>
+              <ToggleSwitch on={layerPrefs.signalements_amis} onToggle={() => toggleLayer('signalements_amis')} />
+            </div>
+          )}
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
             <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
           </div>
