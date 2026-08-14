@@ -156,6 +156,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [locationCheckStatus, setLocationCheckStatus] = useState<'checking' | 'denied' | 'imprecise' | null>(null);
   const [lastAccuracy, setLastAccuracy] = useState<number | null>(null);
   const pendingOverrideCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [placementMode, setPlacementMode] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -454,6 +455,32 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     requireLocationThenCreate(pendingOverrideCoordsRef.current ?? undefined);
   }
 
+  /** Ouvre directement le formulaire à l'endroit cliqué — sans exiger de
+   * vérification GPS. Un clic délibéré et précis sur la carte (bureau)
+   * est déjà en soi la preuve d'un choix intentionnel de position ; la
+   * géolocalisation d'un ordinateur de bureau est de toute façon souvent
+   * peu fiable (approximation par IP/Wi-Fi plutôt qu'un vrai GPS), donc
+   * l'y exiger n'aurait fait qu'empêcher les usagers de bureau de
+   * signaler quoi que ce soit. */
+  function openCreateAtCoords(lat: number, lng: number) {
+    setCreateModalCoords({ lat, lng });
+    setShowCreateModal(true);
+  }
+
+  /** Bouton "Signaler" — sur bureau (peu de chances d'avoir un vrai GPS),
+   * ouvre l'outil "cliquer sur la carte pour choisir l'emplacement" plutôt
+   * que d'exiger le GPS. Sur mobile, garde l'exigence GPS stricte
+   * (requireLocationThenCreate), puisque le GPS d'un téléphone est
+   * généralement fiable et reste la meilleure protection contre les
+   * fausses positions. */
+  function startReporting() {
+    if (window.innerWidth <= 760) {
+      requireLocationThenCreate();
+      return;
+    }
+    setPlacementMode(true);
+  }
+
 
 
   async function handleSearch(e: React.FormEvent) {
@@ -714,6 +741,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onViewportChange={handleViewportChange}
           mapType={mapType}
           onMapClick={(lat, lng, x, y) => setContextMenu({ lat, lng, x, y })}
+          placementModeActive={placementMode}
+          onPlacementClick={(lat, lng) => { setPlacementMode(false); openCreateAtCoords(lat, lng); }}
           focusPinId={selection?.id ?? null}
           hoveredPinId={hoveredPinId}
         />
@@ -1267,7 +1296,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button className="fab" onClick={() => (authenticated ? requireLocationThenCreate() : onRequireAuth())}>
+      <button className="fab" onClick={() => (authenticated ? startReporting() : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
         <span>{t('signaler', lang)}</span>
       </button>
@@ -1286,6 +1315,23 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
         </label>
       </div>
+
+      {placementMode && (
+        <div
+          style={{
+            position: 'absolute', top: 'calc(var(--banner-h, 0px) + 20px)', left: '50%', transform: 'translateX(-50%)',
+            zIndex: 60, background: 'var(--panel-solid)', border: '1px solid var(--accent-signal)', borderRadius: 12,
+            boxShadow: 'var(--shadow-panel)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 14,
+          }}
+        >
+          <span style={{ fontSize: 13 }}>
+            🎯 {lang === 'fr' ? "Clique sur la carte pour choisir l'emplacement exact du signalement." : 'Click on the map to choose the exact location for your report.'}
+          </span>
+          <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setPlacementMode(false)}>
+            {lang === 'fr' ? 'Annuler' : 'Cancel'}
+          </button>
+        </div>
+      )}
 
       {locationCheckStatus && (
         <div className="modal-overlay" onClick={() => locationCheckStatus !== 'checking' && setLocationCheckStatus(null)}>
@@ -1389,7 +1435,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 const { lat, lng } = contextMenu;
                 setContextMenu(null);
                 if (!authenticated) { onRequireAuth(); return; }
-                requireLocationThenCreate({ lat, lng });
+                openCreateAtCoords(lat, lng);
               }}
             >
               📍 {lang === 'fr' ? 'Signaler ici' : 'Report here'}

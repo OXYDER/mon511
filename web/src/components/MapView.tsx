@@ -39,6 +39,12 @@ interface Props {
     bounds: { north: number; south: number; east: number; west: number },
   ) => void;
   onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
+  /** Actif seulement pendant l'outil « cliquer pour choisir l'emplacement »
+   * (bouton Signaler sur bureau) — un clic GAUCHE sur la carte déclenche
+   * alors onPlacementClick, en plus du clic droit qui garde son
+   * comportement habituel (menu contextuel « Signaler ici »). */
+  placementModeActive?: boolean;
+  onPlacementClick?: (lat: number, lng: number) => void;
   focusPinId?: string | null;
   hoveredPinId?: string | null;
 }
@@ -62,9 +68,17 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, focusPinId = null, hoveredPinId = null }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, placementModeActive = false, onPlacementClick, focusPinId = null, hoveredPinId = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  // Le clic gauche en mode placement est enregistré une seule fois à la
+  // création de la carte (comme le clic droit) — des refs évitent que ce
+  // gestionnaire garde en mémoire une valeur périmée de ces props, qui
+  // changent dynamiquement pendant que la carte, elle, ne se recrée pas.
+  const placementModeActiveRef = useRef(placementModeActive);
+  placementModeActiveRef.current = placementModeActive;
+  const onPlacementClickRef = useRef(onPlacementClick);
+  onPlacementClickRef.current = onPlacementClick;
   const markersRef = useRef<Marker[]>([]);
   const styleRetriedRef = useRef(false);
   const popupsRef = useRef<maplibregl.Popup[]>([]);
@@ -248,6 +262,15 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       triggerMapClickIfAllowed(e.lngLat.lat, e.lngLat.lng, e.point);
     });
 
+    // Clic gauche, mais SEULEMENT pendant le mode placement actif (outil
+    // "cliquer pour choisir l'emplacement" du bouton Signaler sur
+    // bureau) — sinon le clic gauche garde son usage normal (sélection
+    // d'un pin, déplacement de la carte, etc.).
+    mapRef.current.on('click', (e) => {
+      if (!placementModeActiveRef.current || !onPlacementClickRef.current) return;
+      onPlacementClickRef.current(e.lngLat.lat, e.lngLat.lng);
+    });
+
     // Appui long sur mobile — équivalent tactile du clic droit. Annulé si
     // le doigt bouge trop (c'est alors un glissement de carte, pas un appui
     // long) ou si le doigt est relâché avant le délai.
@@ -350,6 +373,14 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       // à peine, imperceptible) — plus simple et surtout fiable.
     }
   }, [center]);
+
+  // Curseur en croix pendant le mode placement — signal visuel clair que
+  // le prochain clic sur la carte va déterminer l'emplacement du
+  // signalement.
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.getCanvas().style.cursor = placementModeActive ? 'crosshair' : '';
+  }, [placementModeActive]);
 
   // Redessiner les pins à chaque changement de liste
   /** Regroupe les pins proches à l'écran (pas en distance réelle — la

@@ -61,11 +61,17 @@ export default function Lightbox({ photos, initialIndex, onClose }: Props) {
     const dy = touches[0].clientY - touches[1].clientY;
     return Math.hypot(dx, dy);
   }
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+
   function handleTouchStart(e: React.TouchEvent) {
     if (e.touches.length === 2) {
       pinchRef.current = { startDist: touchDist(e.touches), startZoom: zoom };
     } else if (e.touches.length === 1 && zoom > 1) {
       dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, panX: pan.x, panY: pan.y };
+    } else if (e.touches.length === 1 && zoom === 1 && photos.length > 1) {
+      // Pas zoomé — un seul doigt sert à défiler entre les photos plutôt
+      // qu'à déplacer l'image (qui n'a de sens qu'une fois zoomée).
+      swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
   }
   function handleTouchMove(e: React.TouchEvent) {
@@ -78,7 +84,21 @@ export default function Lightbox({ photos, initialIndex, onClose }: Props) {
       setPan({ x: dragRef.current.panX + dx, y: dragRef.current.panY + dy });
     }
   }
-  function handleTouchEnd() {
+  function handleTouchEnd(e: React.TouchEvent) {
+    // Défilement horizontal du doigt — seuil assez large pour ne pas se
+    // déclencher par accident sur un simple tapotement, et une nette
+    // préférence horizontale pour ne pas gêner le défilement vertical de
+    // la page en dessous (peu probable ici vu que la lightbox couvre tout
+    // l'écran, mais reste prudent).
+    const start = swipeStartRef.current;
+    swipeStartRef.current = null;
+    if (start && e.changedTouches.length === 1) {
+      const dx = e.changedTouches[0].clientX - start.x;
+      const dy = e.changedTouches[0].clientY - start.y;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        go(dx < 0 ? 1 : -1);
+      }
+    }
     dragRef.current = null;
     pinchRef.current = null;
   }
