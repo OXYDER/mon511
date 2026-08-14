@@ -390,27 +390,64 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       return;
     }
     setLocationCheckStatus('checking');
-    navigator.geolocation.getCurrentPosition(
+
+    // Une seule lecture instantanée (getCurrentPosition) peut être de
+    // mauvaise qualité, surtout à l'intérieur d'un bâtiment — le GPS
+    // s'améliore souvent après quelques secondes le temps de capter plus
+    // de satellites. On observe plusieurs lectures pendant une courte
+    // fenêtre et on garde la meilleure plutôt que la toute première.
+    let best: GeolocationPosition | null = null;
+    let settled = false;
+    const watchWindowMs = 6000;
+
+    const finish = (pos: GeolocationPosition) => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      setLastAccuracy(accuracy);
+      if (accuracy > REQUIRED_GPS_ACCURACY_M) {
+        setLocationCheckStatus('imprecise');
+        return;
+      }
+      setLocationCheckStatus(null);
+      // La vérification prouve que l'appareil a une vraie localisation
+      // précise activée — mais pour « Signaler ici » (clic droit), c'est
+      // l'endroit cliqué sur la carte qui doit être utilisé pour le
+      // signalement, pas nécessairement la position actuelle de la
+      // personne (utile pour signaler un endroit qu'on regarde sans y
+      // être physiquement).
+      setCreateModalCoords(pendingOverrideCoordsRef.current ?? { lat: latitude, lng: longitude });
+      setShowCreateModal(true);
+    };
+
+    const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        setLastAccuracy(accuracy);
-        if (accuracy > REQUIRED_GPS_ACCURACY_M) {
-          setLocationCheckStatus('imprecise');
-          return;
+        if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
+        // Assez précis tout de suite — pas besoin d'attendre la fin de la
+        // fenêtre, autant conclure immédiatement.
+        if (pos.coords.accuracy <= REQUIRED_GPS_ACCURACY_M && !settled) {
+          settled = true;
+          navigator.geolocation.clearWatch(watchId);
+          finish(pos);
         }
-        setLocationCheckStatus(null);
-        // La vérification prouve que l'appareil a une vraie localisation
-        // précise activée — mais pour « Signaler ici » (clic droit), c'est
-        // l'endroit cliqué sur la carte qui doit être utilisé pour le
-        // signalement, pas nécessairement la position actuelle de la
-        // personne (utile pour signaler un endroit qu'on regarde sans y
-        // être physiquement).
-        setCreateModalCoords(pendingOverrideCoordsRef.current ?? { lat: latitude, lng: longitude });
-        setShowCreateModal(true);
       },
-      () => setLocationCheckStatus('denied'),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+      () => {
+        if (!settled) {
+          settled = true;
+          navigator.geolocation.clearWatch(watchId);
+          setLocationCheckStatus('denied');
+        }
+      },
+      { enableHighAccuracy: true, timeout: watchWindowMs, maximumAge: 0 },
     );
+
+    // Fin de la fenêtre d'observation — si rien d'assez précis n'est
+    // arrivé entre-temps, on conclut avec la meilleure lecture obtenue.
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      navigator.geolocation.clearWatch(watchId);
+      if (best) finish(best);
+      else setLocationCheckStatus('denied');
+    }, watchWindowMs);
   }
 
   function retryLocationCheck() {
@@ -1260,7 +1297,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   {lang === 'fr' ? 'Vérification de ta position...' : 'Checking your location...'}
                 </div>
                 <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                  {lang === 'fr' ? "Accepte la demande de localisation de ton navigateur si elle apparaît." : 'Accept your browser\'s location prompt if it appears.'}
+                  {lang === 'fr'
+                    ? "Accepte la demande de localisation de ton navigateur si elle apparaît. Ça peut prendre quelques secondes pour affiner la précision, surtout à l'intérieur."
+                    : "Accept your browser's location prompt if it appears. This can take a few seconds to fine-tune accuracy, especially indoors."}
                 </p>
               </>
             )}
