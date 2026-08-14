@@ -642,3 +642,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   animation: spinner-rotate 0.7s linear infinite; flex-shrink: 0;
 }
 @keyframes spinner-rotate { to { transform: rotate(360deg); } }
+
+/* Les marqueurs MapLibre (pins, regroupements déployés) n'ont pas de
+   z-index élevé par défaut — un pin déployé vers le haut d'un gros
+   regroupement peut donc se retrouver sous la barre du haut (z-index:40)
+   ou d'autres éléments d'interface, qui interceptent alors le clic avant
+   qu'il n'atteigne le pin. Force les marqueurs à toujours rester
+   au-dessus de l'interface fixe. */
+.maplibregl-marker {
+  z-index: 45 !important;
+}
