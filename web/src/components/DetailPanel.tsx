@@ -223,7 +223,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
           <div className="detail-meta-row" style={{ marginBottom: 6 }}>
             <span>📍 {report.addressText ?? 'Position GPS'}</span>
-            <span>🕓 {new Date(report.created_at).toLocaleDateString('fr-CA')} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
+            <span>🕓 {new Date(report.created_at).toLocaleString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
           </div>
           <div
             style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}

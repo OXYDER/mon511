@@ -321,7 +321,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
                       <div className="detail-meta-row" style={{ marginBottom: 14 }}>
                         <span>👍 {detail.confirmationsCount} {lang === 'fr' ? 'confirmations' : 'confirmations'}</span>
-                        <span>🕓 {lang === 'fr' ? 'Créé le' : 'Created'} {new Date(detail.created_at).toLocaleDateString(lang === 'fr' ? 'fr-CA' : 'en-CA')} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(detail.created_at, lang)})</span></span>
+                        <span>🕓 {lang === 'fr' ? 'Créé le' : 'Created'} {new Date(detail.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(detail.created_at, lang)})</span></span>
                       </div>
 
                       {detail.photos?.length > 0 && (

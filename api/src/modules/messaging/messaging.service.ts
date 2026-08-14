@@ -1,4 +1,4 @@
-import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { Kysely } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -218,4 +218,70 @@ export class MessagingService {
       .execute();
     return { blocked: true };
   }
+
+  /** Messages signalés comme abusifs, non encore traités — pour la
+   * modération. Regroupe le message lui-même avec son expéditeur, la
+   * personne qui l'a signalé et le motif. */
+  async findFlaggedMessages() {
+    return this.db
+      .selectFrom('message_flags')
+      .innerJoin('direct_messages', 'direct_messages.id', 'message_flags.message_id')
+      .innerJoin('users as sender', 'sender.id', 'direct_messages.sender_id')
+      .innerJoin('users as flagger', 'flagger.id', 'message_flags.flagged_by')
+      .select([
+        'message_flags.id as flagId', 'message_flags.reason', 'message_flags.created_at as flaggedAt',
+        'direct_messages.id as messageId', 'direct_messages.message', 'direct_messages.created_at as messageCreatedAt',
+        'direct_messages.conversation_id as conversationId',
+        'sender.id as senderId', 'sender.email as senderEmail',
+        'flagger.email as flaggerEmail',
+      ])
+      .where('message_flags.handled_at', 'is', null)
+      .orderBy('message_flags.created_at', 'desc')
+      .execute();
+  }
+
+  /** Rejette le signalement sans action — le modérateur juge que le
+   * message n'enfreint rien. */
+  async dismissMessageFlag(flagId: string, moderatorId: string) {
+    await this.db
+      .updateTable('message_flags')
+      .set({ handled_at: new Date() as any, handled_by: moderatorId })
+      .where('id', '=', flagId)
+      .execute();
+    return { dismissed: true };
+  }
+
+  /** Supprime le message signalé (son contenu devient invisible pour les
+   * deux participants) ET bloque son expéditeur de façon permanente —
+   * réservé aux cas confirmés d'abus par la modération. */
+  async removeMessageAndBanSender(flagId: string, moderatorId: string) {
+    const flag = await this.db
+      .selectFrom('message_flags')
+      .innerJoin('direct_messages', 'direct_messages.id', 'message_flags.message_id')
+      .select(['direct_messages.id as messageId', 'direct_messages.sender_id as senderId'])
+      .where('message_flags.id', '=', flagId)
+      .executeTakeFirst();
+    if (!flag) throw new NotFoundException('Signalement introuvable.');
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('direct_messages')
+        .set({ message: '[Message retiré par la modération]' })
+        .where('id', '=', flag.messageId)
+        .execute();
+      await trx
+        .updateTable('users')
+        .set({ status: 'suspended' })
+        .where('id', '=', flag.senderId)
+        .execute();
+      await trx
+        .updateTable('message_flags')
+        .set({ handled_at: new Date() as any, handled_by: moderatorId })
+        .where('id', '=', flagId)
+        .execute();
+    });
+
+    return { removed: true, senderSuspended: true };
+  }
+
 }

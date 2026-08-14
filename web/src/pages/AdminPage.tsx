@@ -9,7 +9,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'municipalPortal' | 'settings';
+type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'municipalPortal' | 'messaging' | 'settings';
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
@@ -53,6 +53,9 @@ export default function AdminPage({ onClose }: Props) {
           <button className={`tab-item ${tab === 'municipalPortal' ? 'active' : ''}`} onClick={() => setTab('municipalPortal')}>
             Portail municipal
           </button>
+          <button className={`tab-item ${tab === 'messaging' ? 'active' : ''}`} onClick={() => setTab('messaging')}>
+            Messagerie
+          </button>
           <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
             Paramètres
           </button>
@@ -67,6 +70,7 @@ export default function AdminPage({ onClose }: Props) {
         {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
         {tab === 'support' && <SupportTicketsAdmin />}
         {tab === 'municipalPortal' && <MunicipalPortalAdmin />}
+        {tab === 'messaging' && <MessagingAdmin />}
         {tab === 'settings' && <SiteSettingsAdmin />}
       </div>
     </div>
@@ -1892,6 +1896,95 @@ function MunicipalPortalAdmin() {
             </div>
           ))}
         </>
+      )}
+    </div>
+  );
+}
+
+function MessagingAdmin() {
+  const [flagged, setFlagged] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [confirmingBanFlagId, setConfirmingBanFlagId] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const results = await api.get<any[]>('/messaging/admin/flagged');
+      setFlagged(results);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function dismiss(flagId: string) {
+    setProcessingId(flagId);
+    await api.post(`/messaging/admin/flags/${flagId}/dismiss`, {}).catch(() => {});
+    setProcessingId(null);
+    load();
+  }
+
+  async function confirmBan() {
+    if (!confirmingBanFlagId) return;
+    setProcessingId(confirmingBanFlagId);
+    await api.post(`/messaging/admin/flags/${confirmingBanFlagId}/remove-and-ban`, {}).catch(() => {});
+    setProcessingId(null);
+    setConfirmingBanFlagId(null);
+    load();
+  }
+
+  if (error) return <div className="error-banner">{error}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Messages signalés ({flagged.length})
+      </div>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        Messages de la messagerie privée entre membres signalés comme abusifs, en attente de traitement.
+      </p>
+
+      {flagged.length === 0 && (
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun message signalé pour le moment.</div>
+      )}
+
+      {flagged.map((f) => (
+        <div key={f.flagId} className="report-card" style={{ cursor: 'default', flexDirection: 'column', alignItems: 'stretch' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 12.5 }}>
+              <strong>{f.senderEmail}</strong> · {new Date(f.messageCreatedAt).toLocaleString('fr-CA')}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Signalé par {f.flaggerEmail}{f.reason && ` — ${f.reason}`}
+            </div>
+          </div>
+          <div style={{
+            background: 'var(--panel-hover)', border: '1px solid var(--panel-border)', borderRadius: 9,
+            padding: 12, marginBottom: 10, fontSize: 13,
+          }}>
+            {f.message}
+          </div>
+          <div className="action-row">
+            <button className="btn-ghost" onClick={() => dismiss(f.flagId)} disabled={processingId === f.flagId}>
+              ✔ Rejeter le signalement
+            </button>
+            <button className="btn-ghost btn-danger" onClick={() => setConfirmingBanFlagId(f.flagId)} disabled={processingId === f.flagId}>
+              🚫 Retirer le message et suspendre l'expéditeur
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {confirmingBanFlagId && (
+        <ConfirmModal
+          title="Retirer ce message et suspendre l'expéditeur ?"
+          message="Le message deviendra invisible pour les deux participants, et le compte de l'expéditeur sera suspendu immédiatement. Cette action est réservée aux cas confirmés d'abus."
+          confirmLabel="Confirmer"
+          danger
+          onConfirm={confirmBan}
+          onCancel={() => setConfirmingBanFlagId(null)}
+        />
       )}
     </div>
   );

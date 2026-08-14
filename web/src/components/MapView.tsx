@@ -244,7 +244,14 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // Les distances en pixels entre pins changent avec le zoom — il faut
     // recalculer les groupes. Le déplacement (pan) seul ne change pas ces
     // distances relatives, donc pas besoin de recalculer pour ça.
-    mapRef.current.on('zoomend', () => setClusterVersion((v) => v + 1));
+    mapRef.current.on('zoomend', () => {
+      setClusterVersion((v) => v + 1);
+      // Un changement de zoom recalcule complètement les regroupements —
+      // un groupe déjà ouvert (déployé en étoile) n'a plus de sens dans
+      // ce nouveau contexte, mieux vaut le refermer plutôt que de le
+      // laisser ouvert avec des pins qui ne correspondent plus.
+      setSpiderfiedClusterId(null);
+    });
 
     function triggerMapClickIfAllowed(lat: number, lng: number, point: { x: number; y: number }) {
       if (!onMapClick) return;
@@ -262,11 +269,13 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       triggerMapClickIfAllowed(e.lngLat.lat, e.lngLat.lng, e.point);
     });
 
-    // Clic gauche, mais SEULEMENT pendant le mode placement actif (outil
-    // "cliquer pour choisir l'emplacement" du bouton Signaler sur
-    // bureau) — sinon le clic gauche garde son usage normal (sélection
-    // d'un pin, déplacement de la carte, etc.).
+    // Clic gauche — ferme d'abord un regroupement déployé en étoile s'il y
+    // en a un (clic "ailleurs" sur la carte, pas sur un pin — les pins
+    // sont des marqueurs HTML séparés, ce clic sur le canevas de la carte
+    // lui-même ne se déclenche donc jamais en cliquant vraiment sur un
+    // pin). Sinon, comportement habituel du mode placement.
     mapRef.current.on('click', (e) => {
+      setSpiderfiedClusterId(null);
       if (!placementModeActiveRef.current || !onPlacementClickRef.current) return;
       onPlacementClickRef.current(e.lngLat.lat, e.lngLat.lng);
     });

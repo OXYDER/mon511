@@ -354,6 +354,8 @@ export interface MessageFlagsTable {
   flagged_by: string;
   reason: string | null;
   created_at: Generated<Timestamp>;
+  handled_at: Timestamp | null;
+  handled_by: string | null;
 }
 
 export interface ReportNotificationsTable {

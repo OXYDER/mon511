@@ -71,9 +71,13 @@ export function setStoredLang(lang: Lang) {
  * "il y a 12 jours"). */
 export function timeAgo(dateStr: string, lang: Lang): string {
   const diffMs = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diffMs / 60000);
+  const hours = Math.floor(diffMs / 3600000);
   const days = Math.floor(diffMs / 86400000);
 
-  if (days <= 0) return lang === 'fr' ? "aujourd'hui" : 'today';
+  if (minutes < 1) return lang === 'fr' ? "à l'instant" : 'just now';
+  if (minutes < 60) return lang === 'fr' ? `il y a ${minutes} min` : `${minutes} min ago`;
+  if (hours < 24) return lang === 'fr' ? `il y a ${hours} h` : `${hours}h ago`;
   if (days === 1) return lang === 'fr' ? 'il y a 1 jour' : '1 day ago';
   if (days < 30) return lang === 'fr' ? `il y a ${days} jours` : `${days} days ago`;
 
