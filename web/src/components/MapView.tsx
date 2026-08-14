@@ -24,7 +24,7 @@ export interface RoadLineFeature {
 }
 
 interface Props {
-  center: { lat: number; lng: number; zoom?: number } | null;
+  center: { lat: number; lng: number; zoom?: number; preserveZoomIfClose?: boolean } | null;
   pins: MapPin[];
   lines?: RoadLineFeature[];
   userLocation?: { lat: number; lng: number } | null;
@@ -348,7 +348,6 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       // 360px), un centrage simple sans padding du tout donne déjà un
       // résultat pratiquement identique à l'idéal (écart théorique de 10px
       // à peine, imperceptible) — plus simple et surtout fiable.
-      map.flyTo({ center: [center.lng, center.lat], zoom: center.zoom ?? 13, duration: 800 });
     }
   }, [center]);
 

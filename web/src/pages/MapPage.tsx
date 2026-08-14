@@ -150,7 +150,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const [queryCenter, setQueryCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number; zoom?: number; preserveZoomIfClose?: boolean } | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [locationCheckStatus, setLocationCheckStatus] = useState<'checking' | 'denied' | 'imprecise' | null>(null);
@@ -556,7 +556,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   function openReport(r: Report) {
     setSelection({ type: 'report', id: r.id });
-    setMapCamera({ lat: r.latitude, lng: r.longitude, zoom: 17 });
+    setMapCamera({ lat: r.latitude, lng: r.longitude, preserveZoomIfClose: true });
   }
 
   /** Ouvre un signalement dont on n'a que l'id (ex. depuis une notification)
@@ -565,7 +565,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     setSelection({ type: 'report', id });
     try {
       const r = await api.get<any>(`/reports/${id}`);
-      if (r.latitude && r.longitude) setMapCamera({ lat: r.latitude, lng: r.longitude, zoom: 17 });
+      if (r.latitude && r.longitude) setMapCamera({ lat: r.latitude, lng: r.longitude, preserveZoomIfClose: true });
     } catch {
       // Le panneau de détail affichera son propre message d'erreur si le
       // signalement est introuvable — pas besoin de dupliquer ici.
@@ -574,7 +574,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   function openExternal(inc: ExternalIncident) {
     setSelection({ type: 'external', id: inc.id });
-    setMapCamera({ lat: inc.latitude, lng: inc.longitude, zoom: 17 });
+    setMapCamera({ lat: inc.latitude, lng: inc.longitude, preserveZoomIfClose: true });
   }
 
   function toggleTypeFilter(id: string) {
