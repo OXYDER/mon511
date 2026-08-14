@@ -348,6 +348,14 @@ export interface UserBlocksTable {
   created_at: Generated<Timestamp>;
 }
 
+export interface MessageFlagsTable {
+  id: Generated<string>;
+  message_id: string;
+  flagged_by: string;
+  reason: string | null;
+  created_at: Generated<Timestamp>;
+}
+
 export interface ReportNotificationsTable {
   id: Generated<string>;
   report_id: string;
@@ -428,6 +436,7 @@ export interface Database {
   conversation_participants: ConversationParticipantsTable;
   direct_messages: DirectMessagesTable;
   user_blocks: UserBlocksTable;
+  message_flags: MessageFlagsTable;
   external_data_sources: ExternalDataSourcesTable;
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;

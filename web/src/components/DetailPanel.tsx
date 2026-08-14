@@ -12,9 +12,10 @@ interface Props {
   onRequireAuth: () => void;
   lang: 'fr' | 'en';
   currentUserId: string | null;
+  onStartConversation?: (userId: string) => void;
 }
 
-export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth, lang, currentUserId }: Props) {
+export default function DetailPanel({ reportId, onClose, onChanged, authenticated, onRequireAuth, lang, currentUserId, onStartConversation }: Props) {
   const [report, setReport] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
@@ -245,7 +246,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             )}
           </div>
           {showAuthorProfile && report.authorId && (
-            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} />
+            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} currentUserId={currentUserId} onStartConversation={onStartConversation} />
           )}
           {report.municipality_notified === 'yes' && (
             <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>

@@ -14,9 +14,14 @@ export class MessagingController {
     return this.service.findMyConversations(user.userId);
   }
 
+  @Get('unread-count')
+  unreadCount(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getUnreadCount(user.userId);
+  }
+
   @Get('conversations/:id/messages')
-  messages(@Param('id') id: string) {
-    return this.service.findMessages(id);
+  messages(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMessages(id, user.userId);
   }
 
   @Post('conversations')
@@ -36,5 +41,10 @@ export class MessagingController {
   @Post('block/:userId')
   block(@Param('userId') blockedId: string, @CurrentUser() user: CurrentUserPayload) {
     return this.service.blockUser(user.userId, blockedId);
+  }
+
+  @Post('messages/:id/flag')
+  flagMessage(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('reason') reason?: string) {
+    return this.service.flagMessage(id, user.userId, reason);
   }
 }

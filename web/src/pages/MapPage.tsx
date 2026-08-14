@@ -16,6 +16,7 @@ const ExternalIncidentPanel = lazy(() => import('../components/ExternalIncidentP
 const ProfileModal = lazy(() => import('../components/ProfileModal'));
 const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
+const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
 const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
 const SupportTicketsModal = lazy(() => import('../components/SupportTicketsModal'));
@@ -199,6 +200,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showAbout, setShowAbout] = useState(false);
   const [showMyReports, setShowMyReports] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMessaging, setShowMessaging] = useState(false);
+  const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     reports: true, cabanes: true, feux: true, avertissements: true, travaux: true,
@@ -242,6 +246,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     if (!authenticated) { setUnreadCount(0); return; }
     api.get<number>('/notifications/unread-count').then(setUnreadCount).catch(() => {});
   }, [authenticated, showNotifications]);
+
+  useEffect(() => {
+    if (!authenticated) { setUnreadMessagesCount(0); return; }
+    api.get<number>('/messaging/unread-count').then(setUnreadMessagesCount).catch(() => {});
+  }, [authenticated, showMessaging]);
 
   useEffect(() => {
     if (authenticated) {
@@ -782,6 +791,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 <button className="icon-btn" title={t('administration', lang)} onClick={() => setShowAdmin(true)}>🛡️</button>
               )}
               <button className="icon-btn" title={lang === 'fr' ? 'Mes signalements' : 'My reports'} onClick={() => setShowMyReports(true)}>📋</button>
+              <button className="icon-btn" title={lang === 'fr' ? 'Messages' : 'Messages'} onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); }}>
+                💬
+                {unreadMessagesCount > 0 && <span className="badge-dot">{unreadMessagesCount}</span>}
+              </button>
               <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
                 🔔
                 {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
@@ -811,7 +824,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             regroupe exactement les mêmes actions avec leur libellé. */}
         <button className="topbar-mobile-menu-btn" onClick={() => setShowMobileMenu((v) => !v)} title={lang === 'fr' ? 'Menu' : 'Menu'}>
           ☰
-          {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
+          {(unreadCount + unreadMessagesCount) > 0 && <span className="badge-dot">{unreadCount + unreadMessagesCount}</span>}
         </button>
         {showMobileMenu && (
           <div className="topbar-mobile-menu">
@@ -821,6 +834,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                   <div className="search-dropdown-item" onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }}>🛡️ {t('administration', lang)}</div>
                 )}
                 <div className="search-dropdown-item" onClick={() => { setShowMyReports(true); setShowMobileMenu(false); }}>📋 {lang === 'fr' ? 'Mes signalements' : 'My reports'}</div>
+                <div className="search-dropdown-item" onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); setShowMobileMenu(false); }}>
+                  💬 {lang === 'fr' ? 'Messages' : 'Messages'}{unreadMessagesCount > 0 ? ` (${unreadMessagesCount})` : ''}
+                </div>
                 <div className="search-dropdown-item" onClick={() => { setShowNotifications(true); setShowMobileMenu(false); }}>
                   🔔 {lang === 'fr' ? 'Notifications' : 'Notifications'}{unreadCount > 0 ? ` (${unreadCount})` : ''}
                 </div>
@@ -1104,6 +1120,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onRequireAuth={onRequireAuth}
           lang={lang}
           currentUserId={currentUserId}
+          onStartConversation={(userId) => { setMessagingStartUserId(userId); setShowMessaging(true); }}
         />
       )}
       {selection?.type === 'external' && (
@@ -1547,6 +1564,14 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <SupportTicketsModal onClose={() => setShowSupportTickets(false)} lang={lang} prefill={ticketPrefill} />
       )}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
+      {showMessaging && (
+        <MessagingPanel
+          onClose={() => { setShowMessaging(false); setMessagingStartUserId(null); }}
+          lang={lang}
+          onUnreadCountChange={setUnreadMessagesCount}
+          startWithUserId={messagingStartUserId}
+        />
+      )}
 
       {/* Mention de droits d'auteur, discrète — même esprit que l'attribution
           MapLibre/MapTiler déjà présente (en bas à droite), mais placée à

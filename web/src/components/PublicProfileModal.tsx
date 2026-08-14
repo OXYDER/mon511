@@ -6,9 +6,11 @@ interface Props {
   userId: string;
   onClose: () => void;
   lang: 'fr' | 'en';
+  currentUserId?: string | null;
+  onStartConversation?: (userId: string) => void;
 }
 
-export default function PublicProfileModal({ userId, onClose, lang }: Props) {
+export default function PublicProfileModal({ userId, onClose, lang, currentUserId, onStartConversation }: Props) {
   const [profile, setProfile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +42,15 @@ export default function PublicProfileModal({ userId, onClose, lang }: Props) {
                     Membre depuis {new Date(profile.memberSince).toLocaleDateString('fr-CA')}
                     {profile.regionName && ` · ${profile.regionName}`}
                   </div>
+                  {onStartConversation && currentUserId && currentUserId !== userId && (
+                    <button
+                      className="btn-ghost"
+                      style={{ marginTop: 8, fontSize: 11.5 }}
+                      onClick={() => { onStartConversation(userId); onClose(); }}
+                    >
+                      💬 {lang === 'fr' ? 'Envoyer un message' : 'Send a message'}
+                    </button>
+                  )}
                 </div>
               </div>
 
