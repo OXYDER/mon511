@@ -157,6 +157,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [lastAccuracy, setLastAccuracy] = useState<number | null>(null);
   const pendingOverrideCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const [placementMode, setPlacementMode] = useState(false);
+  const [showLocationChoice, setShowLocationChoice] = useState(false);
+  const [choiceAddressSearch, setChoiceAddressSearch] = useState('');
+  const [choiceAddressResults, setChoiceAddressResults] = useState<GeocodingResult[]>([]);
   const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -479,9 +482,24 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
    * Seulement si le GPS échoue ou est trop imprécis (locationCheckStatus
    * passe à 'denied'/'imprecise'), un bouton "Choisir sur la carte"
    * apparaît pour se rabattre sur l'outil de placement manuel. */
+  /** Affiche le choix entre les 3 façons d'indiquer l'emplacement, plutôt
+   * que de tenter le GPS en silence et de proposer une alternative
+   * seulement après un échec — plus clair d'entrée de jeu pour les
+   * usagers qui savent déjà ne pas avoir de GPS précis disponible
+   * (ordinateur de bureau, entre autres). */
   function startReporting() {
-    requireLocationThenCreate();
+    setShowLocationChoice(true);
+    setChoiceAddressSearch('');
+    setChoiceAddressResults([]);
   }
+
+  useEffect(() => {
+    if (choiceAddressSearch.trim().length < 3) { setChoiceAddressResults([]); return; }
+    const timeout = setTimeout(() => {
+      searchCities(choiceAddressSearch, 5).then(setChoiceAddressResults);
+    }, 350);
+    return () => clearTimeout(timeout);
+  }, [choiceAddressSearch]);
 
 
 
@@ -1317,6 +1335,70 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
         </label>
       </div>
+
+      {showLocationChoice && (
+        <div className="modal-overlay" onClick={() => setShowLocationChoice(false)}>
+          <div className="modal-card" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+              {lang === 'fr' ? "Où se trouve le problème ?" : 'Where is the problem?'}
+            </div>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+              {lang === 'fr'
+                ? "Choisis la façon la plus précise pour toi d'indiquer l'emplacement."
+                : 'Choose whichever way is most precise for you to indicate the location.'}
+            </p>
+
+            <button
+              className="btn-ghost"
+              style={{ width: '100%', textAlign: 'left', marginBottom: 8, padding: '12px 14px' }}
+              onClick={() => { setShowLocationChoice(false); requireLocationThenCreate(); }}
+            >
+              📍 {lang === 'fr' ? 'Utiliser ma position GPS' : 'Use my GPS location'}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, fontWeight: 400 }}>
+                {lang === 'fr' ? "Le plus précis si ton appareil a un vrai GPS activé (téléphones surtout)." : 'Most precise if your device has real GPS enabled (mostly phones).'}
+              </div>
+            </button>
+
+            <button
+              className="btn-ghost"
+              style={{ width: '100%', textAlign: 'left', marginBottom: 8, padding: '12px 14px' }}
+              onClick={() => { setShowLocationChoice(false); setPlacementMode(true); }}
+            >
+              🗺️ {lang === 'fr' ? 'Cliquer sur la carte' : 'Click on the map'}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, fontWeight: 400 }}>
+                {lang === 'fr' ? "Idéal sur ordinateur, ou pour signaler un endroit que tu regardes sans y être." : 'Ideal on desktop, or to report a spot you\'re looking at without being there.'}
+              </div>
+            </button>
+
+            <div className="btn-ghost" style={{ width: '100%', padding: '12px 14px', position: 'relative', cursor: 'default' }}>
+              🔍 {lang === 'fr' ? 'Rechercher une adresse' : 'Search an address'}
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, marginBottom: 8, fontWeight: 400 }}>
+                {lang === 'fr' ? "Puis clique sur le bon résultat." : 'Then click the right result.'}
+              </div>
+              <input
+                className="text-input"
+                placeholder={lang === 'fr' ? 'Ex. 164 chemin Craig, Danville' : 'Ex. 164 Craig road, Danville'}
+                value={choiceAddressSearch}
+                onChange={(e) => setChoiceAddressSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              {choiceAddressResults.length > 0 && (
+                <div className="search-dropdown" style={{ position: 'relative', marginTop: 4 }}>
+                  {choiceAddressResults.map((r, i) => (
+                    <div
+                      key={i}
+                      className="search-dropdown-item"
+                      onClick={() => { setShowLocationChoice(false); openCreateAtCoords(r.lat, r.lng); }}
+                    >
+                      <span>📍</span><span>{r.name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {placementMode && (
         <div
