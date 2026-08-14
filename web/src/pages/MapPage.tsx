@@ -17,6 +17,7 @@ const ProfileModal = lazy(() => import('../components/ProfileModal'));
 const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
+const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
 const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
 const SupportTicketsModal = lazy(() => import('../components/SupportTicketsModal'));
@@ -124,12 +125,14 @@ const MODERATOR_ROLES = ['moderator', 'admin', 'super_admin'];
 export default function MapPage({ theme, onToggleTheme, onLogout, authenticated, onRequireAuth }: Props) {
   const [lang, setLang] = useState<Lang>(getStoredLang());
   const [reports, setReports] = useState<Report[]>([]);
+  const [friendsReports, setFriendsReports] = useState<any[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
   const [circulationIncidents, setCirculationIncidents] = useState<ExternalIncident[]>([]);
   const [allCabanes, setAllCabanes] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
   const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
     signalements_mon511: true,
+    signalements_amis: false,
     travaux_routiers: false,
     conditions_hivernales: false,
     avertissements: false,
@@ -201,6 +204,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMyReports, setShowMyReports] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessaging, setShowMessaging] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
   const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -251,6 +255,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     if (!authenticated) { setUnreadMessagesCount(0); return; }
     api.get<number>('/messaging/unread-count').then(setUnreadMessagesCount).catch(() => {});
   }, [authenticated, showMessaging]);
+
+  useEffect(() => {
+    if (!authenticated || !layerPrefs.signalements_amis) { setFriendsReports([]); return; }
+    api.get<any[]>('/friends/reports').then(setFriendsReports).catch(() => {});
+  }, [authenticated, layerPrefs.signalements_amis]);
 
   useEffect(() => {
     if (authenticated) {
@@ -702,6 +711,24 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     pending: r.status === 'pending_moderation',
   }));
 
+  // Signalements des amis — icône avec un petit cœur en superposition pour
+  // les distinguer visuellement des signalements communautaires normaux,
+  // sans dupliquer un pin déjà affiché par la couche principale (un ami
+  // peut aussi apparaître dans reportPins si les deux couches sont
+  // activées en même temps).
+  const friendReportPins: MapPin[] = layerPrefs.signalements_amis
+    ? friendsReports
+        .filter((r) => withinBounds(r.latitude, r.longitude) && !filteredReports.some((fr) => fr.id === r.id))
+        .map((r) => ({
+          id: r.id,
+          latitude: r.latitude,
+          longitude: r.longitude,
+          icon: '💜',
+          colorVar: r.status === 'published_resolved' ? 'resolved' : 'unresolved',
+          onClick: () => openReportById(r.id),
+        }))
+    : [];
+
   const officialPins: MapPin[] = [
     ...visibleTravaux.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
@@ -762,7 +789,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       <div className="map-background">
         <MapView
           center={mapCamera}
-          pins={[...reportPins, ...officialPins]}
+          pins={[...reportPins, ...friendReportPins, ...officialPins]}
           lines={[...conditionLines, ...circulationLines]}
           userLocation={userLocation}
           fullBleed
@@ -795,6 +822,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 💬
                 {unreadMessagesCount > 0 && <span className="badge-dot">{unreadMessagesCount}</span>}
               </button>
+              <button className="icon-btn" title={lang === 'fr' ? 'Amis' : 'Friends'} onClick={() => setShowFriends(true)}>👥</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
                 🔔
                 {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
@@ -837,6 +865,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 <div className="search-dropdown-item" onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); setShowMobileMenu(false); }}>
                   💬 {lang === 'fr' ? 'Messages' : 'Messages'}{unreadMessagesCount > 0 ? ` (${unreadMessagesCount})` : ''}
                 </div>
+                <div className="search-dropdown-item" onClick={() => { setShowFriends(true); setShowMobileMenu(false); }}>👥 {lang === 'fr' ? 'Amis' : 'Friends'}</div>
                 <div className="search-dropdown-item" onClick={() => { setShowNotifications(true); setShowMobileMenu(false); }}>
                   🔔 {lang === 'fr' ? 'Notifications' : 'Notifications'}{unreadCount > 0 ? ` (${unreadCount})` : ''}
                 </div>
@@ -1243,10 +1272,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: 'calc(100vh - 298px)' }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
           <div className="layer-toggle" style={{ marginBottom: 8 }}>
-            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>📍 {lang === 'fr' ? 'Signalements mon511' : 'mon511 reports'}</span>
-            <ToggleSwitch on={layerPrefs.signalements_mon511} onToggle={() => toggleLayer('signalements_mon511')} />
-          </div>
-          <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🚧 {t('travauxRoutiers', lang)}</span>
             <ToggleSwitch on={layerPrefs.travaux_routiers} onToggle={() => toggleLayer('travaux_routiers')} />
           </div>
@@ -1570,6 +1595,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           lang={lang}
           onUnreadCountChange={setUnreadMessagesCount}
           startWithUserId={messagingStartUserId}
+        />
+      )}
+      {showFriends && (
+        <FriendsPanel
+          onClose={() => setShowFriends(false)}
+          lang={lang}
+          onOpenConversation={(userId) => { setShowFriends(false); setMessagingStartUserId(userId); setShowMessaging(true); }}
         />
       )}
 

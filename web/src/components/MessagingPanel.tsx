@@ -132,11 +132,11 @@ export default function MessagingPanel({ onClose, lang, onUnreadCountChange, sta
                     {c.otherUserAvatarUrl ? (
                       <img src={c.otherUserAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                     ) : (
-                      (c.otherUserFirstName?.[0] ?? c.otherUserEmail[0]).toUpperCase()
+                      (c.otherUserDisplayName?.[0] ?? c.otherUserEmail[0]).toUpperCase()
                     )}
                   </div>
                   <div className="rc-body">
-                    <div className="rc-title">{c.otherUserFirstName ? `${c.otherUserFirstName} ${c.otherUserLastName ?? ''}`.trim() : c.otherUserEmail}</div>
+                    <div className="rc-title">{c.otherUserDisplayName}</div>
                     <div className="rc-meta" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.lastMessage ?? ''}</div>
                   </div>
                   {Number(c.unreadCount) > 0 && (
@@ -152,7 +152,7 @@ export default function MessagingPanel({ onClose, lang, onUnreadCountChange, sta
               {activeConversation && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>
-                    {activeConversation.otherUserFirstName ? `${activeConversation.otherUserFirstName} ${activeConversation.otherUserLastName ?? ''}`.trim() : activeConversation.otherUserEmail}
+                    {activeConversation.otherUserDisplayName}
                   </div>
                   <button
                     className="btn-ghost"

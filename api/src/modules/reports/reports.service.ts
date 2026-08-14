@@ -6,16 +6,7 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReputationService } from '../reputation/reputation.service';
 import { EmailService } from '../../email/email.service';
-
-/** Nom d'affichage respectant le réglage de confidentialité choisi par
- * l'usager lui-même — dupliqué localement depuis UsersService pour éviter
- * une dépendance inter-module pour une si petite fonction pure. */
-function formatDisplayName(firstName: string | null, lastName: string | null, lastNameDisplay: string | undefined, fallbackEmail: string): string {
-  const first = firstName || fallbackEmail.split('@')[0];
-  if (!lastName || lastNameDisplay === 'hidden' || !lastNameDisplay) return first;
-  if (lastNameDisplay === 'initial') return `${first} ${lastName[0].toUpperCase()}.`;
-  return `${first} ${lastName}`;
-}
+import { formatDisplayName } from '../../common/display-name.util';
 
 @Injectable()
 export class ReportsService {

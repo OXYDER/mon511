@@ -358,6 +358,15 @@ export interface MessageFlagsTable {
   handled_by: string | null;
 }
 
+export interface FriendshipsTable {
+  id: Generated<string>;
+  requester_id: string;
+  addressee_id: string;
+  status: Generated<'pending' | 'accepted' | 'declined'>;
+  created_at: Generated<Timestamp>;
+  responded_at: Timestamp | null;
+}
+
 export interface ReportNotificationsTable {
   id: Generated<string>;
   report_id: string;
@@ -439,6 +448,7 @@ export interface Database {
   direct_messages: DirectMessagesTable;
   user_blocks: UserBlocksTable;
   message_flags: MessageFlagsTable;
+  friendships: FriendshipsTable;
   external_data_sources: ExternalDataSourcesTable;
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;

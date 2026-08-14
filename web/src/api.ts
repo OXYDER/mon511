@@ -17,6 +17,7 @@ const LAYER_PREFS_KEY = 'mon511_layer_prefs';
 
 export interface LayerPrefs {
   signalements_mon511: boolean;
+  signalements_amis: boolean;
   travaux_routiers: boolean;
   conditions_hivernales: boolean;
   avertissements: boolean;
@@ -30,6 +31,7 @@ export const DEFAULT_LAYER_PREFS: LayerPrefs = {
   // couches (travaux, feux, etc.), les signalements communautaires sont
   // le cœur du site, ils doivent être visibles d'entrée de jeu.
   signalements_mon511: true,
+  signalements_amis: false,
   travaux_routiers: false,
   conditions_hivernales: false,
   avertissements: false,

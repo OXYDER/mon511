@@ -2,13 +2,14 @@ import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nest
 import { Kysely } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
+import { formatDisplayName } from '../../common/display-name.util';
 
 @Injectable()
 export class MessagingService {
   constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
 
   async findMyConversations(userId: string) {
-    return this.db
+    const rows = await this.db
       .selectFrom('conversation_participants as me')
       .innerJoin('conversation_participants as other', (join) =>
         join
@@ -19,7 +20,7 @@ export class MessagingService {
       .select([
         'me.conversation_id', 'other.user_id as otherUserId', 'users.email as otherUserEmail',
         'users.first_name as otherUserFirstName', 'users.last_name as otherUserLastName',
-        'users.avatar_url as otherUserAvatarUrl',
+        'users.avatar_url as otherUserAvatarUrl', 'users.privacy_settings as otherUserPrivacySettings',
         (eb) => eb
           .selectFrom('direct_messages')
           .select('message')
@@ -45,6 +46,16 @@ export class MessagingService {
       .orderBy('lastMessageAt', 'desc')
       .where('me.user_id', '=', userId)
       .execute();
+
+    return rows.map((r) => ({
+      ...r,
+      otherUserDisplayName: formatDisplayName(
+        r.otherUserFirstName,
+        r.otherUserLastName,
+        (r.otherUserPrivacySettings as any)?.last_name_display,
+        r.otherUserEmail,
+      ),
+    }));
   }
 
   async findMessages(conversationId: string, userId: string) {
