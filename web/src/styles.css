@@ -360,6 +360,13 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .pin-thumb-popup .maplibregl-popup-content {
   background: var(--panel-solid); border: 1px solid var(--panel-border); border-radius: 10px;
   padding: 4px; box-shadow: var(--shadow-panel);
+  /* MapLibre peut définir son propre pointer-events sur cet élément
+     précis dans son CSS de base — une valeur explicite sur un enfant
+     l'emporte toujours sur l'héritage du parent, peu importe la
+     spécificité. On force donc ici aussi, pas seulement sur l'enveloppe
+     .pin-thumb-popup, pour garantir que rien ne puisse jamais intercepter
+     un clic destiné au pin en dessous. */
+  pointer-events: none;
 }
 .pin-thumb-popup .maplibregl-popup-tip { border-top-color: var(--panel-solid); }
 
