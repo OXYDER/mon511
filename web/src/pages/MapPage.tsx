@@ -153,6 +153,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [mapCamera, setMapCamera] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [locationCheckStatus, setLocationCheckStatus] = useState<'checking' | 'denied' | 'imprecise' | null>(null);
+  const [lastAccuracy, setLastAccuracy] = useState<number | null>(null);
+  const pendingOverrideCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -366,6 +369,55 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       { timeout: 10000, maximumAge: 0 },
     );
   }
+
+  // Seuil au-delà duquel on considère que ce n'est pas une vraie position
+  // GPS mais une approximation par IP (VPN ou non) — un GPS d'appareil
+  // réel rapporte généralement une précision de 5 à 50m ; une position par
+  // IP rapporte typiquement 1000m et plus. 100m laisse une bonne marge
+  // pour un GPS un peu lent à se stabiliser sans laisser passer l'IP.
+  const REQUIRED_GPS_ACCURACY_M = 100;
+
+  /** Exige une position GPS précise et fraîche AVANT d'ouvrir le formulaire
+   * de signalement — pas pour naviguer sur le site, seulement au moment de
+   * vouloir signaler quelque chose. Une adresse tapée à la main reste
+   * possible ENSUITE dans le formulaire (pour ajuster ou signaler pour
+   * quelqu'un d'autre), mais il faut d'abord prouver que l'appareil a une
+   * vraie localisation précise activée. */
+  function requireLocationThenCreate(overrideCoords?: { lat: number; lng: number }) {
+    pendingOverrideCoordsRef.current = overrideCoords ?? null;
+    if (!navigator.geolocation) {
+      setLocationCheckStatus('denied');
+      return;
+    }
+    setLocationCheckStatus('checking');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setLastAccuracy(accuracy);
+        if (accuracy > REQUIRED_GPS_ACCURACY_M) {
+          setLocationCheckStatus('imprecise');
+          return;
+        }
+        setLocationCheckStatus(null);
+        // La vérification prouve que l'appareil a une vraie localisation
+        // précise activée — mais pour « Signaler ici » (clic droit), c'est
+        // l'endroit cliqué sur la carte qui doit être utilisé pour le
+        // signalement, pas nécessairement la position actuelle de la
+        // personne (utile pour signaler un endroit qu'on regarde sans y
+        // être physiquement).
+        setCreateModalCoords(pendingOverrideCoordsRef.current ?? { lat: latitude, lng: longitude });
+        setShowCreateModal(true);
+      },
+      () => setLocationCheckStatus('denied'),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+    );
+  }
+
+  function retryLocationCheck() {
+    requireLocationThenCreate(pendingOverrideCoordsRef.current ?? undefined);
+  }
+
+
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -1178,7 +1230,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button className="fab" onClick={() => (authenticated ? (setCreateModalCoords(userLocation ?? queryCenter), setShowCreateModal(true)) : onRequireAuth())}>
+      <button className="fab" onClick={() => (authenticated ? requireLocationThenCreate() : onRequireAuth())}>
         <span style={{ fontSize: 18 }}>➕</span>
         <span>{t('signaler', lang)}</span>
       </button>
@@ -1197,6 +1249,66 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
         </label>
       </div>
+
+      {locationCheckStatus && (
+        <div className="modal-overlay" onClick={() => locationCheckStatus !== 'checking' && setLocationCheckStatus(null)}>
+          <div className="modal-card" style={{ maxWidth: 380, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            {locationCheckStatus === 'checking' && (
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>📍</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                  {lang === 'fr' ? 'Vérification de ta position...' : 'Checking your location...'}
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                  {lang === 'fr' ? "Accepte la demande de localisation de ton navigateur si elle apparaît." : 'Accept your browser\'s location prompt if it appears.'}
+                </p>
+              </>
+            )}
+            {locationCheckStatus === 'denied' && (
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>🚫</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                  {lang === 'fr' ? 'Position précise requise' : 'Precise location required'}
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16 }}>
+                  {lang === 'fr'
+                    ? "mon511.ca exige une position GPS précise pour signaler un problème, afin de garantir des signalements fiables pour la communauté. Active la localisation dans les réglages de ton navigateur ou de ton appareil, puis réessaie."
+                    : 'mon511.ca requires a precise GPS location to submit a report, to keep reports reliable for the community. Enable location in your browser or device settings, then try again.'}
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button className="btn-primary" onClick={() => retryLocationCheck()}>
+                    {lang === 'fr' ? 'Réessayer' : 'Try again'}
+                  </button>
+                  <button className="btn-ghost" onClick={() => setLocationCheckStatus(null)}>
+                    {lang === 'fr' ? 'Annuler' : 'Cancel'}
+                  </button>
+                </div>
+              </>
+            )}
+            {locationCheckStatus === 'imprecise' && (
+              <>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>⚠️</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                  {lang === 'fr' ? 'Position pas assez précise' : 'Location not precise enough'}
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16 }}>
+                  {lang === 'fr'
+                    ? `Ta position actuelle n'est précise qu'à environ ${Math.round(lastAccuracy ?? 0)} m — probablement une estimation par réseau plutôt que le GPS réel de ton appareil. Assure-toi que la localisation "précise" (pas juste approximative) est activée, idéalement à l'extérieur ou près d'une fenêtre, puis réessaie.`
+                    : `Your current location is only accurate to about ${Math.round(lastAccuracy ?? 0)} m — likely a network estimate rather than your device's real GPS. Make sure "precise" (not just approximate) location is enabled, ideally outdoors or near a window, then try again.`}
+                </p>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+                  <button className="btn-primary" onClick={() => retryLocationCheck()}>
+                    {lang === 'fr' ? 'Réessayer' : 'Try again'}
+                  </button>
+                  <button className="btn-ghost" onClick={() => setLocationCheckStatus(null)}>
+                    {lang === 'fr' ? 'Annuler' : 'Cancel'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {showCreateModal && (
         <CreateReportModal
@@ -1238,8 +1350,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 const { lat, lng } = contextMenu;
                 setContextMenu(null);
                 if (!authenticated) { onRequireAuth(); return; }
-                setCreateModalCoords({ lat, lng });
-                setShowCreateModal(true);
+                requireLocationThenCreate({ lat, lng });
               }}
             >
               📍 {lang === 'fr' ? 'Signaler ici' : 'Report here'}
