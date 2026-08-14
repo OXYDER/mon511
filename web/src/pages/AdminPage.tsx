@@ -1507,7 +1507,7 @@ function AllReportsAdmin() {
 
 function EmailTemplatesAdmin() {
   const [templates, setTemplates] = useState<any[]>([]);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [subject, setSubject] = useState('');
   const [bodyHtml, setBodyHtml] = useState('');
   const [saving, setSaving] = useState(false);
@@ -1520,7 +1520,6 @@ function EmailTemplatesAdmin() {
     try {
       const results = await api.get<any[]>('/email-templates');
       setTemplates(results);
-      if (!selectedKey && results[0]) select(results[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
     }
@@ -1528,20 +1527,20 @@ function EmailTemplatesAdmin() {
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function select(t: any) {
-    setSelectedKey(t.key);
+  function toggleExpand(t: any) {
+    if (expandedKey === t.key) { setExpandedKey(null); return; }
+    setExpandedKey(t.key);
     setSubject(t.subject);
     setBodyHtml(t.body_html);
     setPreview(null);
     setFeedback(null);
   }
 
-  async function save() {
-    if (!selectedKey) return;
+  async function save(key: string) {
     setSaving(true);
     setFeedback(null);
     try {
-      await api.patch(`/email-templates/${selectedKey}`, { subject, bodyHtml });
+      await api.patch(`/email-templates/${key}`, { subject, bodyHtml });
       setFeedback('Enregistré.');
       load();
     } catch (err) {
@@ -1551,11 +1550,10 @@ function EmailTemplatesAdmin() {
     }
   }
 
-  async function showPreview() {
-    if (!selectedKey) return;
+  async function showPreview(key: string) {
     setLoadingPreview(true);
     try {
-      const result = await api.get<{ subject: string; bodyHtml: string }>(`/email-templates/${selectedKey}/preview`);
+      const result = await api.get<{ subject: string; bodyHtml: string }>(`/email-templates/${key}/preview`);
       setPreview(result);
     } catch {
       setPreview(null);
@@ -1564,97 +1562,91 @@ function EmailTemplatesAdmin() {
     }
   }
 
-  const selected = templates.find((t) => t.key === selectedKey);
-
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
-    <div style={{ display: 'flex', gap: 20 }}>
-      <div style={{ flex: '0 0 240px' }}>
-        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-          Gabarits de courriels
-        </div>
-        {templates.map((t) => (
-          <div
-            key={t.key}
-            onClick={() => select(t)}
-            className="report-card"
-            style={{ cursor: 'pointer', borderColor: t.key === selectedKey ? 'var(--accent-signal)' : undefined }}
-          >
-            <div className="rc-body">
-              <div className="rc-title" style={{ fontSize: 12.5 }}>{t.key}</div>
-              <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.description}</div>
-            </div>
-          </div>
-        ))}
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Gabarits de courriels ({templates.length})
       </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {selected && (
-          <>
-            <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-              {selected.key}
-            </div>
-            <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14 }}>{selected.description}</p>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
-              {selected.available_variables.map((v: string) => (
-                <span
-                  key={v}
-                  style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 10.5, background: 'var(--panel-hover)',
-                    border: '1px solid var(--panel-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                  }}
-                  title="Cliquer pour copier"
-                  onClick={() => navigator.clipboard.writeText(`{{${v}}}`)}
-                >
-                  {'{{'}{v}{'}}'}
-                </span>
-              ))}
+      {templates.map((t) => {
+        const isExpanded = expandedKey === t.key;
+        return (
+          <div key={t.key} style={{ marginBottom: 8 }}>
+            <div
+              onClick={() => toggleExpand(t)}
+              className="report-card"
+              style={{ cursor: 'pointer', borderColor: isExpanded ? 'var(--accent-signal)' : undefined }}
+            >
+              <div className="rc-body">
+                <div className="rc-title" style={{ fontSize: 12.5 }}>{t.key}</div>
+                <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.description}</div>
+              </div>
+              <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>{isExpanded ? '−' : '+'}</span>
             </div>
 
-            <div className="field-group">
-              <label className="field-label">Sujet</label>
-              <input className="text-input" value={subject} onChange={(e) => setSubject(e.target.value)} />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Corps (HTML)</label>
-              <textarea rows={10} style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }} value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
-            </div>
-
-            <div className="action-row" style={{ flexWrap: 'wrap' }}>
-              <button className="btn-primary" onClick={save} disabled={saving}>
-                {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-              <button className="btn-ghost" onClick={showPreview} disabled={loadingPreview}>
-                {loadingPreview ? 'Chargement...' : '👁 Prévisualiser'}
-              </button>
-              {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
-            </div>
-
-            {preview && (
-              <div style={{ marginTop: 20 }}>
-                <div className="section-label">Aperçu (avec des données d'exemple)</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
-                  Sujet : <strong style={{ color: 'var(--text-body)' }}>{preview.subject}</strong>
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                  {t.available_variables.map((v: string) => (
+                    <span
+                      key={v}
+                      style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 10.5, background: 'var(--panel-hover)',
+                        border: '1px solid var(--panel-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                      }}
+                      title="Cliquer pour copier"
+                      onClick={() => navigator.clipboard.writeText(`{{${v}}}`)}
+                    >
+                      {'{{'}{v}{'}}'}
+                    </span>
+                  ))}
                 </div>
-                <div
-                  style={{
-                    background: '#0A0B0E', border: '1px solid var(--panel-border)', borderRadius: 10,
-                    padding: 20, maxHeight: 500, overflowY: 'auto',
-                  }}
-                >
-                  <iframe
-                    title="Aperçu du courriel"
-                    style={{ width: '100%', height: 480, border: 'none', background: 'white', borderRadius: 6 }}
-                    srcDoc={`<body style="margin:0;background:#0A0B0E;font-family:sans-serif;color:#F5F6F8;padding:20px;">${preview.bodyHtml}</body>`}
-                  />
+
+                <div className="field-group">
+                  <label className="field-label">Sujet</label>
+                  <input className="text-input" value={subject} onChange={(e) => setSubject(e.target.value)} />
                 </div>
+                <div className="field-group">
+                  <label className="field-label">Corps (HTML)</label>
+                  <textarea rows={10} style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5 }} value={bodyHtml} onChange={(e) => setBodyHtml(e.target.value)} />
+                </div>
+
+                <div className="action-row" style={{ flexWrap: 'wrap' }}>
+                  <button className="btn-primary" onClick={() => save(t.key)} disabled={saving}>
+                    {saving ? 'Enregistrement...' : 'Enregistrer'}
+                  </button>
+                  <button className="btn-ghost" onClick={() => showPreview(t.key)} disabled={loadingPreview}>
+                    {loadingPreview ? 'Chargement...' : '👁 Prévisualiser'}
+                  </button>
+                  {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
+                </div>
+
+                {preview && (
+                  <div style={{ marginTop: 20 }}>
+                    <div className="section-label">Aperçu (avec des données d'exemple)</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+                      Sujet : <strong style={{ color: 'var(--text-body)' }}>{preview.subject}</strong>
+                    </div>
+                    <div
+                      style={{
+                        background: '#0A0B0E', border: '1px solid var(--panel-border)', borderRadius: 10,
+                        padding: 20, maxHeight: 500, overflowY: 'auto',
+                      }}
+                    >
+                      <iframe
+                        title="Aperçu du courriel"
+                        style={{ width: '100%', height: 480, border: 'none', background: 'white', borderRadius: 6 }}
+                        srcDoc={`<body style="margin:0;background:#0A0B0E;font-family:sans-serif;color:#F5F6F8;padding:20px;">${preview.bodyHtml}</body>`}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1668,7 +1660,7 @@ const TICKET_STATUS_LABELS: Record<string, string> = {
 function SupportTicketsAdmin() {
   const [tickets, setTickets] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ ticket: any; replies: any[] } | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
@@ -1680,7 +1672,6 @@ function SupportTicketsAdmin() {
       const params = statusFilter ? `?status=${statusFilter}` : '';
       const results = await api.get<any[]>(`/support/admin/tickets${params}`);
       setTickets(results);
-      if (!selectedId && results[0]) setSelectedId(results[0].id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Accès réservé à l'administration.");
     }
@@ -1692,17 +1683,24 @@ function SupportTicketsAdmin() {
   }
 
   useEffect(() => { loadList(); }, [statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (selectedId) loadDetail(selectedId); }, [selectedId]);
+
+  function toggleExpand(t: any) {
+    if (expandedId === t.id) { setExpandedId(null); setDetail(null); return; }
+    setExpandedId(t.id);
+    setReplyText('');
+    setFeedback(null);
+    loadDetail(t.id);
+  }
 
   async function sendReply() {
-    if (!selectedId || !replyText.trim()) return;
+    if (!expandedId || !replyText.trim()) return;
     setSending(true);
     setFeedback(null);
     try {
-      await api.post(`/support/admin/tickets/${selectedId}/reply`, { message: replyText });
+      await api.post(`/support/admin/tickets/${expandedId}/reply`, { message: replyText });
       setReplyText('');
       setFeedback('Réponse envoyée.');
-      loadDetail(selectedId);
+      loadDetail(expandedId);
       loadList();
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : 'Erreur.');
@@ -1712,95 +1710,99 @@ function SupportTicketsAdmin() {
   }
 
   async function changeStatus(status: string) {
-    if (!selectedId) return;
-    await api.patch(`/support/admin/tickets/${selectedId}/status`, { status });
-    loadDetail(selectedId);
+    if (!expandedId) return;
+    await api.patch(`/support/admin/tickets/${expandedId}/status`, { status });
+    loadDetail(expandedId);
     loadList();
   }
 
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
-    <div style={{ display: 'flex', gap: 16 }}>
-      <div style={{ flex: '1 1 280px', minWidth: 260 }}>
-        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-          Tickets de support ({tickets.length})
-        </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
-          <option value="">Tous les statuts</option>
-          {Object.entries(TICKET_STATUS_LABELS).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
-        {tickets.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun ticket.</div>}
-        {tickets.map((t) => (
-          <div
-            key={t.id}
-            className="report-card"
-            style={{ cursor: 'pointer', borderColor: t.id === selectedId ? 'var(--accent-signal)' : undefined }}
-            onClick={() => setSelectedId(t.id)}
-          >
-            <div className="rc-body">
-              <div className="rc-title" style={{ fontSize: 12.5 }}>{t.subject}</div>
-              <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.email} · {new Date(t.created_at).toLocaleDateString('fr-CA')}</div>
-            </div>
-            <span className={`pill ${t.status === 'resolved' ? 'resolved' : t.status === 'in_progress' ? 'unresolved' : ''}`}>
-              {TICKET_STATUS_LABELS[t.status]}
-            </span>
-          </div>
+    <div>
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Tickets de support ({tickets.length})
+      </div>
+      <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
+        <option value="">Tous les statuts</option>
+        {Object.entries(TICKET_STATUS_LABELS).map(([key, label]) => (
+          <option key={key} value={key}>{label}</option>
         ))}
-      </div>
-
-      <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
-        {!detail && <div className="center-msg">Sélectionne un ticket à gauche.</div>}
-        {detail && (
-          <>
-            <div className="detail-title" style={{ fontSize: 17 }}>{detail.ticket.subject}</div>
-            <div className="detail-meta-row" style={{ margin: '8px 0 16px' }}>
-              <span>✉️ {detail.ticket.email}</span>
-              {detail.ticket.name && <span>👤 {detail.ticket.name}</span>}
-              <span>{detail.ticket.created_by === 'ai' ? '🤖 Créé par le chat IA' : '✍️ Créé manuellement'}</span>
+      </select>
+      {tickets.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun ticket.</div>}
+      {tickets.map((t) => {
+        const isExpanded = expandedId === t.id;
+        return (
+          <div key={t.id} style={{ marginBottom: 8 }}>
+            <div
+              className="report-card"
+              style={{ cursor: 'pointer', borderColor: isExpanded ? 'var(--accent-signal)' : undefined }}
+              onClick={() => toggleExpand(t)}
+            >
+              <div className="rc-body">
+                <div className="rc-title" style={{ fontSize: 12.5 }}>{t.subject}</div>
+                <div className="rc-meta" style={{ fontSize: 10.5 }}>{t.email} · {new Date(t.created_at).toLocaleDateString('fr-CA')}</div>
+              </div>
+              <span className={`pill ${t.status === 'resolved' ? 'resolved' : t.status === 'in_progress' ? 'unresolved' : ''}`}>
+                {TICKET_STATUS_LABELS[t.status]}
+              </span>
+              <span style={{ marginLeft: 10, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>{isExpanded ? '−' : '+'}</span>
             </div>
 
-            <div style={{
-              background: 'var(--panel-hover)', border: '1px solid var(--panel-border)', borderRadius: 10,
-              padding: 14, marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: 260, overflowY: 'auto',
-            }}>
-              {detail.ticket.description}
-            </div>
-
-            {detail.replies.length > 0 && (
-              <>
-                <div className="section-label" style={{ fontSize: 13 }}>Réponses</div>
-                {detail.replies.map((r) => (
-                  <div key={r.id} className="comment">
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 3 }}>
-                      {r.author_type === 'admin' ? 'Équipe mon511.ca' : 'Usager'} · {new Date(r.created_at).toLocaleString('fr-CA')}
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                {!detail && <div className="center-msg">Chargement...</div>}
+                {detail && (
+                  <>
+                    <div className="detail-meta-row" style={{ marginBottom: 16 }}>
+                      <span>✉️ {detail.ticket.email}</span>
+                      {detail.ticket.name && <span>👤 {detail.ticket.name}</span>}
+                      <span>{detail.ticket.created_by === 'ai' ? '🤖 Créé par le chat IA' : '✍️ Créé manuellement'}</span>
                     </div>
-                    {r.message}
-                  </div>
-                ))}
-              </>
-            )}
 
-            <div className="section-label" style={{ fontSize: 13 }}>Répondre</div>
-            <div className="field-group">
-              <textarea rows={3} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Ta réponse (envoyée par courriel à l'usager)..." />
-            </div>
-            <div className="action-row" style={{ flexWrap: 'wrap' }}>
-              <button className="btn-primary" onClick={sendReply} disabled={sending || !replyText.trim()}>
-                {sending ? 'Envoi...' : 'Envoyer la réponse'}
-              </button>
-              {detail.ticket.status !== 'resolved' ? (
-                <button className="btn-ghost" onClick={() => changeStatus('resolved')}>✔ Marquer résolu</button>
-              ) : (
-                <button className="btn-ghost" onClick={() => changeStatus('open')}>↺ Rouvrir</button>
-              )}
-              {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
-            </div>
-          </>
-        )}
-      </div>
+                    <div style={{
+                      background: 'var(--panel-hover)', border: '1px solid var(--panel-border)', borderRadius: 10,
+                      padding: 14, marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, whiteSpace: 'pre-wrap', maxHeight: 260, overflowY: 'auto',
+                    }}>
+                      {detail.ticket.description}
+                    </div>
+
+                    {detail.replies.length > 0 && (
+                      <>
+                        <div className="section-label" style={{ fontSize: 13 }}>Réponses</div>
+                        {detail.replies.map((r) => (
+                          <div key={r.id} className="comment">
+                            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 3 }}>
+                              {r.author_type === 'admin' ? 'Équipe mon511.ca' : 'Usager'} · {new Date(r.created_at).toLocaleString('fr-CA')}
+                            </div>
+                            {r.message}
+                          </div>
+                        ))}
+                      </>
+                    )}
+
+                    <div className="section-label" style={{ fontSize: 13 }}>Répondre</div>
+                    <div className="field-group">
+                      <textarea rows={3} value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Ta réponse (envoyée par courriel à l'usager)..." />
+                    </div>
+                    <div className="action-row" style={{ flexWrap: 'wrap' }}>
+                      <button className="btn-primary" onClick={sendReply} disabled={sending || !replyText.trim()}>
+                        {sending ? 'Envoi...' : 'Envoyer la réponse'}
+                      </button>
+                      {detail.ticket.status !== 'resolved' ? (
+                        <button className="btn-ghost" onClick={() => changeStatus('resolved')}>✔ Marquer résolu</button>
+                      ) : (
+                        <button className="btn-ghost" onClick={() => changeStatus('open')}>↺ Rouvrir</button>
+                      )}
+                      {feedback && <span style={{ fontSize: 12, color: 'var(--status-resolved)' }}>{feedback}</span>}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
