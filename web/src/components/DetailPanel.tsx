@@ -19,7 +19,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showAuthorProfile, setShowAuthorProfile] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -199,20 +199,26 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
           )}
 
           {report.photos?.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, overflowX: 'auto', flexShrink: 0 }}>
-              {report.photos.map((p: any) => (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', flexShrink: 0 }}>
+              {report.photos.map((p: any, i: number) => (
                 <img
                   key={p.id}
                   src={p.url}
                   alt="Photo du signalement"
-                  onClick={() => setLightboxSrc(p.url)}
+                  onClick={() => setLightboxIndex(i)}
                   style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0, cursor: 'zoom-in' }}
                 />
               ))}
             </div>
           )}
 
-          {lightboxSrc && <Lightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
+          {lightboxIndex !== null && (
+            <Lightbox
+              photos={report.photos.map((p: any) => p.url)}
+              initialIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+            />
+          )}
 
           <div className="detail-meta-row" style={{ marginBottom: 6 }}>
             <span>📍 {report.addressText ?? 'Position GPS'}</span>

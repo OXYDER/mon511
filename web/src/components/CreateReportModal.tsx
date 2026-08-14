@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { reverseGeocodeAddress, snapToRoad, searchCities, GeocodingResult } from '../geocoding';
 import { pickName } from '../i18n';
+import { compressImage } from '../imageCompression';
 
 interface ProblemType {
   id: string;
@@ -32,6 +33,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<string | null>(null);
   const [submittedSummary, setSubmittedSummary] = useState<{ typeName: string; typeIcon: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -250,6 +252,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
       return;
     }
     setSubmitting(true);
+    setSubmitProgress('Création du signalement...');
     setError(null);
     try {
       const report = await api.post<{ id: string }>('/reports', {
@@ -265,9 +268,18 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
       });
 
       if (photoFiles.length > 0 && report?.id) {
-        for (const file of photoFiles) {
+        for (let i = 0; i < photoFiles.length; i++) {
+          setSubmitProgress(
+            photoFiles.length > 1
+              ? `Envoi de la photo ${i + 1} sur ${photoFiles.length}...`
+              : 'Envoi de la photo...',
+          );
+          // Compression appliquée seulement ici, juste avant l'envoi —
+          // jamais sur le fichier original (celui déjà utilisé plus haut
+          // pour l'extraction EXIF au moment de la sélection).
+          const compressed = await compressImage(photoFiles[i]);
           const formData = new FormData();
-          formData.append('file', file);
+          formData.append('file', compressed);
           await api.post(`/reports/${report.id}/photos`, formData).catch(() => {
             // Le signalement est déjà créé — un échec d'upload ne doit pas bloquer l'usager.
           });
@@ -280,6 +292,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
       setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
     } finally {
       setSubmitting(false);
+      setSubmitProgress(null);
     }
   }
 
@@ -478,7 +491,14 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
             </div>
 
             <button className="btn-primary" type="submit" disabled={submitting}>
-              {submitting ? 'Envoi...' : 'Envoyer le signalement'}
+              {submitting ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span className="spinner-inline" />
+                  {submitProgress ?? 'Envoi...'}
+                </span>
+              ) : (
+                'Envoyer le signalement'
+              )}
             </button>
           </form>
           </>

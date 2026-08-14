@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { pickName, timeAgo, statusPillClass } from '../i18n';
+import { compressImage } from '../imageCompression';
+import Lightbox from '../components/Lightbox';
 
 interface Props {
   onClose: () => void;
@@ -20,6 +22,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   const [types, setTypes] = useState<any[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [description, setDescription] = useState('');
   const [addressText, setAddressText] = useState('');
   const [problemTypeId, setProblemTypeId] = useState('');
@@ -29,6 +32,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [newPhotoPreviews, setNewPhotoPreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterTypeId, setFilterTypeId] = useState<string>('all');
@@ -59,6 +63,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   /** Clique sur une carte — l'ouvre juste en dessous d'elle-même (accordéon),
    * pas dans un cadre séparé. Recliquer sur la même carte la referme. */
   function toggleExpand(id: string) {
+    setLightboxIndex(null);
     if (expandedId === id) {
       setExpandedId(null);
       setDetail(null);
@@ -77,12 +82,19 @@ export default function MyReportsPage({ onClose, lang }: Props) {
       await api.patch(`/reports/${expandedId}`, { description, addressText, problemTypeId });
       if (newPhotoFiles.length > 0) {
         setUploading(true);
-        for (const file of newPhotoFiles) {
+        for (let i = 0; i < newPhotoFiles.length; i++) {
+          setUploadProgress(
+            newPhotoFiles.length > 1
+              ? (lang === 'fr' ? `Envoi de la photo ${i + 1} sur ${newPhotoFiles.length}...` : `Uploading photo ${i + 1} of ${newPhotoFiles.length}...`)
+              : (lang === 'fr' ? 'Envoi de la photo...' : 'Uploading photo...'),
+          );
+          const compressed = await compressImage(newPhotoFiles[i]);
           const formData = new FormData();
-          formData.append('file', file);
+          formData.append('file', compressed);
           await api.post(`/reports/${expandedId}/photos`, formData).catch(() => {});
         }
         setUploading(false);
+        setUploadProgress(null);
       }
       setFeedback(lang === 'fr' ? 'Signalement mis à jour.' : 'Report updated.');
       loadDetail(expandedId);
@@ -298,9 +310,14 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
                       {detail.photos?.length > 0 && (
                         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-                          {detail.photos.map((p: any) => (
+                          {detail.photos.map((p: any, i: number) => (
                             <div key={p.id} style={{ position: 'relative', width: 90, height: 90 }}>
-                              <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9 }} />
+                              <img
+                                src={p.url}
+                                alt=""
+                                onClick={() => setLightboxIndex(i)}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9, cursor: 'zoom-in' }}
+                              />
                               <button
                                 className="icon-btn"
                                 onClick={() => deletePhoto(p.id)}
@@ -311,6 +328,13 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                             </div>
                           ))}
                         </div>
+                      )}
+                      {lightboxIndex !== null && (
+                        <Lightbox
+                          photos={detail.photos.map((p: any) => p.url)}
+                          initialIndex={lightboxIndex}
+                          onClose={() => setLightboxIndex(null)}
+                        />
                       )}
                       {newPhotoPreviews.length > 0 && (
                         <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -328,6 +352,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                           ))}
                         </div>
                       )}
+
                       {(detail.photos?.length ?? 0) + newPhotoFiles.length < 3 && (
                         <label className="btn-ghost" style={{ display: 'inline-block', marginBottom: 16, cursor: 'pointer' }}>
                           📷 {lang === 'fr' ? 'Ajouter une photo' : 'Add a photo'}
@@ -354,7 +379,12 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
                       <div className="action-row">
                         <button className="btn-primary" onClick={save} disabled={uploading}>
-                          {uploading ? (lang === 'fr' ? 'Envoi...' : 'Uploading...') : (lang === 'fr' ? 'Enregistrer' : 'Save')}
+                          {uploading ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                              <span className="spinner-inline" />
+                              {uploadProgress ?? (lang === 'fr' ? 'Envoi...' : 'Uploading...')}
+                            </span>
+                          ) : (lang === 'fr' ? 'Enregistrer' : 'Save')}
                         </button>
                         <button className="btn-ghost btn-danger" onClick={withdraw}>
                           {lang === 'fr' ? 'Retirer ce signalement' : 'Withdraw report'}

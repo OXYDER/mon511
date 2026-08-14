@@ -635,3 +635,10 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .maplibregl-ctrl-attrib.mon511-attrib-open .maplibregl-ctrl-attrib-inner {
   display: block !important;
 }
+
+.spinner-inline {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 2px solid rgba(20,22,27,0.3); border-top-color: #14161B;
+  animation: spinner-rotate 0.7s linear infinite; flex-shrink: 0;
+}
+@keyframes spinner-rotate { to { transform: rotate(360deg); } }
