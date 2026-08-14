@@ -25,6 +25,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
   const [detail, setDetail] = useState<any>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const [replyText, setReplyText] = useState('');
   const [description, setDescription] = useState('');
   const [addressText, setAddressText] = useState('');
   const [problemTypeId, setProblemTypeId] = useState('');
@@ -66,6 +67,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
    * pas dans un cadre séparé. Recliquer sur la même carte la referme. */
   function toggleExpand(id: string) {
     setLightboxIndex(null);
+    setReplyText('');
     if (expandedId === id) {
       setExpandedId(null);
       setDetail(null);
@@ -113,6 +115,13 @@ export default function MyReportsPage({ onClose, lang }: Props) {
     await api.post(`/reports/${id}/owner-confirm-resolved`, {}).catch(() => {});
     loadList();
     if (expandedId === id) loadDetail(id);
+  }
+
+  async function sendReply(reportId: string) {
+    if (!replyText.trim()) return;
+    await api.post(`/reports/${reportId}/reply`, { message: replyText }).catch(() => {});
+    setReplyText('');
+    loadDetail(reportId);
   }
 
   async function confirmResolved() {
@@ -397,6 +406,37 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                           {lang === 'fr' ? 'Retirer ce signalement' : 'Withdraw report'}
                         </button>
                       </div>
+
+                      {(detail.messages?.length > 0 || detail.status === 'pending_moderation' || detail.status === 'rejected') && (
+                        <>
+                          <div className="section-label" style={{ fontSize: 13 }}>{lang === 'fr' ? 'Échange avec la modération' : 'Exchange with moderation'}</div>
+                          {detail.messages?.length > 0 ? (
+                            detail.messages.map((m: any) => (
+                              <div key={m.id} className="comment">
+                                <div className="comment-author">
+                                  {m.author_role === 'moderator' ? (lang === 'fr' ? 'Modération' : 'Moderation') : (lang === 'fr' ? 'Toi' : 'You')} · {new Date(m.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA')}
+                                </div>
+                                {m.message}
+                              </div>
+                            ))
+                          ) : (
+                            <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              {lang === 'fr' ? 'Aucun message pour le moment.' : 'No messages yet.'}
+                            </p>
+                          )}
+                          <div className="comment-row">
+                            <input
+                              className="text-input"
+                              placeholder={lang === 'fr' ? "Écrire à l'équipe de modération..." : 'Write to the moderation team...'}
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                            />
+                            <button className="btn-ghost" onClick={() => sendReply(r.id)}>
+                              {lang === 'fr' ? 'Envoyer' : 'Send'}
+                            </button>
+                          </div>
+                        </>
+                      )}
 
                       {detail.statusHistory?.length > 0 && (
                         <>

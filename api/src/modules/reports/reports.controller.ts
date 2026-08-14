@@ -99,6 +99,12 @@ export class ReportsController {
     return this.reportsService.ownerConfirmResolved(id, user.userId);
   }
 
+  @Post(':id/reply')
+  @UseGuards(JwtAuthGuard)
+  replyAsOwner(@Param('id') id: string, @Body('message') message: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.reportsService.replyAsOwner(id, user.userId, message);
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   withdrawOwn(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {

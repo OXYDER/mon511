@@ -198,7 +198,19 @@ export class ReportsService {
       .orderBy('created_at', 'desc')
       .execute();
 
-    return { ...base, problemTypeId: report.problem_type_id, statusHistory, flags, resolutionSuggestions };
+    // Échange avec la modération — jusqu'ici visible seulement côté admin
+    // (File de modération), invisible pour le propriétaire lui-même. Un
+    // modérateur qui écrit un message avant d'approuver/refuser un
+    // signalement doit pouvoir être vu ET répondu par l'usager concerné.
+    const messages = await this.db
+      .selectFrom('report_messages')
+      .innerJoin('users', 'users.id', 'report_messages.author_id')
+      .select(['report_messages.id', 'report_messages.message', 'report_messages.author_role', 'report_messages.created_at', 'users.email as authorEmail'])
+      .where('report_messages.report_id', '=', id)
+      .orderBy('report_messages.created_at', 'asc')
+      .execute();
+
+    return { ...base, problemTypeId: report.problem_type_id, statusHistory, flags, resolutionSuggestions, messages };
   }
 
   /** Édition par l'auteur — seuls certains champs sont modifiables, jamais
@@ -279,6 +291,21 @@ export class ReportsService {
     });
 
     return { alreadyResolved: false };
+  }
+
+  /** Le propriétaire répond dans l'échange avec la modération — jusqu'ici
+   * réservé aux modérateurs eux-mêmes (via ModerationService.reply, même
+   * table report_messages, juste author_role différent). */
+  async replyAsOwner(reportId: string, userId: string, message: string) {
+    const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.user_id !== userId) throw new ForbiddenException("Ce signalement ne t'appartient pas.");
+
+    return this.db
+      .insertInto('report_messages')
+      .values({ report_id: reportId, author_id: userId, author_role: 'user', message })
+      .returningAll()
+      .executeTakeFirstOrThrow();
   }
 
   async withdrawOwn(reportId: string, userId: string) {
