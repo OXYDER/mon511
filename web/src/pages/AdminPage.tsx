@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { statusPillClass, timeAgo } from '../i18n';
 import ToggleSwitch from '../components/ToggleSwitch';
+import { compressImage } from '../imageCompression';
 
 interface Props {
   onClose: () => void;
@@ -586,6 +587,13 @@ function UsersAdmin() {
   const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const sortedUsers = [...users].sort((a, b) => {
     const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -614,6 +622,32 @@ function UsersAdmin() {
     load();
   }
 
+  function toggleExpand(u: any) {
+    if (expandedId === u.id) { setExpandedId(null); return; }
+    setExpandedId(u.id);
+    setEditFirstName(u.first_name ?? '');
+    setEditLastName(u.last_name ?? '');
+    setEditEmail(u.email ?? '');
+    setEditAddress(u.address_text ?? '');
+    setSaveError(null);
+  }
+
+  async function saveEdit(id: string) {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await api.patch(`/users/admin/${id}`, {
+        firstName: editFirstName, lastName: editLastName, email: editEmail, addressText: editAddress,
+      });
+      setExpandedId(null);
+      load();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (error) return <div className="error-banner">{error}</div>;
 
   return (
@@ -637,26 +671,70 @@ function UsersAdmin() {
       >
         {sortDir === 'asc' ? '↓ Ascendant (plus ancien d\'abord)' : '↑ Descendant (plus récent d\'abord)'}
       </button>
-      {sortedUsers.map((u) => (
-        <div key={u.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex">{(u.first_name?.[0] ?? u.email[0]).toUpperCase()}</div>
-          <div className="rc-body">
-            <div className="rc-title">{u.email}</div>
-            <div className="rc-meta">réputation {u.reputation_score}</div>
+      {sortedUsers.map((u) => {
+        const isExpanded = expandedId === u.id;
+        return (
+          <div key={u.id} style={{ marginBottom: 8 }}>
+            <div
+              className="report-card"
+              style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, cursor: 'pointer' }}
+              onClick={() => toggleExpand(u)}
+            >
+              <div className="rc-icon-hex">{(u.first_name?.[0] ?? u.email[0]).toUpperCase()}</div>
+              <div className="rc-body">
+                <div className="rc-title">{u.email}</div>
+                <div className="rc-meta">réputation {u.reputation_score}</div>
+              </div>
+              <select
+                value={u.roleName}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => changeRole(u.id, e.target.value)}
+                style={{ width: 140, marginRight: 10 }}
+              >
+                <option value="user">user</option>
+                <option value="moderator">moderator</option>
+                <option value="admin">admin</option>
+                <option value="super_admin">super_admin</option>
+              </select>
+              <div onClick={(e) => e.stopPropagation()}>
+                <ToggleSwitch
+                  on={u.status !== 'suspended'}
+                  onToggle={() => toggleSuspend(u.id, u.status)}
+                  title={u.status === 'suspended' ? 'Suspendu — cliquer pour réactiver' : 'Actif — cliquer pour suspendre'}
+                />
+              </div>
+              <span style={{ marginLeft: 10, color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>{isExpanded ? '−' : '+'}</span>
+            </div>
+
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                {saveError && <div className="error-banner">{saveError}</div>}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Prénom</label>
+                    <input className="text-input" value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} />
+                  </div>
+                  <div className="field-group" style={{ flex: 1 }}>
+                    <label className="field-label">Nom</label>
+                    <input className="text-input" value={editLastName} onChange={(e) => setEditLastName(e.target.value)} />
+                  </div>
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Courriel</label>
+                  <input className="text-input" type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Adresse</label>
+                  <input className="text-input" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+                </div>
+                <button className="btn-primary" onClick={() => saveEdit(u.id)} disabled={saving}>
+                  {saving ? 'Enregistrement...' : 'Enregistrer'}
+                </button>
+              </div>
+            )}
           </div>
-          <select value={u.roleName} onChange={(e) => changeRole(u.id, e.target.value)} style={{ width: 140, marginRight: 10 }}>
-            <option value="user">user</option>
-            <option value="moderator">moderator</option>
-            <option value="admin">admin</option>
-            <option value="super_admin">super_admin</option>
-          </select>
-          <ToggleSwitch
-            on={u.status !== 'suspended'}
-            onToggle={() => toggleSuspend(u.id, u.status)}
-            title={u.status === 'suspended' ? 'Suspendu — cliquer pour réactiver' : 'Actif — cliquer pour suspendre'}
-          />
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1026,6 +1104,9 @@ function AllReportsAdmin() {
   const [editTypeId, setEditTypeId] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [photos, setPhotos] = useState<any[]>([]);
+  const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const LIMIT = 30;
 
   async function load() {
@@ -1053,6 +1134,35 @@ function AllReportsAdmin() {
     setEditAddress(r.addressText ?? '');
     setEditTypeId(r.problem_type_id ?? types.find((t) => t.name_fr === r.problemTypeNameFr)?.id ?? '');
     setEditStatus(r.status);
+    setPhotos([]);
+    setNewPhotoFiles([]);
+    api.get<any>(`/moderation/${r.id}`).then((detail) => setPhotos(detail.photos ?? [])).catch(() => {});
+  }
+
+  async function deletePhoto(photoId: string) {
+    await api.post(`/moderation/all-reports/photos/${photoId}/delete`, {}).catch(() => {});
+    setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+  }
+
+  function handleAddPhotos(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(e.target.files ?? []).slice(0, Math.max(0, 3 - photos.length - newPhotoFiles.length));
+    e.target.value = '';
+    setNewPhotoFiles((prev) => [...prev, ...selected]);
+  }
+
+  async function uploadNewPhotos(reportId: string) {
+    if (newPhotoFiles.length === 0) return;
+    setUploadingPhotos(true);
+    for (const file of newPhotoFiles) {
+      const compressed = await compressImage(file);
+      const formData = new FormData();
+      formData.append('file', compressed);
+      await api.post(`/reports/${reportId}/photos`, formData).catch(() => {});
+    }
+    setNewPhotoFiles([]);
+    setUploadingPhotos(false);
+    const detail = await api.get<any>(`/moderation/${reportId}`).catch(() => null);
+    if (detail) setPhotos(detail.photos ?? []);
   }
 
   async function saveEdit(id: string) {
@@ -1152,6 +1262,46 @@ function AllReportsAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }} onClick={(e) => e.stopPropagation()}>
+                <div className="field-group">
+                  <label className="field-label">Photos</label>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {photos.map((p) => (
+                      <div key={p.id} style={{ position: 'relative', width: 90, height: 90 }}>
+                        <img src={p.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9 }} />
+                        <button
+                          className="icon-btn"
+                          onClick={() => deletePhoto(p.id)}
+                          style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, fontSize: 10 }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {newPhotoFiles.map((f, i) => (
+                      <div key={i} style={{ position: 'relative', width: 90, height: 90 }}>
+                        <img src={URL.createObjectURL(f)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9, opacity: 0.7 }} />
+                        <button
+                          className="icon-btn"
+                          onClick={() => setNewPhotoFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                          style={{ position: 'absolute', top: -6, right: -6, width: 22, height: 22, fontSize: 10 }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {photos.length + newPhotoFiles.length < 3 && (
+                    <label className="btn-ghost" style={{ display: 'inline-block', cursor: 'pointer', fontSize: 11.5 }}>
+                      📷 Ajouter une photo
+                      <input type="file" accept="image/*" multiple onChange={handleAddPhotos} style={{ display: 'none' }} />
+                    </label>
+                  )}
+                  {newPhotoFiles.length > 0 && (
+                    <button className="btn-ghost" style={{ marginLeft: 8, fontSize: 11.5 }} onClick={() => uploadNewPhotos(r.id)} disabled={uploadingPhotos}>
+                      {uploadingPhotos ? 'Envoi...' : `Envoyer ${newPhotoFiles.length} photo(s)`}
+                    </button>
+                  )}
+                </div>
                 <div className="field-group">
                   <label className="field-label">Type de problème</label>
                   <select value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}>

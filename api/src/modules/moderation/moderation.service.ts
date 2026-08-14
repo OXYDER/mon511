@@ -133,6 +133,17 @@ export class ModerationService {
   /** Suppression admin — définitive, contrairement au retrait par le
    * propriétaire qui passe par un statut. Supprime aussi les photos
    * associées sur le stockage S3 avant d'effacer la ligne en base. */
+  /** Suppression d'une photo par un admin — contrairement à
+   * deleteOwnPhoto() du propriétaire, aucune vérification de propriété
+   * (l'admin peut retirer une photo de n'importe quel signalement). */
+  async adminDeletePhoto(photoId: string) {
+    const photo = await this.db.selectFrom('report_photos').select(['storage_key']).where('id', '=', photoId).executeTakeFirst();
+    if (!photo) throw new NotFoundException('Photo introuvable.');
+    await this.uploadsService.deleteObjects([photo.storage_key]).catch(() => {});
+    await this.db.deleteFrom('report_photos').where('id', '=', photoId).execute();
+    return { deleted: true };
+  }
+
   async adminDeleteReport(reportId: string) {
     const photos = await this.db.selectFrom('report_photos').select(['storage_key']).where('report_id', '=', reportId).execute();
     if (photos.length > 0) {

@@ -115,6 +115,16 @@ export class UsersController {
     return this.usersService.setStatus(id, status);
   }
 
+  @Patch('admin/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  adminUpdateUser(
+    @Param('id') id: string,
+    @Body() changes: { firstName?: string; lastName?: string; email?: string; addressText?: string },
+  ) {
+    return this.usersService.adminUpdateUser(id, changes);
+  }
+
   @Patch('admin/:id/role')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('super_admin')

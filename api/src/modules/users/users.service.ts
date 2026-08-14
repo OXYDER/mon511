@@ -246,6 +246,7 @@ export class UsersService {
       .select([
         'users.id', 'users.email', 'users.first_name', 'users.last_name',
         'users.status', 'users.reputation_score', 'users.created_at',
+        'users.address_text',
         'roles.name as roleName', 'roles.id as roleId',
       ])
       .orderBy('users.created_at', 'desc')
@@ -256,6 +257,37 @@ export class UsersService {
     }
 
     return query.execute();
+  }
+
+  /** Édition admin des informations d'un usager — plus large que
+   * updateProfile() (en libre-service), qui ne permet que le prénom/nom.
+   * Un admin peut aussi corriger le courriel (ex. faute de frappe à
+   * l'inscription) et l'adresse. */
+  async adminUpdateUser(
+    userId: string,
+    changes: { firstName?: string; lastName?: string; email?: string; addressText?: string },
+  ) {
+    const user = await this.db.selectFrom('users').select('id').where('id', '=', userId).executeTakeFirst();
+    if (!user) throw new NotFoundException('Usager introuvable.');
+
+    if (changes.email !== undefined) {
+      const existing = await this.db.selectFrom('users').select('id').where('email', '=', changes.email).where('id', '!=', userId).executeTakeFirst();
+      if (existing) throw new BadRequestException('Ce courriel est déjà utilisé par un autre compte.');
+    }
+
+    await this.db
+      .updateTable('users')
+      .set({
+        ...(changes.firstName !== undefined && { first_name: changes.firstName }),
+        ...(changes.lastName !== undefined && { last_name: changes.lastName }),
+        ...(changes.email !== undefined && { email: changes.email }),
+        ...(changes.addressText !== undefined && { address_text: changes.addressText }),
+        updated_at: new Date() as any,
+      })
+      .where('id', '=', userId)
+      .execute();
+
+    return this.findById(userId);
   }
 
   async setStatus(userId: string, status: 'active' | 'suspended' | 'banned') {
