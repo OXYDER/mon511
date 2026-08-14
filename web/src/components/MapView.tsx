@@ -534,7 +534,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         collapseEl.style.background = 'var(--accent-signal, #FF5A1F)';
         collapseEl.style.border = '2px solid #14161B';
         collapseEl.style.cursor = 'pointer';
-        collapseEl.addEventListener('click', () => setSpiderfiedClusterId(null));
+        collapseEl.addEventListener('click', (e) => { e.stopPropagation(); setSpiderfiedClusterId(null); });
         const collapseMarker = new maplibregl.Marker({ element: collapseEl })
           .setLngLat([cluster.lng, cluster.lat])
           .addTo(map);
@@ -571,7 +571,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       el.style.color = '#14161B';
       el.style.cursor = 'pointer';
       el.textContent = String(cluster.pins.length);
-      el.addEventListener('click', () => setSpiderfiedClusterId(cluster.id));
+      el.addEventListener('click', (e) => { e.stopPropagation(); setSpiderfiedClusterId(cluster.id); });
 
       const marker = new maplibregl.Marker({ element: el }).setLngLat([cluster.lng, cluster.lat]).addTo(map);
       markersRef.current.push(marker);
