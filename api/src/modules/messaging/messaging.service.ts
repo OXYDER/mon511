@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { formatDisplayName } from '../../common/display-name.util';
@@ -163,11 +163,15 @@ export class MessagingService {
     }
 
     return this.db.transaction().execute(async (trx) => {
-      const conversation = await trx
-        .insertInto('conversations')
-        .values({})
-        .returning('id')
-        .executeTakeFirstOrThrow();
+      // Kysely génère du SQL invalide (« INSERT INTO conversations ()
+      // VALUES () ») avec un objet .values({}) vide — conversations n'a
+      // pourtant aucune colonne à fournir (id et created_at sont tous les
+      // deux générés automatiquement). DEFAULT VALUES est la syntaxe SQL
+      // correcte pour ce cas précis, via sql brut plutôt que le
+      // constructeur de requêtes habituel.
+      const conversation = await sql<{ id: string }>`
+        INSERT INTO conversations DEFAULT VALUES RETURNING id
+      `.execute(trx).then((r) => r.rows[0]);
 
       await trx
         .insertInto('conversation_participants')
