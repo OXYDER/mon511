@@ -29,6 +29,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingBlockUserId, setConfirmingBlockUserId] = useState<string | null>(null);
+  const [blockedUserId, setBlockedUserId] = useState<string | null>(null);
   const [flaggingMessageId, setFlaggingMessageId] = useState<string | null>(null);
   const [reactingToMessageId, setReactingToMessageId] = useState<string | null>(null);
   const [showingNewFor, setShowingNewFor] = useState<string | null>(null);
@@ -201,10 +202,18 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     setOtherIsTyping(false);
     otherIsTypingRef.current = false;
     isNearBottomRef.current = true;
+    setBlockedUserId(null);
     const data = await api.get<any[]>(`/messaging/conversations/${id}/messages`);
     setMessages(data);
     setConversations((prev) => prev.map((c) => (c.conversation_id === id ? { ...c, unreadCount: 0 } : c)));
     setTimeout(() => scrollToBottom(false), 50);
+
+    const conversation = conversations.find((c) => c.conversation_id === id);
+    if (conversation) {
+      api.get<{ blocked: boolean }>(`/messaging/block/${conversation.otherUserId}`)
+        .then((r) => setBlockedUserId(r.blocked ? conversation.otherUserId : null))
+        .catch(() => {});
+    }
   }
 
   function startWithFriend(friendUserId: string) {
@@ -259,9 +268,16 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
   async function confirmBlock() {
     if (!confirmingBlockUserId) return;
-    await api.post(`/messaging/block/${confirmingBlockUserId}`, {}).catch(() => {});
+    const isCurrentlyBlocked = confirmingBlockUserId === blockedUserId;
+    if (isCurrentlyBlocked) {
+      await api.post(`/messaging/unblock/${confirmingBlockUserId}`, {}).catch(() => {});
+      setBlockedUserId(null);
+    } else {
+      await api.post(`/messaging/block/${confirmingBlockUserId}`, {}).catch(() => {});
+      setBlockedUserId(confirmingBlockUserId);
+      setActiveConversationId(null);
+    }
     setConfirmingBlockUserId(null);
-    setActiveConversationId(null);
     load();
   }
 
@@ -423,10 +439,12 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   </div>
                   <button
                     className="btn-ghost"
-                    style={{ fontSize: 11, color: 'var(--status-danger, #FF4D5E)' }}
+                    style={{ fontSize: 11, color: blockedUserId === activeConversation.otherUserId ? 'var(--text-muted)' : 'var(--status-danger, #FF4D5E)' }}
                     onClick={() => setConfirmingBlockUserId(activeConversation.otherUserId)}
                   >
-                    🚫 {lang === 'fr' ? 'Bloquer' : 'Block'}
+                    {blockedUserId === activeConversation.otherUserId
+                      ? `✅ ${lang === 'fr' ? 'Débloquer' : 'Unblock'}`
+                      : `🚫 ${lang === 'fr' ? 'Bloquer' : 'Block'}`}
                   </button>
                 </div>
               )}
@@ -544,10 +562,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
       {confirmingBlockUserId && (
         <ConfirmModal
-          title={lang === 'fr' ? 'Bloquer cet usager ?' : 'Block this user?'}
-          message={lang === 'fr' ? "Il ne pourra plus t'envoyer de messages. Tu peux annuler ce blocage plus tard depuis ton profil." : "They won't be able to message you anymore. You can undo this later from your profile."}
-          confirmLabel={lang === 'fr' ? 'Bloquer' : 'Block'}
-          danger
+          title={confirmingBlockUserId === blockedUserId
+            ? (lang === 'fr' ? 'Débloquer cet usager ?' : 'Unblock this user?')
+            : (lang === 'fr' ? 'Bloquer cet usager ?' : 'Block this user?')}
+          message={confirmingBlockUserId === blockedUserId
+            ? (lang === 'fr' ? "Il pourra à nouveau t'envoyer des messages." : 'They will be able to message you again.')
+            : (lang === 'fr' ? "Il ne pourra plus t'envoyer de messages. Tu peux annuler ce blocage plus tard depuis ton profil." : "They won't be able to message you anymore. You can undo this later from your profile.")}
+          confirmLabel={confirmingBlockUserId === blockedUserId ? (lang === 'fr' ? 'Débloquer' : 'Unblock') : (lang === 'fr' ? 'Bloquer' : 'Block')}
+          danger={confirmingBlockUserId !== blockedUserId}
           onConfirm={confirmBlock}
           onCancel={() => setConfirmingBlockUserId(null)}
         />

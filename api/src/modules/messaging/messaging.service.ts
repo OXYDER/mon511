@@ -400,6 +400,46 @@ export class MessagingService {
     return { blocked: true };
   }
 
+  async unblockUser(blockerId: string, blockedId: string) {
+    await this.db
+      .deleteFrom('user_blocks')
+      .where('blocker_id', '=', blockerId)
+      .where('blocked_id', '=', blockedId)
+      .execute();
+    return { blocked: false };
+  }
+
+  /** Vérifie si l'usager courant a bloqué cette personne précise — pour
+   * que le bouton "Bloquer" du frontend sache s'il doit plutôt afficher
+   * "Débloquer". */
+  async isBlocked(blockerId: string, blockedId: string) {
+    const row = await this.db
+      .selectFrom('user_blocks')
+      .select('blocker_id')
+      .where('blocker_id', '=', blockerId)
+      .where('blocked_id', '=', blockedId)
+      .executeTakeFirst();
+    return { blocked: !!row };
+  }
+
+  /** Liste de tous les usagers bloqués par la personne courante — pour
+   * pouvoir les débloquer même en dehors d'une conversation active avec
+   * eux (ex. depuis les paramètres du profil). */
+  async findBlockedUsers(blockerId: string) {
+    const rows = await this.db
+      .selectFrom('user_blocks')
+      .innerJoin('users', 'users.id', 'user_blocks.blocked_id')
+      .select(['users.id as userId', 'users.email', 'users.first_name', 'users.last_name', 'users.avatar_url as avatarUrl', 'users.privacy_settings'])
+      .where('user_blocks.blocker_id', '=', blockerId)
+      .execute();
+
+    return rows.map((r) => ({
+      userId: r.userId,
+      avatarUrl: r.avatarUrl,
+      displayName: formatDisplayName(r.first_name, r.last_name, (r.privacy_settings as any)?.last_name_display, r.email),
+    }));
+  }
+
   /** Messages signalés comme abusifs, non encore traités — pour la
    * modération. Regroupe le message lui-même avec son expéditeur, la
    * personne qui l'a signalé et le motif. */

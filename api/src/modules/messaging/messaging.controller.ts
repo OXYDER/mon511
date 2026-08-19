@@ -45,6 +45,21 @@ export class MessagingController {
     return this.service.blockUser(user.userId, blockedId);
   }
 
+  @Post('unblock/:userId')
+  unblock(@Param('userId') blockedId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.unblockUser(user.userId, blockedId);
+  }
+
+  @Get('block/:userId')
+  isBlocked(@Param('userId') blockedId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.isBlocked(user.userId, blockedId);
+  }
+
+  @Get('blocked')
+  findBlockedUsers(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findBlockedUsers(user.userId);
+  }
+
   @Post('messages/:id/flag')
   flagMessage(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('reason') reason?: string) {
     return this.service.flagMessage(id, user.userId, reason);

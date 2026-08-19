@@ -20,6 +20,7 @@ const PRIVACY_LABELS: [string, string, string][] = [
 export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Props) {
   const [me, setMe] = useState<any>(null);
   const [loadError, setLoadError] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<any[] | null>(null);
   const [tab, setTab] = useState<'profile' | 'privacy' | 'security'>('profile');
 
   const [firstName, setFirstName] = useState('');
@@ -76,6 +77,15 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
     });
     // (Mes signalements affichés maintenant dans leur propre page dédiée.)
   }, []);
+
+  useEffect(() => {
+    api.get<any[]>('/messaging/blocked').then(setBlockedUsers).catch(() => setBlockedUsers([]));
+  }, []);
+
+  async function unblockUser(userId: string) {
+    await api.post(`/messaging/unblock/${userId}`, {}).catch(() => {});
+    setBlockedUsers((prev) => (prev ?? []).filter((b) => b.userId !== userId));
+  }
 
   async function togglePrivacy(snakeKey: string, camelKey: string, current: boolean) {
     const body: Record<string, boolean> = { [camelKey]: !current };
@@ -288,6 +298,29 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
                       ]}
                     />
                   </div>
+
+                  <div className="section-label">Usagers bloqués</div>
+                  {blockedUsers === null && <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chargement...</p>}
+                  {blockedUsers?.length === 0 && (
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucun usager bloqué.</p>
+                  )}
+                  {blockedUsers?.map((b) => (
+                    <div key={b.userId} className="report-card" style={{ cursor: 'default' }}>
+                      <div className="rc-icon-hex">
+                        {b.avatarUrl ? (
+                          <img src={b.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                        ) : (
+                          (b.displayName?.[0] ?? '?').toUpperCase()
+                        )}
+                      </div>
+                      <div className="rc-body">
+                        <div className="rc-title">{b.displayName}</div>
+                      </div>
+                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => unblockUser(b.userId)}>
+                        Débloquer
+                      </button>
+                    </div>
+                  ))}
                 </>
               )}
 
