@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
-import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS } from '../api';
+import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken } from '../api';
 import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import SiteBanner from '../components/SiteBanner';
@@ -272,6 +272,20 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         // connecté.
         if (me.map_layer_preferences) setLayerPrefs({ ...DEFAULT_LAYER_PREFS, ...me.map_layer_preferences });
         setCurrentUserId(me.id);
+      }).catch((err) => {
+        // Le jeton stocké dans localStorage existe (authenticated est
+        // vrai — voir App.tsx, qui ne vérifie que la présence du jeton,
+        // pas sa validité) mais n'est plus valide côté serveur (expiré,
+        // ou compte modifié depuis). Sans ce catch, currentUserId ne se
+        // fixait jamais, laissant l'usager dans un état bloqué où
+        // l'interface le montre "connecté" mais où presque rien ne
+        // fonctionne réellement — exactement "comme si je n'étais plus
+        // connecté", sans façon claire de s'en sortir. Une déconnexion
+        // propre et automatique est la bonne réponse à un jeton invalide.
+        if (err instanceof Error && err.message.toLowerCase().includes('unauthorized')) {
+          clearToken();
+          onLogout();
+        }
       });
     } else {
       setLayerPrefs(getLocalLayerPrefs());

@@ -18,6 +18,7 @@ const PRIVACY_LABELS: [string, string, string][] = [
 
 export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Props) {
   const [me, setMe] = useState<any>(null);
+  const [loadError, setLoadError] = useState(false);
   const [tab, setTab] = useState<'profile' | 'privacy' | 'security'>('profile');
 
   const [firstName, setFirstName] = useState('');
@@ -57,6 +58,20 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
       setMe(data);
       setFirstName(data.first_name ?? '');
       setLastName(data.last_name ?? '');
+    }).catch((err) => {
+      // Le jeton stocké existe (sinon la modale n'ouvrirait pas) mais
+      // n'est plus valide (expiré, ou compte modifié depuis) — sans
+      // catch ici, la modale restait bloquée sur "Chargement..." pour
+      // toujours, avec le bouton de déconnexion emprisonné à l'intérieur
+      // d'un {me && (...)} qui ne s'affichait donc jamais. Un jeton
+      // invalide devrait de toute façon mener à une déconnexion propre,
+      // pas à un blocage sans issue.
+      if (err instanceof Error && err.message.toLowerCase().includes('unauthorized')) {
+        clearToken();
+        onLogout();
+        return;
+      }
+      setLoadError(true);
     });
     // (Mes signalements affichés maintenant dans leur propre page dédiée.)
   }, []);
@@ -146,7 +161,15 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <div className="modal-body">
-          {!me && <div className="center-msg">Chargement...</div>}
+          {!me && !loadError && <div className="center-msg">Chargement...</div>}
+          {loadError && (
+            <div className="center-msg" style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+              <span>Impossible de charger ton profil.</span>
+              <button className="btn-ghost" onClick={() => { clearToken(); onLogout(); }}>
+                Se déconnecter
+              </button>
+            </div>
+          )}
           {me && (
             <>
               <div className="profile-head">
