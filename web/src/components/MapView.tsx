@@ -571,7 +571,21 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       el.style.color = '#14161B';
       el.style.cursor = 'pointer';
       el.textContent = String(cluster.pins.length);
-      el.addEventListener('click', (e) => { e.stopPropagation(); setSpiderfiedClusterId(cluster.id); });
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // Déployer 16 pins en étoile à un niveau de zoom éloigné est
+        // confus — mieux vaut se rapprocher d'abord, ce qui sépare
+        // naturellement le regroupement en sous-groupes plus petits
+        // (le regroupement se recalcule selon la distance à l'écran, pas
+        // la distance géographique réelle). Seulement une fois assez
+        // proche (regroupement de 2 ou moins) le déploiement en étoile
+        // devient utile.
+        if (cluster.pins.length > 2) {
+          map.flyTo({ center: [cluster.lng, cluster.lat], zoom: map.getZoom() + 2, duration: 500 });
+        } else {
+          setSpiderfiedClusterId(cluster.id);
+        }
+      });
 
       const marker = new maplibregl.Marker({ element: el }).setLngLat([cluster.lng, cluster.lat]).addTo(map);
       markersRef.current.push(marker);
