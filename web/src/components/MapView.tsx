@@ -39,6 +39,7 @@ interface Props {
     bounds: { north: number; south: number; east: number; west: number },
   ) => void;
   onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
+  onUserZoomOut?: () => void;
   /** Actif seulement pendant l'outil « cliquer pour choisir l'emplacement »
    * (bouton Signaler sur bureau) — un clic GAUCHE sur la carte déclenche
    * alors onPlacementClick, en plus du clic droit qui garde son
@@ -68,7 +69,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, placementModeActive = false, onPlacementClick, focusPinId = null, hoveredPinId = null }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, onUserZoomOut, placementModeActive = false, onPlacementClick, focusPinId = null, hoveredPinId = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   // Le clic gauche en mode placement est enregistré une seule fois à la
@@ -80,6 +81,9 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   const onPlacementClickRef = useRef(onPlacementClick);
   onPlacementClickRef.current = onPlacementClick;
   const markersRef = useRef<Marker[]>([]);
+  const lastZoomRef = useRef<number | null>(null);
+  const onUserZoomOutRef = useRef(onUserZoomOut);
+  onUserZoomOutRef.current = onUserZoomOut;
   const styleRetriedRef = useRef(false);
   const popupsRef = useRef<maplibregl.Popup[]>([]);
   const popupsByIdRef = useRef<Record<string, { popup: maplibregl.Popup; lng: number; lat: number }>>({});
@@ -244,13 +248,22 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     // Les distances en pixels entre pins changent avec le zoom — il faut
     // recalculer les groupes. Le déplacement (pan) seul ne change pas ces
     // distances relatives, donc pas besoin de recalculer pour ça.
-    mapRef.current.on('zoomend', () => {
+    mapRef.current.on('zoomend', (e) => {
+      const newZoom = mapRef.current!.getZoom();
+      // e.originalEvent n'existe QUE pour une vraie interaction de
+      // l'usager (molette, pincement) — absent pour un flyTo() déclenché
+      // par le code (ex. la révélation automatique d'un pin sélectionné).
+      // Sans cette distinction, fermer la fiche du signalement au moindre
+      // zoom programmé serait très gênant.
+      const isUserZoomOut = !!(e as any).originalEvent && lastZoomRef.current !== null && newZoom < lastZoomRef.current;
+      lastZoomRef.current = newZoom;
       setClusterVersion((v) => v + 1);
       // Un changement de zoom recalcule complètement les regroupements —
       // un groupe déjà ouvert (déployé en étoile) n'a plus de sens dans
       // ce nouveau contexte, mieux vaut le refermer plutôt que de le
       // laisser ouvert avec des pins qui ne correspondent plus.
       setSpiderfiedClusterId(null);
+      if (isUserZoomOut) onUserZoomOutRef.current?.();
     });
 
     function triggerMapClickIfAllowed(lat: number, lng: number, point: { x: number; y: number }) {
@@ -608,10 +621,15 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // que sur la carte) doit aussi révéler ce pin s'il est caché dans un
   // regroupement — même règle que le clic direct sur un regroupement :
   // zoomer d'abord si le groupe est gros (plus de 2), déployer en étoile
-  // seulement s'il est déjà petit. C'était le vrai bug de la « grande
-  // roue » — ce chemin-ci déployait SANS AUCUNE LIMITE DE TAILLE,
-  // contournant complètement la règle appliquée au clic direct sur un
-  // regroupement.
+  // seulement s'il est déjà petit.
+  //
+  // IMPORTANT : ne réagit qu'à un NOUVEAU focusPinId (une nouvelle
+  // sélection), jamais à clusterVersion — sinon, comme le zoom lui-même
+  // incrémente clusterVersion, cet effet se redéclenchait à chaque fois
+  // que l'usager essayait de DÉZOOMER manuellement avec un signalement
+  // sélectionné, le ramenant de force dessus à répétition (« ne lâche
+  // pas le morceau »). Une seule tentative de révélation à la sélection,
+  // qui respecte ensuite tout dézoom manuel ultérieur.
   useEffect(() => {
     if (!mapRef.current || !focusPinId) return;
     const clusters = clusterPins(pins, mapRef.current);
@@ -623,7 +641,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
       setSpiderfiedClusterId(owningCluster.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusPinId, clusterVersion, pins]);
+  }, [focusPinId]);
 
   // Survol d'un élément dans la liste (hors carte) → montrer la bulle photo
   // du pin correspondant, réciproque du survol direct du pin sur la carte.

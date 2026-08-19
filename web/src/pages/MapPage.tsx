@@ -838,6 +838,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onViewportChange={handleViewportChange}
           mapType={mapType}
           onMapClick={(lat, lng, x, y) => setContextMenu({ lat, lng, x, y })}
+          onUserZoomOut={() => setSelection(null)}
           placementModeActive={placementMode}
           onPlacementClick={(lat, lng) => { setPlacementMode(false); openCreateAtCoords(lat, lng); }}
           focusPinId={selection?.id ?? null}
