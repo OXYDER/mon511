@@ -407,6 +407,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // chaque navigation, peu importe si le zoom bouge vraiment ou non.
   useEffect(() => {
     setSpiderfiedClusterId(null);
+    console.log('[diag pins] center a changé, spiderfiedClusterId remis à null');
   }, [center]);
 
   // Curseur en croix pendant le mode placement — signal visuel clair que
@@ -502,6 +503,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     spiderfyLegsRef.current = [];
 
     const clusters = clusterPins(pins, map);
+    console.log('[diag pins] rendu — spiderfiedClusterId:', spiderfiedClusterId, '| regroupements:', clusters.map((c) => ({ id: c.id.slice(0, 20), taille: c.pins.length, déployé: c.id === spiderfiedClusterId })));
 
     for (const cluster of clusters) {
       if (cluster.pins.length === 1) {
