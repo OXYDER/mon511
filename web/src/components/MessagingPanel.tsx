@@ -283,12 +283,12 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', minHeight: 420, maxHeight: '72vh', overflow: 'hidden' }}>
-          {error && !activeConversationId && !showingNewConversation && <div className="error-banner">{error}</div>}
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', height: '72vh', overflow: 'hidden' }}>
+          {error && !activeConversationId && !showingNewConversation && <div className="error-banner" style={{ flexShrink: 0 }}>{error}</div>}
           {loading && <div className="center-msg">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div>}
 
           {!loading && !activeConversationId && !showingNewConversation && (
-            <>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {onlineFriends.length > 0 && (
                 <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid var(--panel-border)' }}>
                   {onlineFriends.map((f) => (
@@ -365,13 +365,13 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   )}
                 </div>
               ))}
-            </>
+            </div>
           )}
 
           {(activeConversationId || showingNewConversation) && (
             <>
               {activeConversation && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ position: 'relative', width: 30, height: 30, flexShrink: 0 }}>
                       <div className="rc-icon-hex" style={{ width: 30, height: 30 }}>
@@ -407,7 +407,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                 </div>
               )}
 
-              {error && <div className="error-banner">{error}</div>}
+              {error && <div className="error-banner" style={{ flexShrink: 0 }}>{error}</div>}
 
               <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
                 <div
@@ -495,7 +495,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                 )}
               </div>
 
-              <div className="comment-row">
+              <div className="comment-row" style={{ flexShrink: 0 }}>
                 <input
                   className="text-input"
                   placeholder={lang === 'fr' ? 'Écrire un message...' : 'Write a message...'}
