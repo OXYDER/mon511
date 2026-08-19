@@ -169,6 +169,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [contextMenu, setContextMenu] = useState<{ lat: number; lng: number; x: number; y: number } | null>(null);
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const [createModalCoords, setCreateModalCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationMethod, setLocationMethod] = useState<'map_click' | 'address_search' | 'gps' | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
@@ -473,6 +474,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       // personne (utile pour signaler un endroit qu'on regarde sans y
       // être physiquement).
       setCreateModalCoords(pendingOverrideCoordsRef.current ?? { lat: latitude, lng: longitude });
+      setLocationMethod(pendingOverrideCoordsRef.current ? 'map_click' : 'gps');
       setShowCreateModal(true);
     };
 
@@ -519,8 +521,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
    * peu fiable (approximation par IP/Wi-Fi plutôt qu'un vrai GPS), donc
    * l'y exiger n'aurait fait qu'empêcher les usagers de bureau de
    * signaler quoi que ce soit. */
-  function openCreateAtCoords(lat: number, lng: number) {
+  function openCreateAtCoords(lat: number, lng: number, method: 'map_click' | 'address_search' = 'map_click') {
     setCreateModalCoords({ lat, lng });
+    setLocationMethod(method);
     setShowCreateModal(true);
   }
 
@@ -1476,7 +1479,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                     <div
                       key={i}
                       className="search-dropdown-item"
-                      onClick={() => { setShowLocationChoice(false); openCreateAtCoords(r.lat, r.lng); }}
+                      onClick={() => { setShowLocationChoice(false); openCreateAtCoords(r.lat, r.lng, 'address_search'); }}
                     >
                       <span>📍</span><span>{r.name}</span>
                     </div>
@@ -1576,11 +1579,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       {showCreateModal && (
         <CreateReportModal
           initialCoords={createModalCoords}
+          locationMethod={locationMethod}
           lang={lang}
-          onClose={() => { setShowCreateModal(false); setCreateModalCoords(null); }}
+          onClose={() => { setShowCreateModal(false); setCreateModalCoords(null); setLocationMethod(null); }}
           onCreated={() => {
             setShowCreateModal(false);
             setCreateModalCoords(null);
+            setLocationMethod(null);
             if (queryCenter) loadNearby(queryCenter.lat, queryCenter.lng);
           }}
         />

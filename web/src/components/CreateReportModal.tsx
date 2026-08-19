@@ -15,10 +15,11 @@ interface Props {
   onClose: () => void;
   onCreated: () => void;
   initialCoords?: { lat: number; lng: number } | null;
+  locationMethod?: 'map_click' | 'address_search' | 'gps' | null;
   lang: 'fr' | 'en';
 }
 
-export default function CreateReportModal({ onClose, onCreated, initialCoords, lang }: Props) {
+export default function CreateReportModal({ onClose, onCreated, initialCoords, locationMethod, lang }: Props) {
   const [types, setTypes] = useState<ProblemType[]>([]);
   const [typeId, setTypeId] = useState<string>('');
   const [description, setDescription] = useState('');
@@ -467,9 +468,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                     "Position adaptée aux données GPS d'où la photo a été prise."
                   ) : addressAutoFilled ? (
                     <>
-                      Position précise capturée — précision ±{Math.round(coords.accuracy)} m
+                      Position précise capturée{locationMethod === 'map_click' ? ' par clic sur la carte' : locationMethod === 'address_search' ? " par recherche d'adresse manuelle" : ''} — précision ±{Math.round(coords.accuracy)} m
                       {snappedToRoad && ' · alignée sur la route'}
-                      {' · adresse détectée automatiquement'}
+                      {locationMethod !== 'address_search' && ' · adresse détectée automatiquement'}
                     </>
                   ) : (
                     'Adresse entrée manuellement — assurez-vous que celle-ci est la plus précise possible.'
