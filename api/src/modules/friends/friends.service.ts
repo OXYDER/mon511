@@ -109,7 +109,7 @@ export class FriendsService {
         'friendships.id as friendshipId', 'friendships.created_at',
         'users.id as friendUserId', 'users.email as friendEmail', 'users.first_name as friendFirstName',
         'users.last_name as friendLastName', 'users.avatar_url as friendAvatarUrl',
-        'users.privacy_settings as friendPrivacySettings',
+        'users.privacy_settings as friendPrivacySettings', 'users.last_active_at as friendLastActiveAt',
       ])
       .where('friendships.requester_id', '=', userId)
       .where('friendships.status', '=', 'accepted')
@@ -122,16 +122,22 @@ export class FriendsService {
         'friendships.id as friendshipId', 'friendships.created_at',
         'users.id as friendUserId', 'users.email as friendEmail', 'users.first_name as friendFirstName',
         'users.last_name as friendLastName', 'users.avatar_url as friendAvatarUrl',
-        'users.privacy_settings as friendPrivacySettings',
+        'users.privacy_settings as friendPrivacySettings', 'users.last_active_at as friendLastActiveAt',
       ])
       .where('friendships.addressee_id', '=', userId)
       .where('friendships.status', '=', 'accepted')
       .execute();
 
+    // "En ligne" est une approximation — pas de vraie infrastructure
+    // temps réel (WebSocket), juste une activité authentifiée dans les 5
+    // dernières minutes. Suffisant pour donner une idée générale sans le
+    // coût/la complexité d'un vrai système de présence.
+    const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
     return [...asRequester, ...asAddressee]
       .map((f) => ({
         ...f,
         friendDisplayName: formatDisplayName(f.friendFirstName, f.friendLastName, (f.friendPrivacySettings as any)?.last_name_display, f.friendEmail),
+        friendOnline: f.friendLastActiveAt ? Date.now() - new Date(f.friendLastActiveAt).getTime() < ONLINE_THRESHOLD_MS : false,
       }))
       .sort((a, b) => a.friendDisplayName.localeCompare(b.friendDisplayName, 'fr-CA'));
   }

@@ -3,10 +3,14 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { formatDisplayName } from '../../common/display-name.util';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class MessagingService {
-  constructor(@Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>) {}
+  constructor(
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async findMyConversations(userId: string) {
     const rows = await this.db
@@ -71,14 +75,6 @@ export class MessagingService {
       .executeTakeFirst();
     if (!participant) throw new ForbiddenException("Tu ne fais pas partie de cette conversation.");
 
-    const messages = await this.db
-      .selectFrom('direct_messages')
-      .innerJoin('users', 'users.id', 'direct_messages.sender_id')
-      .select(['direct_messages.id', 'direct_messages.message', 'direct_messages.sender_id as senderId', 'direct_messages.created_at', 'users.email as senderEmail'])
-      .where('direct_messages.conversation_id', '=', conversationId)
-      .orderBy('direct_messages.created_at', 'asc')
-      .execute();
-
     // Marque comme lus tous les messages de l'AUTRE personne — jamais les
     // siens, pas de sens de se marquer soi-même comme "lu".
     await this.db
@@ -89,7 +85,27 @@ export class MessagingService {
       .where('read_at', 'is', null)
       .execute();
 
-    return messages;
+    const messages = await this.db
+      .selectFrom('direct_messages')
+      .innerJoin('users', 'users.id', 'direct_messages.sender_id')
+      .select(['direct_messages.id', 'direct_messages.message', 'direct_messages.sender_id as senderId', 'direct_messages.created_at', 'users.email as senderEmail'])
+      .where('direct_messages.conversation_id', '=', conversationId)
+      .orderBy('direct_messages.created_at', 'asc')
+      .execute();
+
+    const messageIds = messages.map((m) => m.id);
+    const reactions = messageIds.length > 0
+      ? await this.db
+          .selectFrom('message_reactions')
+          .select(['message_id as messageId', 'user_id as userId', 'emoji'])
+          .where('message_id', 'in', messageIds)
+          .execute()
+      : [];
+
+    return messages.map((m) => ({
+      ...m,
+      reactions: reactions.filter((r) => r.messageId === m.id),
+    }));
   }
 
   async getUnreadCount(userId: string) {
@@ -116,6 +132,26 @@ export class MessagingService {
       .values({ message_id: messageId, flagged_by: userId, reason: reason ?? null })
       .execute();
     return { flagged: true };
+  }
+
+  /** Ajoute ou retire une réaction (bascule) — cliquer deux fois sur le
+   * même emoji la retire, comme Messenger. */
+  async toggleReaction(messageId: string, userId: string, emoji: string) {
+    const existing = await this.db
+      .selectFrom('message_reactions')
+      .select('id')
+      .where('message_id', '=', messageId)
+      .where('user_id', '=', userId)
+      .where('emoji', '=', emoji)
+      .executeTakeFirst();
+
+    if (existing) {
+      await this.db.deleteFrom('message_reactions').where('id', '=', existing.id).execute();
+      return { added: false };
+    }
+
+    await this.db.insertInto('message_reactions').values({ message_id: messageId, user_id: userId, emoji }).execute();
+    return { added: true };
   }
 
   /**
@@ -188,6 +224,9 @@ export class MessagingService {
         .executeTakeFirstOrThrow();
 
       return { conversationId: conversation.id, message };
+    }).then(async (result) => {
+      await this.notifyNewMessage(toUserId, fromUserId, firstMessage);
+      return result;
     });
   }
 
@@ -218,11 +257,32 @@ export class MessagingService {
       if (blocked) throw new ForbiddenException('Cet usager ne peut plus être contacté.');
     }
 
-    return this.db
+    const newMessage = await this.db
       .insertInto('direct_messages')
       .values({ conversation_id: conversationId, sender_id: senderId, message })
       .returningAll()
       .executeTakeFirstOrThrow();
+
+    if (otherUserId) await this.notifyNewMessage(otherUserId, senderId, message);
+
+    return newMessage;
+  }
+
+  /** Notification avec l'avatar de l'expéditeur et un aperçu du message
+   * (150 caractères) — actorId permet au frontend de retrouver l'avatar
+   * via la jointure déjà en place dans NotificationsService.findMine(). */
+  private async notifyNewMessage(toUserId: string, fromUserId: string, message: string) {
+    const sender = await this.db.selectFrom('users').select(['first_name', 'email', 'privacy_settings']).where('id', '=', fromUserId).executeTakeFirst();
+    if (!sender) return;
+    const senderName = formatDisplayName(sender.first_name, null, undefined, sender.email);
+    const preview = message.length > 150 ? `${message.slice(0, 150)}…` : message;
+    await this.notifications.create({
+      userId: toUserId,
+      type: 'direct_message_received',
+      actorId: fromUserId,
+      title: `Nouveau message de ${senderName}`,
+      body: preview,
+    });
   }
 
   async blockUser(blockerId: string, blockedId: string) {

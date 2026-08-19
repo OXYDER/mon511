@@ -50,6 +50,11 @@ export class MessagingController {
     return this.service.flagMessage(id, user.userId, reason);
   }
 
+  @Post('messages/:id/react')
+  toggleReaction(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('emoji') emoji: string) {
+    return this.service.toggleReaction(id, user.userId, emoji);
+  }
+
   @Get('admin/flagged')
   @UseGuards(RolesGuard)
   @Roles('moderator', 'admin', 'super_admin')

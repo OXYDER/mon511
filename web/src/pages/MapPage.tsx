@@ -1603,6 +1603,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <MessagingPanel
           onClose={() => { setShowMessaging(false); setMessagingStartUserId(null); }}
           lang={lang}
+          currentUserId={currentUserId}
           onUnreadCountChange={setUnreadMessagesCount}
           startWithUserId={messagingStartUserId}
         />

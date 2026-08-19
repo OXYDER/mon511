@@ -15,6 +15,7 @@ export class NotificationsService {
       .selectFrom('notifications')
       .leftJoin('reports', 'reports.id', 'notifications.report_id')
       .leftJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .leftJoin('users as actor', 'actor.id', 'notifications.actor_id')
       .select([
         'notifications.id', 'notifications.type', 'notifications.report_id as reportId',
         'notifications.title', 'notifications.body', 'notifications.read_at as readAt',
@@ -24,6 +25,7 @@ export class NotificationsService {
         'problem_types.name_en as reportProblemTypeNameEn',
         'problem_types.icon as reportProblemTypeIcon',
         sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('reportThumbnailUrl'),
+        'actor.avatar_url as actorAvatarUrl',
       ])
       .where('notifications.user_id', '=', userId)
       .orderBy('notifications.created_at', 'desc')

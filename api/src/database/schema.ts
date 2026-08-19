@@ -52,6 +52,7 @@ export interface UsersTable {
   }>;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
+  last_active_at: Timestamp | null;
 }
 
 export interface ProblemCategoriesTable {
@@ -367,6 +368,14 @@ export interface FriendshipsTable {
   responded_at: Timestamp | null;
 }
 
+export interface MessageReactionsTable {
+  id: Generated<string>;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: Generated<Timestamp>;
+}
+
 export interface ReportNotificationsTable {
   id: Generated<string>;
   report_id: string;
@@ -449,6 +458,7 @@ export interface Database {
   user_blocks: UserBlocksTable;
   message_flags: MessageFlagsTable;
   friendships: FriendshipsTable;
+  message_reactions: MessageReactionsTable;
   external_data_sources: ExternalDataSourcesTable;
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;
