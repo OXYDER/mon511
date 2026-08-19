@@ -37,6 +37,8 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
       ]);
       setConversations(convos);
       setOnlineFriends(friends.filter((f) => f.friendOnline));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur de chargement.');
     } finally {
       setLoading(false);
     }
@@ -154,6 +156,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', minHeight: 420, maxHeight: '72vh' }}>
+          {error && !activeConversationId && !showingNewConversation && <div className="error-banner">{error}</div>}
           {loading && <div className="center-msg">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div>}
 
           {!loading && !activeConversationId && !showingNewConversation && (

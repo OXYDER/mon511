@@ -29,6 +29,8 @@ export default function FriendsPanel({ onClose, lang, onOpenConversation }: Prop
       setFriends(f);
       setReceived(r);
       setSent(s);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur de chargement.');
     } finally {
       setLoading(false);
     }
