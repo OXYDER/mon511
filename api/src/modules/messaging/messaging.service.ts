@@ -87,6 +87,27 @@ export class MessagingService {
       .where('read_at', 'is', null)
       .execute();
 
+    // Marque aussi la notification consolidée de cette conversation comme
+    // lue — visiter la conversation devrait avoir le même effet que
+    // consulter le panneau de notifications lui-même, sinon la
+    // notification resterait affichée même si l'usager a déjà tout lu ici.
+    const otherParticipant = await this.db
+      .selectFrom('conversation_participants')
+      .select('user_id')
+      .where('conversation_id', '=', conversationId)
+      .where('user_id', '!=', userId)
+      .executeTakeFirst();
+    if (otherParticipant) {
+      await this.db
+        .updateTable('notifications')
+        .set({ read_at: new Date() as any })
+        .where('user_id', '=', userId)
+        .where('type', '=', 'direct_message_received')
+        .where('actor_id', '=', otherParticipant.user_id)
+        .where('read_at', 'is', null)
+        .execute();
+    }
+
     const messages = await this.db
       .selectFrom('direct_messages')
       .innerJoin('users', 'users.id', 'direct_messages.sender_id')
@@ -294,11 +315,39 @@ export class MessagingService {
   /** Notification avec l'avatar de l'expéditeur et un aperçu du message
    * (150 caractères) — actorId permet au frontend de retrouver l'avatar
    * via la jointure déjà en place dans NotificationsService.findMine(). */
+  /** Notification avec l'avatar de l'expéditeur et un aperçu du message
+   * (150 caractères) — actorId permet au frontend de retrouver l'avatar
+   * via la jointure déjà en place dans NotificationsService.findMine().
+   *
+   * Consolidée par conversation : si une notification non lue de cette
+   * même personne existe déjà (l'usager n'a pas encore visité la
+   * conversation ni consulté ses notifications depuis), on la MET À JOUR
+   * avec le dernier message plutôt que d'en créer une nouvelle — évite
+   * de spammer d'une notification par message dans un échange rapide. */
   private async notifyNewMessage(toUserId: string, fromUserId: string, message: string) {
     const sender = await this.db.selectFrom('users').select(['first_name', 'email', 'privacy_settings']).where('id', '=', fromUserId).executeTakeFirst();
     if (!sender) return;
     const senderName = formatDisplayName(sender.first_name, null, undefined, sender.email);
     const preview = message.length > 150 ? `${message.slice(0, 150)}…` : message;
+
+    const existing = await this.db
+      .selectFrom('notifications')
+      .select('id')
+      .where('user_id', '=', toUserId)
+      .where('type', '=', 'direct_message_received')
+      .where('actor_id', '=', fromUserId)
+      .where('read_at', 'is', null)
+      .executeTakeFirst();
+
+    if (existing) {
+      await this.db
+        .updateTable('notifications')
+        .set({ title: `Nouveaux messages de ${senderName}`, body: preview, created_at: new Date() as any })
+        .where('id', '=', existing.id)
+        .execute();
+      return;
+    }
+
     await this.notifications.create({
       userId: toUserId,
       type: 'direct_message_received',
