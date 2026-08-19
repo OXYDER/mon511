@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
 import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken } from '../api';
+import { getSocket } from '../socket';
 import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
 import SiteBanner from '../components/SiteBanner';
+import MessageToast from '../components/MessageToast';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import ToggleSwitch from '../components/ToggleSwitch';
@@ -204,6 +206,9 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showMyReports, setShowMyReports] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessaging, setShowMessaging] = useState(false);
+  const showMessagingRef = useRef(false);
+  showMessagingRef.current = showMessaging;
+  const [messageToast, setMessageToast] = useState<any>(null);
   const [showFriends, setShowFriends] = useState(false);
   const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
@@ -255,6 +260,23 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     if (!authenticated) { setUnreadMessagesCount(0); return; }
     api.get<number>('/messaging/unread-count').then(setUnreadMessagesCount).catch(() => {});
   }, [authenticated, showMessaging]);
+
+  // Bulle flottante style Teams — s'affiche peu importe où l'usager se
+  // trouve sur le site (pas seulement si le panneau de messagerie est
+  // déjà ouvert, où elle serait redondante avec le fil de discussion
+  // déjà visible).
+  useEffect(() => {
+    if (!authenticated) return;
+    const socket = getSocket();
+    if (!socket) return;
+    function handleToast(toast: any) {
+      if (showMessagingRef.current) return;
+      setMessageToast(toast);
+      setUnreadMessagesCount((c) => c + 1);
+    }
+    socket.on('message-toast', handleToast);
+    return () => { socket.off('message-toast', handleToast); };
+  }, [authenticated]);
 
   useEffect(() => {
     if (!authenticated || !layerPrefs.signalements_amis) { setFriendsReports([]); return; }
@@ -1613,6 +1635,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <SupportTicketsModal onClose={() => setShowSupportTickets(false)} lang={lang} prefill={ticketPrefill} />
       )}
       {showNotifications && <NotificationsPanel onClose={() => setShowNotifications(false)} lang={lang} onOpenReport={openReportById} onUnreadCountChange={setUnreadCount} />}
+      {messageToast && (
+        <MessageToast
+          toast={messageToast}
+          onReply={() => {
+            setMessagingStartUserId(messageToast.senderId);
+            setShowMessaging(true);
+            setMessageToast(null);
+          }}
+          onDismiss={() => setMessageToast(null)}
+        />
+      )}
       {showMessaging && (
         <MessagingPanel
           onClose={() => { setShowMessaging(false); setMessagingStartUserId(null); }}

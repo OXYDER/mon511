@@ -69,6 +69,17 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
+  /** Bulle flottante style Teams — avatar, nom et aperçu déjà inclus,
+   * pour s'afficher peu importe où l'usager se trouve sur le site, sans
+   * appel supplémentaire au serveur pour obtenir ces infos. */
+  notifyMessageToast(userId: string, toast: { conversationId: string; senderId: string; senderName: string; senderAvatarUrl: string | null; preview: string }) {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets || sockets.size === 0) return;
+    for (const socketId of sockets) {
+      this.server.to(socketId).emit('message-toast', toast);
+    }
+  }
+
   /** Pousse un ajout/retrait de réaction à un usager précis — même
    * mécanisme que notifyNewMessage(), silencieux si la personne n'est
    * pas connectée en ce moment. */

@@ -265,8 +265,8 @@ export class MessagingService {
 
       return { conversationId: conversation.id, message };
     }).then(async (result) => {
-      await this.notifyNewMessage(toUserId, fromUserId, firstMessage);
       this.gateway.notifyNewMessage(toUserId, result.conversationId, result.message);
+      await this.notifyNewMessage(toUserId, fromUserId, result.conversationId, firstMessage);
       return result;
     });
   }
@@ -305,8 +305,8 @@ export class MessagingService {
       .executeTakeFirstOrThrow();
 
     if (otherUserId) {
-      await this.notifyNewMessage(otherUserId, senderId, message);
       this.gateway.notifyNewMessage(otherUserId, conversationId, newMessage);
+      await this.notifyNewMessage(otherUserId, senderId, conversationId, message);
     }
 
     return newMessage;
@@ -324,8 +324,22 @@ export class MessagingService {
    * conversation ni consulté ses notifications depuis), on la MET À JOUR
    * avec le dernier message plutôt que d'en créer une nouvelle — évite
    * de spammer d'une notification par message dans un échange rapide. */
-  private async notifyNewMessage(toUserId: string, fromUserId: string, message: string) {
-    const sender = await this.db.selectFrom('users').select(['first_name', 'email', 'privacy_settings']).where('id', '=', fromUserId).executeTakeFirst();
+  /** Notification avec l'avatar de l'expéditeur et un aperçu du message
+   * (150 caractères) — actorId permet au frontend de retrouver l'avatar
+   * via la jointure déjà en place dans NotificationsService.findMine().
+   *
+   * Consolidée par conversation : si une notification non lue de cette
+   * même personne existe déjà (l'usager n'a pas encore visité la
+   * conversation ni consulté ses notifications depuis), on la MET À JOUR
+   * avec le dernier message plutôt que d'en créer une nouvelle — évite
+   * de spammer d'une notification par message dans un échange rapide.
+   *
+   * Pousse aussi une bulle flottante en temps réel via WebSocket (avatar
+   * + nom + aperçu déjà inclus, le frontend n'a besoin de rien
+   * redemander), pour que l'usager puisse répondre directement peu
+   * importe où il se trouve sur le site — style Teams. */
+  private async notifyNewMessage(toUserId: string, fromUserId: string, conversationId: string, message: string) {
+    const sender = await this.db.selectFrom('users').select(['first_name', 'email', 'privacy_settings', 'avatar_url']).where('id', '=', fromUserId).executeTakeFirst();
     if (!sender) return;
     const senderName = formatDisplayName(sender.first_name, null, undefined, sender.email);
     const preview = message.length > 150 ? `${message.slice(0, 150)}…` : message;
@@ -345,15 +359,22 @@ export class MessagingService {
         .set({ title: `Nouveaux messages de ${senderName}`, body: preview, created_at: new Date() as any })
         .where('id', '=', existing.id)
         .execute();
-      return;
+    } else {
+      await this.notifications.create({
+        userId: toUserId,
+        type: 'direct_message_received',
+        actorId: fromUserId,
+        title: `Nouveau message de ${senderName}`,
+        body: preview,
+      });
     }
 
-    await this.notifications.create({
-      userId: toUserId,
-      type: 'direct_message_received',
-      actorId: fromUserId,
-      title: `Nouveau message de ${senderName}`,
-      body: preview,
+    this.gateway.notifyMessageToast(toUserId, {
+      conversationId,
+      senderId: fromUserId,
+      senderName,
+      senderAvatarUrl: sender.avatar_url,
+      preview,
     });
   }
 
