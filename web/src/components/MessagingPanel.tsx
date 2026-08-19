@@ -260,6 +260,8 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 2px' }}>
                 {messages.map((m) => {
                   const isMine = m.senderId === currentUserId;
+                  // DIAGNOSTIC TEMPORAIRE — à retirer une fois le bug trouvé.
+                  console.log('[diag messagerie]', { messageText: m.message, senderId: m.senderId, currentUserId, isMine });
                   const groupedReactions = (m.reactions ?? []).reduce((acc: Record<string, number>, r: any) => {
                     acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
                     return acc;
