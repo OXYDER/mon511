@@ -61,6 +61,19 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     }
   }
 
+  /** Ouvre le sélecteur rapide de réactions — s'il apparaît près du bas
+   * du fil (surtout pour le dernier message), défile légèrement pour le
+   * garder entièrement visible plutôt que d'obliger un défilement manuel.
+   * Pas nécessaire pour un message plus haut dans l'historique, où il y
+   * a déjà de la place en dessous. */
+  function openReactionPicker(messageId: string, isNearBottomMessage: boolean) {
+    const opening = reactingToMessageId !== messageId;
+    setReactingToMessageId(opening ? messageId : null);
+    if (opening && isNearBottomMessage) {
+      setTimeout(() => scrollToBottom(), 60);
+    }
+  }
+
   async function load() {
     try {
       const [convos, friends] = await Promise.all([
@@ -425,8 +438,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   onScroll={handleMessagesScroll}
                   style={{ height: '100%', overflowY: 'auto', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 2px' }}
                 >
-                  {messages.map((m) => {
+                  {messages.map((m, i) => {
                     const isMine = m.senderId === currentUserId;
+                    // Les 2 derniers messages sont assez proches du bas pour
+                    // que le sélecteur de réactions risque de déborder de la
+                    // zone visible — un défilement léger est justifié pour
+                    // ceux-là ; plus haut dans l'historique, il y a
+                    // généralement déjà assez de place en dessous.
+                    const isNearBottomMessage = i >= messages.length - 2;
                     const groupedReactions = (m.reactions ?? []).reduce((acc: Record<string, number>, r: any) => {
                       acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
                       return acc;
@@ -441,7 +460,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                             fontSize: 13.5, lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer',
                             borderBottomRightRadius: isMine ? 5 : 18, borderBottomLeftRadius: isMine ? 18 : 5,
                           }}
-                          onDoubleClick={() => setReactingToMessageId(m.id)}
+                          onDoubleClick={() => openReactionPicker(m.id, isNearBottomMessage)}
                         >
                           {m.message}
                         </div>
@@ -461,7 +480,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                               {m.read_at ? '✓✓' : '✓'}
                             </span>
                           )}
-                          <span style={{ cursor: 'pointer' }} onClick={() => setReactingToMessageId(reactingToMessageId === m.id ? null : m.id)}>😊</span>
+                          <span style={{ cursor: 'pointer' }} onClick={() => openReactionPicker(m.id, isNearBottomMessage)}>😊</span>
                           {!isMine && (
                             <span style={{ cursor: 'pointer' }} title={lang === 'fr' ? 'Signaler' : 'Report'} onClick={() => setFlaggingMessageId(m.id)}>🚩</span>
                           )}
