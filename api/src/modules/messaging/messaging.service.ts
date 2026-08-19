@@ -4,12 +4,14 @@ import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { formatDisplayName } from '../../common/display-name.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MessagingGateway } from './messaging.gateway';
 
 @Injectable()
 export class MessagingService {
   constructor(
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly notifications: NotificationsService,
+    private readonly gateway: MessagingGateway,
   ) {}
 
   async findMyConversations(userId: string) {
@@ -226,6 +228,7 @@ export class MessagingService {
       return { conversationId: conversation.id, message };
     }).then(async (result) => {
       await this.notifyNewMessage(toUserId, fromUserId, firstMessage);
+      this.gateway.notifyNewMessage(toUserId, result.conversationId, result.message);
       return result;
     });
   }
@@ -263,7 +266,10 @@ export class MessagingService {
       .returning(['id', 'conversation_id', 'sender_id as senderId', 'message', 'created_at', 'read_at'])
       .executeTakeFirstOrThrow();
 
-    if (otherUserId) await this.notifyNewMessage(otherUserId, senderId, message);
+    if (otherUserId) {
+      await this.notifyNewMessage(otherUserId, senderId, message);
+      this.gateway.notifyNewMessage(otherUserId, conversationId, newMessage);
+    }
 
     return newMessage;
   }

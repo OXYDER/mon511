@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import { getSocket } from '../socket';
 import ConfirmModal from './ConfirmModal';
 import { timeAgo } from '../i18n';
 
@@ -19,6 +20,8 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<'date' | 'name'>('date');
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const activeConversationIdRef = useRef<string | null>(null);
+  activeConversationIdRef.current = activeConversationId;
   const [messages, setMessages] = useState<any[]>([]);
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
@@ -45,6 +48,33 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   }
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Écoute en temps réel via WebSocket — le sondage périodique plus bas
+  // reste comme filet de sécurité (si la connexion WebSocket échoue pour
+  // une raison quelconque, par exemple un réseau qui la bloque), mais
+  // avec le WebSocket actif, les nouveaux messages arrivent
+  // normalement bien avant le prochain sondage.
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return;
+
+    function handleNewMessage({ conversationId, message }: { conversationId: string; message: any }) {
+      if (conversationId === activeConversationIdRef.current) {
+        setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, { ...message, reactions: [] }]));
+        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+      }
+      // Rafraîchit aussi la liste (dernier message, badge de non-lu) —
+      // sauf pour la conversation ouverte, déjà marquée lue localement.
+      setConversations((prev) => prev.map((c) => (
+        c.conversation_id === conversationId && c.conversation_id !== activeConversationIdRef.current
+          ? { ...c, unreadCount: Number(c.unreadCount ?? 0) + 1, lastMessage: message.message, lastMessageAt: message.created_at }
+          : c
+      )));
+    }
+
+    socket.on('new-message', handleNewMessage);
+    return () => { socket.off('new-message', handleNewMessage); };
+  }, []);
 
   // Même esprit que le rafraîchissement des messages ci-dessous — tant
   // que le panneau reste ouvert, on revérifie périodiquement les

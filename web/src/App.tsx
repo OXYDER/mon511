@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getToken, clearToken } from './api';
+import { closeSocket } from './socket';
 import MapPage from './pages/MapPage';
 import AuthModal from './components/AuthModal';
 
@@ -16,6 +17,7 @@ export default function App() {
 
   function logout() {
     clearToken();
+    closeSocket();
     setAuthenticated(false);
   }
 
@@ -27,6 +29,7 @@ export default function App() {
   // que mettre à jour l'état React en conséquence.
   useEffect(() => {
     function handleSessionExpired() {
+      closeSocket();
       setAuthenticated(false);
     }
     window.addEventListener('mon511:session-expired', handleSessionExpired);
