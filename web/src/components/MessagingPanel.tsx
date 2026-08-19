@@ -469,7 +469,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   })}
 
                   {otherIsTyping && (
-                    <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '10px 14px', background: 'var(--panel-hover)', borderRadius: 18, borderBottomLeftRadius: 5 }}>
+                    <div style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 4, padding: '10px 14px', background: 'var(--panel-hover)', borderRadius: 18, borderBottomLeftRadius: 5 }}>
                       <span className="typing-dot" style={{ animationDelay: '0s' }} />
                       <span className="typing-dot" style={{ animationDelay: '0.15s' }} />
                       <span className="typing-dot" style={{ animationDelay: '0.3s' }} />
