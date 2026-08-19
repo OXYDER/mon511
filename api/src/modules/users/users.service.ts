@@ -202,6 +202,7 @@ export class UsersService {
       ...(dto.showRealName !== undefined && { show_real_name: dto.showRealName }),
       ...(dto.lastNameDisplay !== undefined && { last_name_display: dto.lastNameDisplay }),
       ...(dto.dmPermission !== undefined && { dm_permission: dto.dmPermission }),
+      ...(dto.showOnlineStatus !== undefined && { show_online_status: dto.showOnlineStatus }),
     };
 
     await this.db

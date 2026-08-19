@@ -20,6 +20,7 @@ const AboutModal = lazy(() => import('../components/AboutModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
 const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
+const PublicProfileModal = lazy(() => import('../components/PublicProfileModal'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
 const SupportChatWidget = lazy(() => import('../components/SupportChatWidget'));
 const SupportTicketsModal = lazy(() => import('../components/SupportTicketsModal'));
@@ -212,6 +213,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [messageToast, setMessageToast] = useState<any>(null);
   const [showFriends, setShowFriends] = useState(false);
   const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
+  const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -1658,6 +1660,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           currentUserId={currentUserId}
           onUnreadCountChange={setUnreadMessagesCount}
           startWithUserId={messagingStartUserId}
+          onViewProfile={(userId) => setViewingProfileUserId(userId)}
         />
       )}
       {showFriends && (
@@ -1665,6 +1668,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onClose={() => setShowFriends(false)}
           lang={lang}
           onOpenConversation={(userId) => { setShowFriends(false); setMessagingStartUserId(userId); setShowMessaging(true); }}
+          onViewProfile={(userId) => setViewingProfileUserId(userId)}
+        />
+      )}
+
+      {viewingProfileUserId && (
+        <PublicProfileModal
+          userId={viewingProfileUserId}
+          onClose={() => setViewingProfileUserId(null)}
+          lang={lang}
+          currentUserId={currentUserId}
+          onStartConversation={(userId) => { setViewingProfileUserId(null); setMessagingStartUserId(userId); setShowMessaging(true); }}
         />
       )}
 

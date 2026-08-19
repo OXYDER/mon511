@@ -4,12 +4,14 @@ import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { formatDisplayName } from '../../common/display-name.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { MessagingGateway } from '../messaging/messaging.gateway';
 
 @Injectable()
 export class FriendsService {
   constructor(
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly notifications: NotificationsService,
+    private readonly gateway: MessagingGateway,
   ) {}
 
   /** Envoie une demande d'ami par courriel — l'usager visé doit déjà avoir
@@ -128,16 +130,15 @@ export class FriendsService {
       .where('friendships.status', '=', 'accepted')
       .execute();
 
-    // "En ligne" est une approximation — pas de vraie infrastructure
-    // temps réel (WebSocket), juste une activité authentifiée dans les 5
-    // dernières minutes. Suffisant pour donner une idée générale sans le
-    // coût/la complexité d'un vrai système de présence.
-    const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
     return [...asRequester, ...asAddressee]
       .map((f) => ({
         ...f,
         friendDisplayName: formatDisplayName(f.friendFirstName, f.friendLastName, (f.friendPrivacySettings as any)?.last_name_display, f.friendEmail),
-        friendOnline: f.friendLastActiveAt ? Date.now() - new Date(f.friendLastActiveAt).getTime() < ONLINE_THRESHOLD_MS : false,
+        // Vrai statut de connexion WebSocket — reflète immédiatement une
+        // déconnexion, contrairement à l'ancienne approximation par
+        // horodatage. Respecte le choix de CET ami (pas de celui qui
+        // consulte la liste) de cacher son statut en ligne.
+        friendOnline: (f.friendPrivacySettings as any)?.show_online_status !== false && this.gateway.isUserOnline(f.friendUserId),
       }))
       .sort((a, b) => a.friendDisplayName.localeCompare(b.friendDisplayName, 'fr-CA'));
   }

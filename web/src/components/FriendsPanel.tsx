@@ -6,9 +6,10 @@ interface Props {
   onClose: () => void;
   lang: 'fr' | 'en';
   onOpenConversation: (userId: string) => void;
+  onViewProfile: (userId: string) => void;
 }
 
-export default function FriendsPanel({ onClose, lang, onOpenConversation }: Props) {
+export default function FriendsPanel({ onClose, lang, onOpenConversation, onViewProfile }: Props) {
   const [friends, setFriends] = useState<any[]>([]);
   const [received, setReceived] = useState<any[]>([]);
   const [sent, setSent] = useState<any[]>([]);
@@ -111,7 +112,7 @@ export default function FriendsPanel({ onClose, lang, onOpenConversation }: Prop
               </div>
               {received.map((r) => (
                 <div key={r.friendshipId} className="report-card" style={{ cursor: 'default' }}>
-                  <div className="rc-icon-hex">
+                  <div className="rc-icon-hex" style={{ cursor: 'pointer' }} onClick={() => onViewProfile(r.fromUserId)}>
                     {r.fromAvatarUrl ? (
                       <img src={r.fromAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                     ) : (
@@ -147,7 +148,7 @@ export default function FriendsPanel({ onClose, lang, onOpenConversation }: Prop
               {friends.map((f) => (
                 <div key={f.friendshipId} className="report-card" style={{ cursor: 'default' }}>
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div className="rc-icon-hex">
+                    <div className="rc-icon-hex" style={{ cursor: 'pointer' }} onClick={() => onViewProfile(f.friendUserId)}>
                       {f.friendAvatarUrl ? (
                         <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                       ) : (

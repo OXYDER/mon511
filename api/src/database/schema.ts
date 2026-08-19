@@ -45,6 +45,7 @@ export interface UsersTable {
     show_real_name: boolean;
     last_name_display: 'full' | 'initial' | 'hidden';
     dm_permission: 'everyone' | 'shared_reports_only';
+    show_online_status: boolean;
   }>;
   map_layer_preferences: Generated<{
     travaux_routiers: boolean;

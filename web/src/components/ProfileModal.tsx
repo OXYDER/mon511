@@ -14,6 +14,7 @@ const PRIVACY_LABELS: [string, string, string][] = [
   ['show_report_history', 'showReportHistory', 'Afficher mon historique de signalements'],
   ['show_region', 'showRegion', 'Afficher ma région'],
   ['show_real_name', 'showRealName', 'Afficher mon vrai nom'],
+  ['show_online_status', 'showOnlineStatus', 'Afficher mon statut en ligne'],
 ];
 
 export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Props) {

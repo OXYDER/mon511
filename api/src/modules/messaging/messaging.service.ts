@@ -61,6 +61,11 @@ export class MessagingService {
         (r.otherUserPrivacySettings as any)?.last_name_display,
         r.otherUserEmail,
       ),
+      // Vrai statut de connexion, pas seulement pour les amis — n'importe
+      // quelle conversation (même avec un usager qui n'est pas un ami)
+      // doit pouvoir montrer si l'autre personne est en ligne, sauf si
+      // elle a choisi de le cacher.
+      otherUserOnline: (r.otherUserPrivacySettings as any)?.show_online_status !== false && this.gateway.isUserOnline(r.otherUserId),
     }));
   }
 

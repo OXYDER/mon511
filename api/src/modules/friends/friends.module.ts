@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { FriendsController } from './friends.controller';
 import { FriendsService } from './friends.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
-  imports: [NotificationsModule],
+  imports: [NotificationsModule, MessagingModule],
   controllers: [FriendsController],
   providers: [FriendsService],
 })

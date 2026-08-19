@@ -24,4 +24,8 @@ export class UpdatePrivacyDto {
   @IsOptional()
   @IsIn(['everyone', 'shared_reports_only'])
   dmPermission?: 'everyone' | 'shared_reports_only';
+
+  @IsOptional()
+  @IsBoolean()
+  showOnlineStatus?: boolean;
 }

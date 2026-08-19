@@ -109,6 +109,15 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
+  /** Vrai statut de connexion — reflète immédiatement une déconnexion
+   * (contrairement à une approximation basée sur la dernière activité,
+   * qui pouvait rester "en ligne" jusqu'à plusieurs minutes après une
+   * vraie déconnexion). */
+  isUserOnline(userId: string): boolean {
+    const sockets = this.userSockets.get(userId);
+    return !!sockets && sockets.size > 0;
+  }
+
   /** Relais "en train d'écrire…" — purement éphémère, jamais écrit en
    * base (contrairement aux messages eux-mêmes), juste transmis en
    * direct à l'autre participant de la conversation s'il est connecté.

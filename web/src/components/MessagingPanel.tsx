@@ -10,12 +10,13 @@ interface Props {
   currentUserId: string | null;
   onUnreadCountChange: (count: number) => void;
   startWithUserId?: string | null;
+  onViewProfile: (userId: string) => void;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 const NEAR_BOTTOM_THRESHOLD = 80;
 
-export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadCountChange, startWithUserId }: Props) {
+export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadCountChange, startWithUserId, onViewProfile }: Props) {
   const [conversations, setConversations] = useState<any[]>([]);
   const [onlineFriends, setOnlineFriends] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -322,7 +323,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                       title={f.friendDisplayName}
                     >
                       <div style={{ position: 'relative', width: 42, height: 42 }}>
-                        <div className="rc-icon-hex" style={{ width: 42, height: 42 }}>
+                        <div className="rc-icon-hex" style={{ width: 42, height: 42, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onViewProfile(f.friendUserId); }}>
                           {f.friendAvatarUrl ? (
                             <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                           ) : (
@@ -365,14 +366,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   onClick={() => openConversation(c.conversation_id)}
                 >
                   <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div className="rc-icon-hex">
+                    <div className="rc-icon-hex" onClick={(e) => { e.stopPropagation(); onViewProfile(c.otherUserId); }}>
                       {c.otherUserAvatarUrl ? (
                         <img src={c.otherUserAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                       ) : (
                         (c.otherUserDisplayName?.[0] ?? c.otherUserEmail[0]).toUpperCase()
                       )}
                     </div>
-                    {onlineFriends.some((f) => f.friendUserId === c.otherUserId) && (
+                    {c.otherUserOnline && (
                       <span style={{
                         position: 'absolute', bottom: -1, right: -1, width: 11, height: 11, borderRadius: '50%',
                         background: '#3BD16F', border: '2px solid var(--panel-solid)',
@@ -397,14 +398,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ position: 'relative', width: 30, height: 30, flexShrink: 0 }}>
-                      <div className="rc-icon-hex" style={{ width: 30, height: 30 }}>
+                      <div className="rc-icon-hex" style={{ width: 30, height: 30, cursor: 'pointer' }} onClick={() => onViewProfile(activeConversation.otherUserId)}>
                         {activeConversation.otherUserAvatarUrl ? (
                           <img src={activeConversation.otherUserAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
                         ) : (
                           (activeConversation.otherUserDisplayName?.[0] ?? activeConversation.otherUserEmail[0]).toUpperCase()
                         )}
                       </div>
-                      {onlineFriends.some((f) => f.friendUserId === activeConversation.otherUserId) && (
+                      {activeConversation.otherUserOnline && (
                         <span style={{
                           position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: '50%',
                           background: '#3BD16F', border: '2px solid var(--panel-solid)',
@@ -412,7 +413,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                       )}
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversation.otherUserDisplayName}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer' }} onClick={() => onViewProfile(activeConversation.otherUserId)}>{activeConversation.otherUserDisplayName}</div>
                       {otherIsTyping && (
                         <div style={{ fontSize: 10.5, color: 'var(--accent-signal)' }}>
                           {lang === 'fr' ? 'écrit...' : 'typing...'}
