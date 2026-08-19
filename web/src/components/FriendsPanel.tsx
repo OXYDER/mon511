@@ -146,11 +146,19 @@ export default function FriendsPanel({ onClose, lang, onOpenConversation }: Prop
               )}
               {friends.map((f) => (
                 <div key={f.friendshipId} className="report-card" style={{ cursor: 'default' }}>
-                  <div className="rc-icon-hex">
-                    {f.friendAvatarUrl ? (
-                      <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                    ) : (
-                      (f.friendDisplayName?.[0] ?? '?').toUpperCase()
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div className="rc-icon-hex">
+                      {f.friendAvatarUrl ? (
+                        <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                      ) : (
+                        (f.friendDisplayName?.[0] ?? '?').toUpperCase()
+                      )}
+                    </div>
+                    {f.friendOnline && (
+                      <span style={{
+                        position: 'absolute', bottom: -1, right: -1, width: 11, height: 11, borderRadius: '50%',
+                        background: '#3BD16F', border: '2px solid var(--panel-solid)',
+                      }} />
                     )}
                   </div>
                   <div className="rc-body">

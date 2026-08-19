@@ -332,7 +332,24 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
             <>
               {activeConversation && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversation.otherUserDisplayName}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ position: 'relative', width: 30, height: 30, flexShrink: 0 }}>
+                      <div className="rc-icon-hex" style={{ width: 30, height: 30 }}>
+                        {activeConversation.otherUserAvatarUrl ? (
+                          <img src={activeConversation.otherUserAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                        ) : (
+                          (activeConversation.otherUserDisplayName?.[0] ?? activeConversation.otherUserEmail[0]).toUpperCase()
+                        )}
+                      </div>
+                      {onlineFriends.some((f) => f.friendUserId === activeConversation.otherUserId) && (
+                        <span style={{
+                          position: 'absolute', bottom: -1, right: -1, width: 10, height: 10, borderRadius: '50%',
+                          background: '#3BD16F', border: '2px solid var(--panel-solid)',
+                        }} />
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversation.otherUserDisplayName}</div>
+                  </div>
                   <button
                     className="btn-ghost"
                     style={{ fontSize: 11, color: 'var(--status-danger, #FF4D5E)' }}
