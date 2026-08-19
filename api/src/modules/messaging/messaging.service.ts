@@ -220,7 +220,7 @@ export class MessagingService {
       const message = await trx
         .insertInto('direct_messages')
         .values({ conversation_id: conversation.id, sender_id: fromUserId, message: firstMessage })
-        .returningAll()
+        .returning(['id', 'conversation_id', 'sender_id as senderId', 'message', 'created_at', 'read_at'])
         .executeTakeFirstOrThrow();
 
       return { conversationId: conversation.id, message };
@@ -260,7 +260,7 @@ export class MessagingService {
     const newMessage = await this.db
       .insertInto('direct_messages')
       .values({ conversation_id: conversationId, sender_id: senderId, message })
-      .returningAll()
+      .returning(['id', 'conversation_id', 'sender_id as senderId', 'message', 'created_at', 'read_at'])
       .executeTakeFirstOrThrow();
 
     if (otherUserId) await this.notifyNewMessage(otherUserId, senderId, message);
