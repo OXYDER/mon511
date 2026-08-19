@@ -13,6 +13,7 @@ interface Props {
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const NEAR_BOTTOM_THRESHOLD = 80;
 
 export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadCountChange, startWithUserId }: Props) {
   const [conversations, setConversations] = useState<any[]>([]);
@@ -30,7 +31,34 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   const [flaggingMessageId, setFlaggingMessageId] = useState<string | null>(null);
   const [reactingToMessageId, setReactingToMessageId] = useState<string | null>(null);
   const [showingNewFor, setShowingNewFor] = useState<string | null>(null);
+  const [hasNewMessageBelow, setHasNewMessageBelow] = useState(false);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingEmitRef = useRef(0);
+
+  function scrollToBottom(smooth = true) {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+    setHasNewMessageBelow(false);
+  }
+
+  function handleMessagesScroll() {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < NEAR_BOTTOM_THRESHOLD;
+    if (isNearBottomRef.current) setHasNewMessageBelow(false);
+  }
+
+  function handleIncomingMessage(isMine: boolean) {
+    if (isMine || isNearBottomRef.current) {
+      setTimeout(() => scrollToBottom(), 50);
+    } else {
+      setHasNewMessageBelow(true);
+    }
+  }
 
   async function load() {
     try {
@@ -49,11 +77,6 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Écoute en temps réel via WebSocket — le sondage périodique plus bas
-  // reste comme filet de sécurité (si la connexion WebSocket échoue pour
-  // une raison quelconque, par exemple un réseau qui la bloque), mais
-  // avec le WebSocket actif, les nouveaux messages arrivent
-  // normalement bien avant le prochain sondage.
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
@@ -61,17 +84,15 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     function handleNewMessage({ conversationId, message }: { conversationId: string; message: any }) {
       if (conversationId === activeConversationIdRef.current) {
         setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, { ...message, reactions: [] }]));
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        setOtherIsTyping(false);
+        handleIncomingMessage(false);
       }
-      // Rafraîchit aussi la liste (dernier message, badge de non-lu) —
-      // sauf pour la conversation ouverte, déjà marquée lue localement.
       setConversations((prev) => prev.map((c) => (
         c.conversation_id === conversationId && c.conversation_id !== activeConversationIdRef.current
           ? { ...c, unreadCount: Number(c.unreadCount ?? 0) + 1, lastMessage: message.message, lastMessageAt: message.created_at }
           : c
       )));
     }
-
     socket.on('new-message', handleNewMessage);
 
     function handleReaction({ messageId, userId, emoji, added }: { messageId: string; userId: string; emoji: string; added: boolean }) {
@@ -85,23 +106,33 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     }
     socket.on('message-reaction', handleReaction);
 
+    function handleMessagesRead({ conversationId, messageIds }: { conversationId: string; messageIds: string[] }) {
+      if (conversationId !== activeConversationIdRef.current) return;
+      setMessages((prev) => prev.map((m) => (messageIds.includes(m.id) ? { ...m, read_at: new Date().toISOString() } : m)));
+    }
+    socket.on('messages-read', handleMessagesRead);
+
+    function handleUserTyping({ conversationId }: { conversationId: string }) {
+      if (conversationId !== activeConversationIdRef.current) return;
+      setOtherIsTyping(true);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setOtherIsTyping(false), 3000);
+    }
+    socket.on('user-typing', handleUserTyping);
+
     return () => {
       socket.off('new-message', handleNewMessage);
       socket.off('message-reaction', handleReaction);
+      socket.off('messages-read', handleMessagesRead);
+      socket.off('user-typing', handleUserTyping);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Même esprit que le rafraîchissement des messages ci-dessous — tant
-  // que le panneau reste ouvert, on revérifie périodiquement les
-  // conversations (nouveaux messages non lus, nouvelles conversations)
-  // même si aucune n'est activement affichée.
   useEffect(() => {
     const interval = setInterval(() => {
       api.get<any[]>('/messaging/conversations').then((data) => {
         setConversations((prev) => {
-          // Ne touche pas à la conversation actuellement ouverte — son
-          // propre rafraîchissement (ci-dessous) s'en occupe déjà, et
-          // remplacer unreadCount ici la ferait clignoter inutilement.
           if (!activeConversationId) return data;
           return data.map((c) => (c.conversation_id === activeConversationId ? { ...c, unreadCount: 0 } : c));
         });
@@ -122,12 +153,6 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startWithUserId, conversations]);
 
-  // Pas de vraie infrastructure temps réel (WebSocket) — on se rapproche
-  // du "en direct" en rafraîchissant discrètement la conversation ouverte
-  // toutes les 3 secondes, tant que le panneau reste actif. N'écrase les
-  // messages que si le nombre a vraiment changé, pour éviter de faire
-  // clignoter l'écran ou de perdre le focus du champ de texte à chaque
-  // rafraîchissement.
   useEffect(() => {
     if (!activeConversationId) return;
     const interval = setInterval(async () => {
@@ -135,7 +160,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
         const data = await api.get<any[]>(`/messaging/conversations/${activeConversationId}/messages`);
         setMessages((prev) => {
           if (data.length === prev.length) return prev;
-          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+          handleIncomingMessage(false);
           return data;
         });
       } catch {
@@ -144,15 +169,18 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
       }
     }, 3000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
   async function openConversation(id: string) {
     setActiveConversationId(id);
     setError(null);
+    setOtherIsTyping(false);
+    isNearBottomRef.current = true;
     const data = await api.get<any[]>(`/messaging/conversations/${id}/messages`);
     setMessages(data);
     setConversations((prev) => prev.map((c) => (c.conversation_id === id ? { ...c, unreadCount: 0 } : c)));
-    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 50);
+    setTimeout(() => scrollToBottom(false), 50);
   }
 
   function startWithFriend(friendUserId: string) {
@@ -166,6 +194,17 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
   const effectiveNewTargetId = startWithUserId ?? showingNewFor;
 
+  function handleTextChange(value: string) {
+    setMessageText(value);
+    const targetConversationId = activeConversationId;
+    if (!targetConversationId) return;
+    const now = Date.now();
+    if (now - lastTypingEmitRef.current > 2000) {
+      lastTypingEmitRef.current = now;
+      getSocket()?.emit('typing', { conversationId: targetConversationId });
+    }
+  }
+
   async function send() {
     if (!messageText.trim()) return;
     setSending(true);
@@ -174,6 +213,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
       if (activeConversationId) {
         const msg = await api.post<any>(`/messaging/conversations/${activeConversationId}/messages`, { message: messageText });
         setMessages((prev) => [...prev, { ...msg, reactions: [] }]);
+        handleIncomingMessage(true);
       } else if (effectiveNewTargetId) {
         const result = await api.post<{ conversationId: string; message: any }>('/messaging/conversations', {
           toUserId: effectiveNewTargetId,
@@ -183,9 +223,9 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
         setMessages([{ ...result.message, reactions: [] }]);
         setShowingNewFor(null);
         load();
+        setTimeout(() => scrollToBottom(false), 50);
       }
       setMessageText('');
-      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur.');
     } finally {
@@ -348,7 +388,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                         }} />
                       )}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversation.otherUserDisplayName}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{activeConversation.otherUserDisplayName}</div>
+                      {otherIsTyping && (
+                        <div style={{ fontSize: 10.5, color: 'var(--accent-signal)' }}>
+                          {lang === 'fr' ? 'écrit...' : 'typing...'}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <button
                     className="btn-ghost"
@@ -362,55 +409,90 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
               {error && <div className="error-banner">{error}</div>}
 
-              <div style={{ flex: 1, overflowY: 'auto', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 2px' }}>
-                {messages.map((m) => {
-                  const isMine = m.senderId === currentUserId;
-                  const groupedReactions = (m.reactions ?? []).reduce((acc: Record<string, number>, r: any) => {
-                    acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
-                    return acc;
-                  }, {});
-                  return (
-                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative' }}>
-                      <div
-                        style={{
-                          maxWidth: '75%', padding: '9px 13px', borderRadius: 18,
-                          background: isMine ? 'var(--accent-signal)' : 'var(--panel-hover)',
-                          color: isMine ? '#14161B' : 'var(--text-body)',
-                          fontSize: 13.5, lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer',
-                          borderBottomRightRadius: isMine ? 5 : 18, borderBottomLeftRadius: isMine ? 18 : 5,
-                        }}
-                        onDoubleClick={() => setReactingToMessageId(m.id)}
-                      >
-                        {m.message}
-                      </div>
-
-                      {Object.keys(groupedReactions).length > 0 && (
-                        <div style={{ display: 'flex', gap: 3, marginTop: -6, marginBottom: 4, background: 'var(--panel-solid)', borderRadius: 10, padding: '2px 6px', border: '1px solid var(--panel-border)' }}>
-                          {Object.entries(groupedReactions).map(([emoji, count]) => (
-                            <span key={emoji} style={{ fontSize: 11 }}>{emoji}{Number(count) > 1 ? Number(count) : ''}</span>
-                          ))}
+              <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
+                <div
+                  ref={messagesContainerRef}
+                  onScroll={handleMessagesScroll}
+                  style={{ height: '100%', overflowY: 'auto', marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 3, padding: '4px 2px' }}
+                >
+                  {messages.map((m) => {
+                    const isMine = m.senderId === currentUserId;
+                    const groupedReactions = (m.reactions ?? []).reduce((acc: Record<string, number>, r: any) => {
+                      acc[r.emoji] = (acc[r.emoji] ?? 0) + 1;
+                      return acc;
+                    }, {});
+                    return (
+                      <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', position: 'relative' }}>
+                        <div
+                          style={{
+                            maxWidth: '75%', padding: '9px 13px', borderRadius: 18,
+                            background: isMine ? 'var(--accent-signal)' : 'var(--panel-hover)',
+                            color: isMine ? '#14161B' : 'var(--text-body)',
+                            fontSize: 13.5, lineHeight: 1.4, wordBreak: 'break-word', cursor: 'pointer',
+                            borderBottomRightRadius: isMine ? 5 : 18, borderBottomLeftRadius: isMine ? 18 : 5,
+                          }}
+                          onDoubleClick={() => setReactingToMessageId(m.id)}
+                        >
+                          {m.message}
                         </div>
-                      )}
 
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                        <span>{timeAgo(m.created_at, lang)}</span>
-                        <span style={{ cursor: 'pointer' }} onClick={() => setReactingToMessageId(reactingToMessageId === m.id ? null : m.id)}>😊</span>
-                        {!isMine && (
-                          <span style={{ cursor: 'pointer' }} title={lang === 'fr' ? 'Signaler' : 'Report'} onClick={() => setFlaggingMessageId(m.id)}>🚩</span>
+                        {Object.keys(groupedReactions).length > 0 && (
+                          <div style={{ display: 'flex', gap: 3, marginTop: -6, marginBottom: 4, background: 'var(--panel-solid)', borderRadius: 10, padding: '2px 6px', border: '1px solid var(--panel-border)' }}>
+                            {Object.entries(groupedReactions).map(([emoji, count]) => (
+                              <span key={emoji} style={{ fontSize: 11 }}>{emoji}{Number(count) > 1 ? Number(count) : ''}</span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                          <span>{timeAgo(m.created_at, lang)}</span>
+                          {isMine && (
+                            <span title={m.read_at ? (lang === 'fr' ? 'Lu' : 'Read') : (lang === 'fr' ? 'Envoyé' : 'Sent')} style={{ color: m.read_at ? 'var(--accent-signal)' : 'var(--text-muted)' }}>
+                              {m.read_at ? '✓✓' : '✓'}
+                            </span>
+                          )}
+                          <span style={{ cursor: 'pointer' }} onClick={() => setReactingToMessageId(reactingToMessageId === m.id ? null : m.id)}>😊</span>
+                          {!isMine && (
+                            <span style={{ cursor: 'pointer' }} title={lang === 'fr' ? 'Signaler' : 'Report'} onClick={() => setFlaggingMessageId(m.id)}>🚩</span>
+                          )}
+                        </div>
+
+                        {reactingToMessageId === m.id && (
+                          <div style={{ display: 'flex', gap: 4, background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 20, padding: '4px 8px', marginTop: 2, boxShadow: 'var(--shadow-panel)' }}>
+                            {QUICK_EMOJIS.map((emoji) => (
+                              <span key={emoji} style={{ cursor: 'pointer', fontSize: 15 }} onClick={() => toggleReaction(m.id, emoji)}>{emoji}</span>
+                            ))}
+                          </div>
                         )}
                       </div>
+                    );
+                  })}
 
-                      {reactingToMessageId === m.id && (
-                        <div style={{ display: 'flex', gap: 4, background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 20, padding: '4px 8px', marginTop: 2, boxShadow: 'var(--shadow-panel)' }}>
-                          {QUICK_EMOJIS.map((emoji) => (
-                            <span key={emoji} style={{ cursor: 'pointer', fontSize: 15 }} onClick={() => toggleReaction(m.id, emoji)}>{emoji}</span>
-                          ))}
-                        </div>
-                      )}
+                  {otherIsTyping && (
+                    <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '10px 14px', background: 'var(--panel-hover)', borderRadius: 18, borderBottomLeftRadius: 5 }}>
+                      <span className="typing-dot" style={{ animationDelay: '0s' }} />
+                      <span className="typing-dot" style={{ animationDelay: '0.15s' }} />
+                      <span className="typing-dot" style={{ animationDelay: '0.3s' }} />
                     </div>
-                  );
-                })}
-                <div ref={messagesEndRef} />
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {hasNewMessageBelow && (
+                  <button
+                    onClick={() => scrollToBottom()}
+                    style={{
+                      position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
+                      width: 38, height: 38, borderRadius: '50%', background: 'var(--accent-signal)', color: '#14161B',
+                      border: 'none', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 4px 14px rgba(0,0,0,0.35)', animation: 'new-message-bounce 1.1s ease-in-out infinite',
+                    }}
+                    title={lang === 'fr' ? 'Nouveau message' : 'New message'}
+                  >
+                    ↓
+                  </button>
+                )}
               </div>
 
               <div className="comment-row">
@@ -418,7 +500,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                   className="text-input"
                   placeholder={lang === 'fr' ? 'Écrire un message...' : 'Write a message...'}
                   value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
+                  onChange={(e) => handleTextChange(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && send()}
                 />
                 <button className="btn-primary" onClick={send} disabled={sending || !messageText.trim()}>

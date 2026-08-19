@@ -1,8 +1,11 @@
-import { OnGatewayConnection, OnGatewayDisconnect, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
-import { Injectable, Logger } from '@nestjs/common';
+import { MessageBody, ConnectedSocket, OnGatewayConnection, OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
+import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
+import { Kysely } from 'kysely';
 import { JwtService } from '@nestjs/jwt';
 import { JwtPayload } from '../../auth/strategies/jwt.strategy';
+import { Database } from '../../database/schema';
+import { KYSELY_INSTANCE } from '../../database/database.module';
 
 /** Passerelle WebSocket pour la messagerie privée — pousse les nouveaux
  * messages instantanément aux destinataires connectés, plutôt que de
@@ -28,7 +31,10 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly jwt: JwtService) {}
+  constructor(
+    private readonly jwt: JwtService,
+    @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
+  ) {}
 
   handleConnection(client: Socket) {
     const token = client.handshake.auth?.token as string | undefined;
@@ -88,6 +94,44 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!sockets || sockets.size === 0) return;
     for (const socketId of sockets) {
       this.server.to(socketId).emit('message-reaction', { messageId, userId: reactorUserId, emoji, added });
+    }
+  }
+
+  /** Accusé de lecture en direct — pousse à l'EXPÉDITEUR des messages
+   * concernés (pas au lecteur lui-même) la confirmation que ses messages
+   * viennent d'être lus, pour que le petit crochet passe instantanément
+   * de "envoyé" à "lu" sans attendre le prochain sondage périodique. */
+  notifyMessagesRead(senderUserId: string, conversationId: string, messageIds: string[]) {
+    const sockets = this.userSockets.get(senderUserId);
+    if (!sockets || sockets.size === 0) return;
+    for (const socketId of sockets) {
+      this.server.to(socketId).emit('messages-read', { conversationId, messageIds });
+    }
+  }
+
+  /** Relais "en train d'écrire…" — purement éphémère, jamais écrit en
+   * base (contrairement aux messages eux-mêmes), juste transmis en
+   * direct à l'autre participant de la conversation s'il est connecté.
+   * Le frontend renvoie régulièrement cet événement tant que la personne
+   * tape, et s'arrête (ou le client considère l'indicateur périmé après
+   * quelques secondes sans nouvel envoi) dès qu'elle arrête. */
+  @SubscribeMessage('typing')
+  async handleTyping(@ConnectedSocket() client: Socket, @MessageBody() data: { conversationId: string }) {
+    const userId = client.data.userId as string | undefined;
+    if (!userId) return;
+
+    const otherParticipant = await this.db
+      .selectFrom('conversation_participants')
+      .select('user_id')
+      .where('conversation_id', '=', data.conversationId)
+      .where('user_id', '!=', userId)
+      .executeTakeFirst();
+    if (!otherParticipant) return;
+
+    const sockets = this.userSockets.get(otherParticipant.user_id);
+    if (!sockets) return;
+    for (const socketId of sockets) {
+      this.server.to(socketId).emit('user-typing', { conversationId: data.conversationId, userId });
     }
   }
 }

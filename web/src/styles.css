@@ -658,3 +658,16 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
   from { opacity: 1; transform: translateY(0) scale(1); }
   to { opacity: 0; transform: translateY(16px) scale(0.96); }
 }
+
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+  display: inline-block; animation: typing-bounce 1s infinite ease-in-out;
+}
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes new-message-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-4px); }
+}

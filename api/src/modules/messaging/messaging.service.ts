@@ -79,13 +79,21 @@ export class MessagingService {
 
     // Marque comme lus tous les messages de l'AUTRE personne — jamais les
     // siens, pas de sens de se marquer soi-même comme "lu".
-    await this.db
+    const justRead = await this.db
       .updateTable('direct_messages')
       .set({ read_at: new Date() as any })
       .where('conversation_id', '=', conversationId)
       .where('sender_id', '!=', userId)
       .where('read_at', 'is', null)
+      .returning(['id', 'sender_id'])
       .execute();
+
+    // Accusé de lecture en direct — sans ça, l'expéditeur ne verrait le
+    // changement qu'à son prochain sondage périodique, plusieurs
+    // secondes plus tard.
+    if (justRead.length > 0) {
+      this.gateway.notifyMessagesRead(justRead[0].sender_id, conversationId, justRead.map((m) => m.id));
+    }
 
     // Marque aussi la notification consolidée de cette conversation comme
     // lue — visiter la conversation devrait avoir le même effet que
@@ -111,7 +119,7 @@ export class MessagingService {
     const messages = await this.db
       .selectFrom('direct_messages')
       .innerJoin('users', 'users.id', 'direct_messages.sender_id')
-      .select(['direct_messages.id', 'direct_messages.message', 'direct_messages.sender_id as senderId', 'direct_messages.created_at', 'users.email as senderEmail'])
+      .select(['direct_messages.id', 'direct_messages.message', 'direct_messages.sender_id as senderId', 'direct_messages.created_at', 'direct_messages.read_at', 'users.email as senderEmail'])
       .where('direct_messages.conversation_id', '=', conversationId)
       .orderBy('direct_messages.created_at', 'asc')
       .execute();
