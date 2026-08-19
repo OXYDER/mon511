@@ -842,6 +842,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           placementModeActive={placementMode}
           onPlacementClick={(lat, lng) => { setPlacementMode(false); openCreateAtCoords(lat, lng); }}
           focusPinId={selection?.id ?? null}
+          selectedPinId={selection?.id ?? null}
           hoveredPinId={hoveredPinId}
         />
       </div>

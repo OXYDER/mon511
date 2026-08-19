@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl, { Map as MapLibreMap, Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -40,6 +40,7 @@ interface Props {
   ) => void;
   onMapClick?: (lat: number, lng: number, screenX: number, screenY: number) => void;
   onUserZoomOut?: () => void;
+  selectedPinId?: string | null;
   /** Actif seulement pendant l'outil « cliquer pour choisir l'emplacement »
    * (bouton Signaler sur bureau) — un clic GAUCHE sur la carte déclenche
    * alors onPlacementClick, en plus du clic droit qui garde son
@@ -69,7 +70,7 @@ const PIN_COLORS: Record<MapPin['colorVar'], string> = {
   official: '#3B9CFF',
 };
 
-export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, onUserZoomOut, placementModeActive = false, onPlacementClick, focusPinId = null, hoveredPinId = null }: Props) {
+export default function MapView({ center, pins, lines = [], userLocation = null, height = 320, fullBleed = false, theme = 'dark', mapType = 'default', onViewportChange, onMapClick, onUserZoomOut, selectedPinId = null, placementModeActive = false, onPlacementClick, focusPinId = null, hoveredPinId = null }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   // Le clic gauche en mode placement est enregistré une seule fois à la
@@ -81,6 +82,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   const onPlacementClickRef = useRef(onPlacementClick);
   onPlacementClickRef.current = onPlacementClick;
   const markersRef = useRef<Marker[]>([]);
+  const pinElementsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastZoomRef = useRef<number | null>(null);
   const onUserZoomOutRef = useRef(onUserZoomOut);
   onUserZoomOutRef.current = onUserZoomOut;
@@ -468,6 +470,7 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
 
   function buildPinElement(pin: MapPin) {
     const el = document.createElement('div');
+    pinElementsRef.current.set(pin.id, el);
     el.style.width = '32px';
     el.style.height = '32px';
     el.style.cursor = pin.onClick ? 'pointer' : 'default';
@@ -503,12 +506,28 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     return el;
   }
 
+  // Signature stable du contenu des pins, EXCLUANT le champ selected —
+  // le tableau pins reçu en prop obtient une nouvelle référence à chaque
+  // changement de sélection (le composant parent le reconstruit avec
+  // .map() à chaque rendu), ce qui forçait l'effet ci-dessous à détruire
+  // et reconstruire TOUS les marqueurs de la carte à chaque clic sur un
+  // signalement — la vraie cause du besoin de cliquer deux fois pour en
+  // sélectionner un autre. Cette chaîne reste identique tant que le
+  // CONTENU réel des pins ne change pas, même si la référence du tableau,
+  // elle, change à chaque rendu — utilisée comme dépendance à la place
+  // de pins directement, ça évite la reconstruction inutile.
+  const pinsSignature = useMemo(
+    () => pins.map((p) => `${p.id}:${p.latitude}:${p.longitude}:${p.icon}:${p.colorVar}:${p.pending}:${p.photoUrl}`).join('|'),
+    [pins],
+  );
+
   useEffect(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
     markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
+    pinElementsRef.current.clear();
     popupsRef.current.forEach((p) => p.remove());
     popupsRef.current = [];
     popupsByIdRef.current = {};
@@ -531,7 +550,12 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         // Déployé en éventail : chaque pin à une position calculée en
         // cercle autour du centre du groupe, avec un fil de connexion.
         const centerScreen = map.project([cluster.lng, cluster.lat]);
-        const radius = 42 + cluster.pins.length * 6;
+        // Le rayon doit rester SOUS le seuil de regroupement (42px, voir
+        // pixelRadius dans clusterPins) — sinon les pins déployés peuvent
+        // déborder jusqu'à chevaucher un pin ou un autre regroupement
+        // voisin qui, lui, n'était pas assez proche pour être fusionné
+        // dans ce groupe-ci.
+        const radius = Math.min(24 + cluster.pins.length * 4, 38);
         cluster.pins.forEach((pin, idx) => {
           const angle = (idx / cluster.pins.length) * Math.PI * 2 - Math.PI / 2;
           const targetScreen = { x: centerScreen.x + Math.cos(angle) * radius, y: centerScreen.y + Math.sin(angle) * radius };
@@ -615,7 +639,23 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     }
 
     if (map.isStyleLoaded()) ensureSpiderfyLinesLayer();
-  }, [pins, clusterVersion, spiderfiedClusterId]);
+  }, [pinsSignature, clusterVersion, spiderfiedClusterId]);
+
+  // Applique le style "sélectionné" directement sur l'élément DOM
+  // existant, SANS passer par la reconstruction complète ci-dessus —
+  // c'était la vraie cause du besoin de cliquer deux fois pour
+  // sélectionner un autre signalement : le tableau pins (qui inclut le
+  // drapeau selected par pin) est recréé à chaque changement de
+  // sélection dans le composant parent, ce qui déclenchait la
+  // destruction/reconstruction de TOUS les marqueurs de la carte à
+  // répétition, y compris celui qu'on venait tout juste de cliquer.
+  useEffect(() => {
+    pinElementsRef.current.forEach((el, id) => {
+      el.style.boxShadow = id === selectedPinId
+        ? '0 0 0 3px #FF2D3B, 0 0 0 6px rgba(255,45,59,0.35), 0 2px 6px rgba(0,0,0,0.4)'
+        : '0 2px 6px rgba(0,0,0,0.4)';
+    });
+  }, [selectedPinId]);
 
   // Sélectionner un pin depuis l'extérieur (ex. clic dans la liste plutôt
   // que sur la carte) doit aussi révéler ce pin s'il est caché dans un
