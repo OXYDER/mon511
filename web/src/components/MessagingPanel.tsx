@@ -283,7 +283,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', minHeight: 420, maxHeight: '72vh' }}>
+        <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', minHeight: 420, maxHeight: '72vh', overflow: 'hidden' }}>
           {error && !activeConversationId && !showingNewConversation && <div className="error-banner">{error}</div>}
           {loading && <div className="center-msg">{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div>}
 
