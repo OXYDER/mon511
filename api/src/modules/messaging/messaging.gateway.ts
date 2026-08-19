@@ -68,4 +68,15 @@ export class MessagingGateway implements OnGatewayConnection, OnGatewayDisconnec
       this.server.to(socketId).emit('new-message', { conversationId, message });
     }
   }
+
+  /** Pousse un ajout/retrait de réaction à un usager précis — même
+   * mécanisme que notifyNewMessage(), silencieux si la personne n'est
+   * pas connectée en ce moment. */
+  notifyReaction(userId: string, messageId: string, reactorUserId: string, emoji: string, added: boolean) {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets || sockets.size === 0) return;
+    for (const socketId of sockets) {
+      this.server.to(socketId).emit('message-reaction', { messageId, userId: reactorUserId, emoji, added });
+    }
+  }
 }

@@ -147,13 +147,30 @@ export class MessagingService {
       .where('emoji', '=', emoji)
       .executeTakeFirst();
 
+    let added: boolean;
     if (existing) {
       await this.db.deleteFrom('message_reactions').where('id', '=', existing.id).execute();
-      return { added: false };
+      added = false;
+    } else {
+      await this.db.insertInto('message_reactions').values({ message_id: messageId, user_id: userId, emoji }).execute();
+      added = true;
     }
 
-    await this.db.insertInto('message_reactions').values({ message_id: messageId, user_id: userId, emoji }).execute();
-    return { added: true };
+    // Pousse la réaction à l'autre participant en temps réel — même
+    // esprit que les nouveaux messages, sans quoi il faudrait attendre
+    // le prochain sondage périodique pour la voir apparaître.
+    const conversation = await this.db
+      .selectFrom('direct_messages')
+      .innerJoin('conversation_participants', 'conversation_participants.conversation_id', 'direct_messages.conversation_id')
+      .select('conversation_participants.user_id')
+      .where('direct_messages.id', '=', messageId)
+      .where('conversation_participants.user_id', '!=', userId)
+      .executeTakeFirst();
+    if (conversation) {
+      this.gateway.notifyReaction(conversation.user_id, messageId, userId, emoji, added);
+    }
+
+    return { added };
   }
 
   /**

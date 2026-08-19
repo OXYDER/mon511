@@ -73,7 +73,22 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     }
 
     socket.on('new-message', handleNewMessage);
-    return () => { socket.off('new-message', handleNewMessage); };
+
+    function handleReaction({ messageId, userId, emoji, added }: { messageId: string; userId: string; emoji: string; added: boolean }) {
+      setMessages((prev) => prev.map((m) => {
+        if (m.id !== messageId) return m;
+        const reactions = added
+          ? [...(m.reactions ?? []), { messageId, userId, emoji }]
+          : (m.reactions ?? []).filter((r: any) => !(r.userId === userId && r.emoji === emoji));
+        return { ...m, reactions };
+      }));
+    }
+    socket.on('message-reaction', handleReaction);
+
+    return () => {
+      socket.off('new-message', handleNewMessage);
+      socket.off('message-reaction', handleReaction);
+    };
   }, []);
 
   // Même esprit que le rafraîchissement des messages ci-dessous — tant
