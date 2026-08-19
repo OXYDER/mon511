@@ -37,6 +37,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const otherIsTypingRef = useRef(false);
   const lastTypingEmitRef = useRef(0);
 
   function scrollToBottom(smooth = true) {
@@ -85,6 +86,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
       if (conversationId === activeConversationIdRef.current) {
         setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, { ...message, reactions: [] }]));
         setOtherIsTyping(false);
+        otherIsTypingRef.current = false;
         handleIncomingMessage(false);
       }
       setConversations((prev) => prev.map((c) => (
@@ -114,9 +116,16 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
     function handleUserTyping({ conversationId }: { conversationId: string }) {
       if (conversationId !== activeConversationIdRef.current) return;
+      // Seulement si l'usager suivait déjà le bas de la conversation —
+      // sinon la bulle "en train d'écrire" pousserait le contenu sans
+      // qu'on la voie, obligeant à défiler manuellement à chaque fois
+      // pour la retrouver.
+      const wasAlreadyTyping = otherIsTypingRef.current;
       setOtherIsTyping(true);
+      otherIsTypingRef.current = true;
+      if (!wasAlreadyTyping) handleIncomingMessage(false);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-      typingTimeoutRef.current = setTimeout(() => setOtherIsTyping(false), 3000);
+      typingTimeoutRef.current = setTimeout(() => { setOtherIsTyping(false); otherIsTypingRef.current = false; }, 3000);
     }
     socket.on('user-typing', handleUserTyping);
 
@@ -176,6 +185,7 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     setActiveConversationId(id);
     setError(null);
     setOtherIsTyping(false);
+    otherIsTypingRef.current = false;
     isNearBottomRef.current = true;
     const data = await api.get<any[]>(`/messaging/conversations/${id}/messages`);
     setMessages(data);
