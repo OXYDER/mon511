@@ -407,7 +407,6 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // chaque navigation, peu importe si le zoom bouge vraiment ou non.
   useEffect(() => {
     setSpiderfiedClusterId(null);
-    console.log('[diag pins] center a changé, spiderfiedClusterId remis à null');
   }, [center]);
 
   // Curseur en croix pendant le mode placement — signal visuel clair que
@@ -503,7 +502,6 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     spiderfyLegsRef.current = [];
 
     const clusters = clusterPins(pins, map);
-    console.log('[diag pins] rendu — spiderfiedClusterId:', spiderfiedClusterId, '| regroupements:', clusters.map((c) => ({ id: c.id.slice(0, 20), taille: c.pins.length, déployé: c.id === spiderfiedClusterId })));
 
     for (const cluster of clusters) {
       if (cluster.pins.length === 1) {
@@ -607,13 +605,23 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   }, [pins, clusterVersion, spiderfiedClusterId]);
 
   // Sélectionner un pin depuis l'extérieur (ex. clic dans la liste plutôt
-  // que sur la carte) doit aussi déployer le groupe en éventail si ce pin
-  // en fait partie — sinon il reste invisible, caché dans un groupe fermé.
+  // que sur la carte) doit aussi révéler ce pin s'il est caché dans un
+  // regroupement — même règle que le clic direct sur un regroupement :
+  // zoomer d'abord si le groupe est gros (plus de 2), déployer en étoile
+  // seulement s'il est déjà petit. C'était le vrai bug de la « grande
+  // roue » — ce chemin-ci déployait SANS AUCUNE LIMITE DE TAILLE,
+  // contournant complètement la règle appliquée au clic direct sur un
+  // regroupement.
   useEffect(() => {
     if (!mapRef.current || !focusPinId) return;
     const clusters = clusterPins(pins, mapRef.current);
     const owningCluster = clusters.find((c) => c.pins.length > 1 && c.pins.some((p) => p.id === focusPinId));
-    if (owningCluster) setSpiderfiedClusterId(owningCluster.id);
+    if (!owningCluster) return;
+    if (owningCluster.pins.length > 2) {
+      mapRef.current.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: mapRef.current.getZoom() + 2, duration: 500 });
+    } else {
+      setSpiderfiedClusterId(owningCluster.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPinId, clusterVersion, pins]);
 
