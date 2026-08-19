@@ -86,6 +86,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   const res = await fetch(`${API_URL}/api${path}`, { ...options, headers });
 
+  if (res.status === 401 && token) {
+    // Le jeton présent n'est plus valide côté serveur (expiré, ou compte
+    // modifié depuis) — peu importe QUEL appel échoue, une session
+    // vraiment terminée ne devrait jamais laisser l'usager dans un état
+    // "semi-authentifié" (jeton encore présent localement, mais plus
+    // rien qui fonctionne vraiment). Déconnexion automatique et
+    // immédiate, centralisée ici plutôt que dispersée dans chaque
+    // composant qui pourrait recevoir ce genre d'échec.
+    clearToken();
+    window.dispatchEvent(new CustomEvent('mon511:session-expired'));
+  }
+
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error(errorBody.message ?? `Erreur ${res.status}`);
