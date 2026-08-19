@@ -46,6 +46,25 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
 
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Même esprit que le rafraîchissement des messages ci-dessous — tant
+  // que le panneau reste ouvert, on revérifie périodiquement les
+  // conversations (nouveaux messages non lus, nouvelles conversations)
+  // même si aucune n'est activement affichée.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      api.get<any[]>('/messaging/conversations').then((data) => {
+        setConversations((prev) => {
+          // Ne touche pas à la conversation actuellement ouverte — son
+          // propre rafraîchissement (ci-dessous) s'en occupe déjà, et
+          // remplacer unreadCount ici la ferait clignoter inutilement.
+          if (!activeConversationId) return data;
+          return data.map((c) => (c.conversation_id === activeConversationId ? { ...c, unreadCount: 0 } : c));
+        });
+      }).catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [activeConversationId]);
+
   useEffect(() => {
     onUnreadCountChange(conversations.reduce((sum, c) => sum + Number(c.unreadCount ?? 0), 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,6 +76,30 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
     if (existing) openConversation(existing.conversation_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startWithUserId, conversations]);
+
+  // Pas de vraie infrastructure temps réel (WebSocket) — on se rapproche
+  // du "en direct" en rafraîchissant discrètement la conversation ouverte
+  // toutes les 3 secondes, tant que le panneau reste actif. N'écrase les
+  // messages que si le nombre a vraiment changé, pour éviter de faire
+  // clignoter l'écran ou de perdre le focus du champ de texte à chaque
+  // rafraîchissement.
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const interval = setInterval(async () => {
+      try {
+        const data = await api.get<any[]>(`/messaging/conversations/${activeConversationId}/messages`);
+        setMessages((prev) => {
+          if (data.length === prev.length) return prev;
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+          return data;
+        });
+      } catch {
+        // Silencieux — un échec ponctuel de rafraîchissement en arrière-plan
+        // ne doit pas interrompre la conversation en cours.
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [activeConversationId]);
 
   async function openConversation(id: string) {
     setActiveConversationId(id);
