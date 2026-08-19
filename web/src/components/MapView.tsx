@@ -399,6 +399,16 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     }
   }, [center]);
 
+  // Fermer un regroupement déployé en étoile dès qu'on navigue ailleurs
+  // (ex. clic sur un signalement à l'intérieur du déploiement, qui ouvre
+  // son détail) — le seul zoomend ne suffisait pas dans ce cas précis
+  // (openReport() peut parfois garder exactement le même niveau de zoom,
+  // ne déclenchant alors aucun événement de zoom réel). center change à
+  // chaque navigation, peu importe si le zoom bouge vraiment ou non.
+  useEffect(() => {
+    setSpiderfiedClusterId(null);
+  }, [center]);
+
   // Curseur en croix pendant le mode placement — signal visuel clair que
   // le prochain clic sur la carte va déterminer l'emplacement du
   // signalement.
