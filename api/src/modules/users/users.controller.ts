@@ -38,6 +38,18 @@ export class UsersController {
     return this.usersService.updatePrivacySettings(user.userId, dto);
   }
 
+  @Post('me/tutorial/complete')
+  @UseGuards(JwtAuthGuard)
+  completeTutorial(@CurrentUser() user: CurrentUserPayload) {
+    return this.usersService.completeTutorial(user.userId);
+  }
+
+  @Post('me/tutorial/restart')
+  @UseGuards(JwtAuthGuard)
+  restartTutorial(@CurrentUser() user: CurrentUserPayload) {
+    return this.usersService.restartTutorial(user.userId);
+  }
+
   @Patch('me/profile')
   @UseGuards(JwtAuthGuard)
   updateProfile(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdateProfileDto) {

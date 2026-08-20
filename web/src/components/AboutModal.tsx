@@ -3,9 +3,11 @@ import { APP_VERSION, BUILD_DATE } from '../version';
 interface Props {
   onClose: () => void;
   lang: 'fr' | 'en';
+  onOpenTerms: () => void;
+  onOpenPrivacyPolicy: () => void;
 }
 
-export default function AboutModal({ onClose, lang }: Props) {
+export default function AboutModal({ onClose, lang, onOpenTerms, onOpenPrivacyPolicy }: Props) {
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ width: 380 }}>
@@ -44,7 +46,6 @@ export default function AboutModal({ onClose, lang }: Props) {
             MapTiler (cartographie)
           </div>
 
-          <div className="section-label">{lang === 'fr' ? 'Technique' : 'Technical'}</div>
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8 }}>
             {lang === 'fr' ? 'Version' : 'Version'} : {APP_VERSION}<br />
             {lang === 'fr' ? 'Compilé le' : 'Built on'} : {BUILD_DATE}

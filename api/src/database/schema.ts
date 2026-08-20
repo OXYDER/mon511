@@ -54,6 +54,7 @@ export interface UsersTable {
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   last_active_at: Timestamp | null;
+  tutorial_completed_at: Timestamp | null;
 }
 
 export interface ProblemCategoriesTable {

@@ -17,8 +17,11 @@ const DetailPanel = lazy(() => import('../components/DetailPanel'));
 const ExternalIncidentPanel = lazy(() => import('../components/ExternalIncidentPanel'));
 const ProfileModal = lazy(() => import('../components/ProfileModal'));
 const AboutModal = lazy(() => import('../components/AboutModal'));
+const TermsModal = lazy(() => import('../components/TermsModal'));
+const PrivacyPolicyModal = lazy(() => import('../components/PrivacyPolicyModal'));
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
+const OnboardingTutorial = lazy(() => import('../components/OnboardingTutorial'));
 const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
 const PublicProfileModal = lazy(() => import('../components/PublicProfileModal'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
@@ -205,6 +208,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   const [showAbout, setShowAbout] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showMyReports, setShowMyReports] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessaging, setShowMessaging] = useState(false);
@@ -214,6 +219,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showFriends, setShowFriends] = useState(false);
   const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
   const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
+  const [showTutorial, setShowTutorial] = useState(false);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -297,6 +303,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         // connecté.
         if (me.map_layer_preferences) setLayerPrefs({ ...DEFAULT_LAYER_PREFS, ...me.map_layer_preferences });
         setCurrentUserId(me.id);
+        if (!me.tutorial_completed_at) setShowTutorial(true);
       }).catch((err) => {
         // Le jeton stocké dans localStorage existe (authenticated est
         // vrai — voir App.tsx, qui ne vérifie que la présence du jeton,
@@ -1600,6 +1607,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onClose={() => setShowProfileModal(false)}
           onLogout={() => { setShowProfileModal(false); onLogout(); }}
           onOpenMyReports={() => { setShowProfileModal(false); setShowMyReports(true); }}
+          onRestartTutorial={() => { setShowProfileModal(false); setShowTutorial(true); }}
         />
       )}
       {contextMenu && (
@@ -1631,7 +1639,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
+      {showAbout && (
+        <AboutModal
+          onClose={() => setShowAbout(false)}
+          lang={lang}
+          onOpenTerms={() => { setShowAbout(false); setShowTerms(true); }}
+          onOpenPrivacyPolicy={() => { setShowAbout(false); setShowPrivacyPolicy(true); }}
+        />
+      )}
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} lang={lang} />}
+      {showPrivacyPolicy && <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} lang={lang} />}
       {showFaq && <FaqModal onClose={() => setShowFaq(false)} lang={lang} />}
       {showSupportChat && (
         <SupportChatWidget
@@ -1682,6 +1699,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           currentUserId={currentUserId}
           onStartConversation={(userId) => { setViewingProfileUserId(null); setMessagingStartUserId(userId); setShowMessaging(true); }}
         />
+      )}
+
+      {showTutorial && (
+        <OnboardingTutorial lang={lang} onFinish={() => setShowTutorial(false)} />
       )}
 
       {/* Mention de droits d'auteur, discrète — même esprit que l'attribution

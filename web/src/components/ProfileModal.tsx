@@ -7,6 +7,7 @@ interface Props {
   onClose: () => void;
   onLogout: () => void;
   onOpenMyReports: () => void;
+  onRestartTutorial: () => void;
 }
 
 const PRIVACY_LABELS: [string, string, string][] = [
@@ -17,7 +18,7 @@ const PRIVACY_LABELS: [string, string, string][] = [
   ['show_online_status', 'showOnlineStatus', 'Afficher mon statut en ligne'],
 ];
 
-export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Props) {
+export default function ProfileModal({ onClose, onLogout, onOpenMyReports, onRestartTutorial }: Props) {
   const [me, setMe] = useState<any>(null);
   const [loadError, setLoadError] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<any[] | null>(null);
@@ -85,6 +86,12 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
   async function unblockUser(userId: string) {
     await api.post(`/messaging/unblock/${userId}`, {}).catch(() => {});
     setBlockedUsers((prev) => (prev ?? []).filter((b) => b.userId !== userId));
+  }
+
+  async function restartTutorial() {
+    await api.post('/users/me/tutorial/restart', {}).catch(() => {});
+    onClose();
+    onRestartTutorial();
   }
 
   async function togglePrivacy(snakeKey: string, camelKey: string, current: boolean) {
@@ -267,6 +274,20 @@ export default function ProfileModal({ onClose, onLogout, onOpenMyReports }: Pro
                       <button className="btn-primary" type="submit">Confirmer le changement</button>
                     </form>
                   )}
+                </div>
+              )}
+
+              {tab === 'profile' && (
+                <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--panel-border)' }}>
+                  <div className="field-group">
+                    <label className="field-label">Tutoriel d'accueil</label>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+                      Revoir la présentation guidée des principales fonctionnalités de mon511.
+                    </p>
+                    <button className="btn-ghost" onClick={restartTutorial}>
+                      🔄 Recommencer le tutoriel
+                    </button>
+                  </div>
                 </div>
               )}
 

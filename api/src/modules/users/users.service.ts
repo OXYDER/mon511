@@ -120,6 +120,7 @@ export class UsersService {
       .select([
         'id', 'email', 'first_name', 'last_name', 'avatar_url', 'locale',
         'region_id', 'reputation_score', 'privacy_settings', 'map_layer_preferences', 'created_at',
+        'tutorial_completed_at',
       ])
       .where('id', '=', id)
       .executeTakeFirst();
@@ -212,6 +213,30 @@ export class UsersService {
       .execute();
 
     return updated;
+  }
+
+  /** Marque le tutoriel d'accueil comme complété (ou passé — même
+   * traitement, l'usager ne le reverra plus automatiquement dans les
+   * deux cas). */
+  async completeTutorial(userId: string) {
+    await this.db
+      .updateTable('users')
+      .set({ tutorial_completed_at: new Date() as any })
+      .where('id', '=', userId)
+      .execute();
+    return { completed: true };
+  }
+
+  /** Recommencer volontairement le tutoriel depuis les paramètres du
+   * profil — remet simplement l'horodatage à zéro, le prochain
+   * chargement de l'app le redéclenchera automatiquement. */
+  async restartTutorial(userId: string) {
+    await this.db
+      .updateTable('users')
+      .set({ tutorial_completed_at: null })
+      .where('id', '=', userId)
+      .execute();
+    return { completed: false };
   }
 
   /** "Mes signalements" — voir maquette page profil. */

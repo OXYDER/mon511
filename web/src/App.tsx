@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import { getToken, clearToken } from './api';
 import { closeSocket } from './socket';
+import { getStoredLang } from './i18n';
 import MapPage from './pages/MapPage';
 import AuthModal from './components/AuthModal';
+import CookieConsentBanner from './components/CookieConsentBanner';
+
+const COOKIE_CONSENT_KEY = 'mon511_cookie_consent';
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const [showCookieBanner, setShowCookieBanner] = useState(() => !localStorage.getItem(COOKIE_CONSENT_KEY));
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
@@ -19,6 +24,14 @@ export default function App() {
     clearToken();
     closeSocket();
     setAuthenticated(false);
+  }
+
+  function handleCookieDecision(accepted: boolean) {
+    // Le choix lui-même est enregistré peu importe la réponse — sinon la
+    // bannière réapparaîtrait à chaque visite même après un refus
+    // explicite, ce qui serait plus insistant qu'utile.
+    localStorage.setItem(COOKIE_CONSENT_KEY, accepted ? 'accepted' : 'declined');
+    setShowCookieBanner(false);
   }
 
   // Déconnexion automatique dès qu'un appel quelconque révèle que le
@@ -54,6 +67,9 @@ export default function App() {
             setAuthModalMode(null);
           }}
         />
+      )}
+      {showCookieBanner && (
+        <CookieConsentBanner lang={getStoredLang()} onDecision={handleCookieDecision} />
       )}
     </>
   );
