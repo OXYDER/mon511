@@ -46,6 +46,17 @@ export default function AboutModal({ onClose, lang, onOpenTerms, onOpenPrivacyPo
             MapTiler (cartographie)
           </div>
 
+          <div className="section-label">{lang === 'fr' ? 'Légal' : 'Legal'}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5 }}>
+            <button className="btn-ghost" style={{ justifyContent: 'flex-start', textAlign: 'left' }} onClick={onOpenTerms}>
+              {lang === 'fr' ? "📄 Termes et conditions d'utilisation" : '📄 Terms of Use'}
+            </button>
+            <button className="btn-ghost" style={{ justifyContent: 'flex-start', textAlign: 'left' }} onClick={onOpenPrivacyPolicy}>
+              {lang === 'fr' ? '🔒 Politique de vie privée' : '🔒 Privacy Policy'}
+            </button>
+          </div>
+
+          <div className="section-label">{lang === 'fr' ? 'Technique' : 'Technical'}</div>
           <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.8 }}>
             {lang === 'fr' ? 'Version' : 'Version'} : {APP_VERSION}<br />
             {lang === 'fr' ? 'Compilé le' : 'Built on'} : {BUILD_DATE}
