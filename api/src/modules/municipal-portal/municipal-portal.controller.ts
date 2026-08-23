@@ -39,21 +39,90 @@ export class MunicipalPortalController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')
   findPendingAccessRequests() {
-    return this.service.findPendingAccessRequests();
+    return this.service.findPendingAccessRequests(null);
   }
 
   @Post('admin/access-requests/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')
   approveAccessRequest(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-    return this.service.approveAccessRequest(id, user.userId);
+    return this.service.approveAccessRequest(id, user.userId, true);
   }
 
   @Post('admin/access-requests/:id/reject')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')
   rejectAccessRequest(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-    return this.service.rejectAccessRequest(id, user.userId);
+    return this.service.rejectAccessRequest(id, user.userId, true);
+  }
+
+  // ---------- Auto-gestion municipale (municipal_admin, sans passer par
+  // un admin du site) — le premier membre approuvé pour une municipalité
+  // devient automatiquement municipal_admin (voir requestAccess), et peut
+  // ensuite gérer lui-même ses propres modérateurs et le contenu de sa
+  // municipalité. ----------
+
+  @Get('my-region/access-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  findMyRegionAccessRequests(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findPendingAccessRequestsForReviewer(user.userId);
+  }
+
+  @Post('my-region/access-requests/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  approveMyRegionAccessRequest(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.approveAccessRequest(id, user.userId, false);
+  }
+
+  @Post('my-region/access-requests/:id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  rejectMyRegionAccessRequest(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.rejectAccessRequest(id, user.userId, false);
+  }
+
+  @Get('my-region/reports/queue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionReportsQueue(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionReportsQueue(user.userId);
+  }
+
+  @Post('my-region/reports/:id/resolve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  resolveMyRegionReport(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.resolveReportInMyRegion(user.userId, id);
+  }
+
+  @Post('my-region/reports/:id/flag-false')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  flagMyRegionReportAsFalse(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('reason') reason?: string) {
+    return this.service.rejectReportInMyRegion(user.userId, id, reason);
+  }
+
+  @Get('my-region/posts/queue')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionPostsQueue(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionPostsQueue(user.userId);
+  }
+
+  @Post('my-region/posts/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  approveMyRegionPost(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.approvePostInMyRegion(user.userId, id);
+  }
+
+  @Post('my-region/posts/:id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  rejectMyRegionPost(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('reason') reason?: string) {
+    return this.service.rejectPostInMyRegion(user.userId, id, reason);
   }
 
   @Get('admin/municipalities')

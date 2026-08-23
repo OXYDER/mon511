@@ -38,11 +38,54 @@ export class MunicipalPortalService {
       .executeTakeFirst();
     if (existing) throw new BadRequestException('Une demande est déjà en attente pour ce compte.');
 
-    return this.db
+    const request = await this.db
       .insertInto('municipality_access_requests')
       .values({ user_id: userId, region_id: regionId, job_title: jobTitle, message: message ?? null })
       .returningAll()
       .executeTakeFirstOrThrow();
+
+    // Premier membre approuvé pour cette municipalité — devient
+    // automatiquement gestionnaire principal (municipal_admin), sans
+    // attendre l'approbation d'un admin du site : personne d'autre
+    // n'existe encore pour approuver, et attendre bloquerait
+    // indéfiniment la toute première inscription d'une municipalité.
+    const existingStaff = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select('users.id')
+      .where('users.region_id', '=', regionId)
+      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+      .executeTakeFirst();
+
+    if (!existingStaff) {
+      await this.applyApproval(request.id, userId, regionId, 'municipal_admin', userId);
+    }
+
+    return request;
+  }
+
+  /** Logique d'approbation partagée — réutilisée par l'auto-approbation du
+   * premier membre ET l'approbation manuelle (par un admin du site ou par
+   * le gestionnaire municipal déjà en place pour cette région). */
+  private async applyApproval(requestId: string, targetUserId: string, regionId: string, roleName: 'municipal_staff' | 'municipal_admin', reviewerId: string) {
+    const role = await this.db.selectFrom('roles').select('id').where('name', '=', roleName).executeTakeFirstOrThrow();
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx.updateTable('users').set({ role_id: role.id, region_id: regionId }).where('id', '=', targetUserId).execute();
+      await trx
+        .updateTable('municipality_access_requests')
+        .set({ status: 'approved', reviewed_at: new Date() as any, reviewed_by: reviewerId })
+        .where('id', '=', requestId)
+        .execute();
+      await trx.insertInto('municipality_subscriptions').values({ region_id: regionId }).onConflict((oc) => oc.doNothing()).execute();
+    });
+
+    const user = await this.db.selectFrom('users').select('email').where('id', '=', targetUserId).executeTakeFirst();
+    if (user) {
+      this.email
+        .send(user.email, 'Accès au portail municipal approuvé — mon511.ca', "Ta demande d'accès au portail municipal a été approuvée! Tu peux maintenant y accéder via portail.mon511.ca.")
+        .catch(() => {});
+    }
   }
 
   /** Statut de la propre demande de l'usager courant — pour afficher où il
@@ -63,8 +106,8 @@ export class MunicipalPortalService {
 
   // ---------- Admin (approbation) ----------
 
-  async findPendingAccessRequests() {
-    return this.db
+  async findPendingAccessRequests(reviewerRegionId: string | null) {
+    let query = this.db
       .selectFrom('municipality_access_requests')
       .innerJoin('users', 'users.id', 'municipality_access_requests.user_id')
       .innerJoin('regions', 'regions.id', 'municipality_access_requests.region_id')
@@ -76,47 +119,43 @@ export class MunicipalPortalService {
         'regions.name_fr as regionName',
       ])
       .where('municipality_access_requests.status', '=', 'pending')
-      .orderBy('municipality_access_requests.requested_at', 'asc')
-      .execute();
+      .orderBy('municipality_access_requests.requested_at', 'asc');
+
+    // reviewerRegionId non nul = appelant municipal_admin (pas admin du
+    // site) — ne voit que les demandes de SA propre municipalité.
+    if (reviewerRegionId) query = query.where('municipality_access_requests.region_id', '=', reviewerRegionId);
+
+    return query.execute();
   }
 
-  async approveAccessRequest(requestId: string, reviewerId: string) {
+  /** Approbation par un admin du site (sans restriction de région) OU par
+   * le municipal_admin déjà en place pour la MÊME région que la demande —
+   * c'est cette deuxième possibilité qui permet l'auto-gestion demandée :
+   * plus besoin d'un admin du site pour chaque nouveau modérateur d'une
+   * municipalité déjà établie. */
+  async approveAccessRequest(requestId: string, reviewerId: string, reviewerIsSiteAdmin: boolean) {
     const request = await this.db.selectFrom('municipality_access_requests').selectAll().where('id', '=', requestId).executeTakeFirst();
     if (!request) throw new NotFoundException('Demande introuvable.');
 
-    const role = await this.db.selectFrom('roles').select('id').where('name', '=', request.requested_role).executeTakeFirstOrThrow();
-
-    await this.db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable('users')
-        .set({ role_id: role.id, region_id: request.region_id })
-        .where('id', '=', request.user_id)
-        .execute();
-      await trx
-        .updateTable('municipality_access_requests')
-        .set({ status: 'approved', reviewed_at: new Date() as any, reviewed_by: reviewerId })
-        .where('id', '=', requestId)
-        .execute();
-      // Palier gratuit par défaut à la première approbation pour cette
-      // municipalité — n'écrase rien si déjà configuré.
-      await trx
-        .insertInto('municipality_subscriptions')
-        .values({ region_id: request.region_id })
-        .onConflict((oc) => oc.doNothing())
-        .execute();
-    });
-
-    const user = await this.db.selectFrom('users').select('email').where('id', '=', request.user_id).executeTakeFirst();
-    if (user) {
-      this.email
-        .send(user.email, 'Accès au portail municipal approuvé — mon511.ca', "Ta demande d'accès au portail municipal a été approuvée! Tu peux maintenant y accéder via portail.mon511.ca.")
-        .catch(() => {});
+    if (!reviewerIsSiteAdmin) {
+      const reviewer = await this.db.selectFrom('users').select('region_id').where('id', '=', reviewerId).executeTakeFirst();
+      if (reviewer?.region_id !== request.region_id) {
+        throw new ForbiddenException("Tu ne peux approuver que les demandes de ta propre municipalité.");
+      }
     }
 
+    await this.applyApproval(requestId, request.user_id, request.region_id, request.requested_role as 'municipal_staff' | 'municipal_admin', reviewerId);
     return { approved: true };
   }
 
-  async rejectAccessRequest(requestId: string, reviewerId: string) {
+  async rejectAccessRequest(requestId: string, reviewerId: string, reviewerIsSiteAdmin: boolean) {
+    if (!reviewerIsSiteAdmin) {
+      const request = await this.db.selectFrom('municipality_access_requests').select('region_id').where('id', '=', requestId).executeTakeFirst();
+      const reviewer = await this.db.selectFrom('users').select('region_id').where('id', '=', reviewerId).executeTakeFirst();
+      if (!request || reviewer?.region_id !== request.region_id) {
+        throw new ForbiddenException("Tu ne peux refuser que les demandes de ta propre municipalité.");
+      }
+    }
     await this.db
       .updateTable('municipality_access_requests')
       .set({ status: 'rejected', reviewed_at: new Date() as any, reviewed_by: reviewerId })
@@ -165,6 +204,87 @@ export class MunicipalPortalService {
     if (!user?.region_id) throw new ForbiddenException("Ton compte n'est rattaché à aucune municipalité.");
     const sub = await this.db.selectFrom('municipality_subscriptions').select('tier').where('region_id', '=', user.region_id).executeTakeFirst();
     return { regionId: user.region_id, tier: sub?.tier ?? 'free' };
+  }
+
+  async findPendingAccessRequestsForReviewer(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.findPendingAccessRequests(regionId);
+  }
+
+  /** File de modération des signalements — SEULEMENT ceux de la propre
+   * municipalité de l'appelant, contrairement à la file générale des
+   * modérateurs du site qui voit tout. */
+  async findMyRegionReportsQueue(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .select([
+        'reports.id', 'reports.description', 'reports.address_text', 'reports.status', 'reports.created_at',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+        sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
+      ])
+      .where('reports.region_id', '=', regionId)
+      .where('reports.status', 'in', ['pending_moderation', 'published_unresolved'])
+      .orderBy('reports.created_at', 'desc')
+      .execute();
+  }
+
+  private async assertReportInRegion(regionId: string, reportId: string) {
+    const report = await this.db.selectFrom('reports').select('region_id').where('id', '=', reportId).executeTakeFirst();
+    if (!report) throw new NotFoundException('Signalement introuvable.');
+    if (report.region_id !== regionId) throw new ForbiddenException("Ce signalement n'appartient pas à ta municipalité.");
+  }
+
+  async resolveReportInMyRegion(userId: string, reportId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    await this.assertReportInRegion(regionId, reportId);
+    await this.db.updateTable('reports').set({ status: 'published_resolved', resolved_at: new Date() as any, updated_at: new Date() as any }).where('id', '=', reportId).execute();
+    return { resolved: true };
+  }
+
+  /** « Signaler une fausse information » — même statut rejected que la
+   * modération générale du site, scopé à la propre municipalité. */
+  async rejectReportInMyRegion(userId: string, reportId: string, _reason?: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    await this.assertReportInRegion(regionId, reportId);
+    await this.db.updateTable('reports').set({ status: 'rejected', updated_at: new Date() as any }).where('id', '=', reportId).execute();
+    return { rejected: true };
+  }
+
+  async findMyRegionPostsQueue(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.db
+      .selectFrom('posts')
+      .innerJoin('users', 'users.id', 'posts.author_id')
+      .select([
+        'posts.id', 'posts.category', 'posts.body', 'posts.link_url as linkUrl', 'posts.visibility', 'posts.created_at',
+        'users.email as authorEmail', 'users.first_name as authorFirstName', 'users.last_name as authorLastName',
+      ])
+      .where('posts.region_id', '=', regionId)
+      .where('posts.status', '=', 'pending_moderation')
+      .orderBy('posts.created_at', 'asc')
+      .execute();
+  }
+
+  private async assertPostInRegion(regionId: string, postId: string) {
+    const post = await this.db.selectFrom('posts').select('region_id').where('id', '=', postId).executeTakeFirst();
+    if (!post) throw new NotFoundException('Publication introuvable.');
+    if (post.region_id !== regionId) throw new ForbiddenException("Cette publication n'appartient pas à ta municipalité.");
+  }
+
+  async approvePostInMyRegion(userId: string, postId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    await this.assertPostInRegion(regionId, postId);
+    await this.db.updateTable('posts').set({ status: 'published', updated_at: new Date() as any }).where('id', '=', postId).execute();
+    return { approved: true };
+  }
+
+  async rejectPostInMyRegion(userId: string, postId: string, reason?: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    await this.assertPostInRegion(regionId, postId);
+    await this.db.updateTable('posts').set({ status: 'rejected', rejection_reason: reason ?? null, updated_at: new Date() as any }).where('id', '=', postId).execute();
+    return { rejected: true };
   }
 
   // ---------- Tableau de bord ----------

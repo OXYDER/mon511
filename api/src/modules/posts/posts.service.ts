@@ -86,10 +86,15 @@ export class PostsService {
   }
 
   async createPost(authorId: string, dto: CreatePostDto) {
+    let regionId: string | null = null;
     if (dto.reportId) {
-      const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', dto.reportId).executeTakeFirst();
+      const report = await this.db.selectFrom('reports').select(['user_id', 'region_id']).where('id', '=', dto.reportId).executeTakeFirst();
       if (!report) throw new NotFoundException('Signalement introuvable.');
       if (report.user_id !== authorId) throw new ForbiddenException("Tu ne peux partager que tes propres signalements.");
+      regionId = report.region_id;
+    } else {
+      const author = await this.db.selectFrom('users').select('region_id').where('id', '=', authorId).executeTakeFirst();
+      regionId = author?.region_id ?? null;
     }
 
     const requireModeration = await this.db.selectFrom('site_settings').select('value').where('key', '=', 'require_moderation').executeTakeFirst();
@@ -100,6 +105,7 @@ export class PostsService {
       .values({
         author_id: authorId,
         report_id: dto.reportId ?? null,
+        region_id: regionId,
         category: dto.category,
         body: dto.body ?? null,
         link_url: dto.linkUrl ?? null,

@@ -382,6 +382,7 @@ export interface PostsTable {
   id: Generated<string>;
   author_id: string;
   report_id: string | null;
+  region_id: string | null;
   category: Generated<'road_conditions' | 'community' | 'general'>;
   body: string | null;
   link_url: string | null;
