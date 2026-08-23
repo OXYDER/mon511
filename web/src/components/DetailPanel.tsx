@@ -40,7 +40,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       setEditDescription(r.description ?? '');
       setEditAddress(r.addressText ?? '');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Signalement introuvable.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Signalement introuvable.' : 'Report not found.'));
     }
   }
 
@@ -58,7 +58,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       await load();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Erreur.' : 'Error.'));
     } finally {
       setEditSaving(false);
     }
@@ -68,9 +68,9 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
     if (!authenticated) return onRequireAuth();
     try {
       await api.post(`/reports/${reportId}/confirm`);
-      setFeedback('Confirmation enregistrée. Merci !');
+      setFeedback(lang === 'fr' ? 'Confirmation enregistrée. Merci !' : 'Confirmation recorded. Thank you!');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action impossible.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Action impossible.' : 'Action not possible.'));
     }
   }
 
@@ -81,7 +81,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       load();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action impossible.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Action impossible.' : 'Action not possible.'));
     }
   }
 
@@ -90,28 +90,37 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
     try {
       const result = await api.post<{ autoResolved: boolean; alreadySuggested: boolean }>(`/reports/${reportId}/suggest-resolution`, {});
       setFeedback(
-        result.alreadySuggested
-          ? 'Tu avais déjà suggéré que ce signalement est résolu.'
-          : result.autoResolved
-            ? 'Merci ! Le signalement est maintenant marqué résolu.'
-            : "Suggestion envoyée à la modération et à l'auteur.",
+        lang === 'fr'
+          ? (result.alreadySuggested
+              ? 'Tu avais déjà suggéré que ce signalement est résolu.'
+              : result.autoResolved
+                ? 'Merci ! Le signalement est maintenant marqué résolu.'
+                : "Suggestion envoyée à la modération et à l'auteur.")
+          : (result.alreadySuggested
+              ? "You've already suggested this report is resolved."
+              : result.autoResolved
+                ? 'Thanks! The report is now marked as resolved.'
+                : 'Suggestion sent to moderation and to the author.'),
       );
       load();
       onChanged();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action impossible.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Action impossible.' : 'Action not possible.'));
     }
   }
 
   async function flag() {
     if (!authenticated) return onRequireAuth();
-    const reason = window.prompt('Motif (duplicate, inappropriate, wrong_location, spam, other) :', 'duplicate');
+    const reason = window.prompt(
+      lang === 'fr' ? 'Motif (duplicate, inappropriate, wrong_location, spam, other) :' : 'Reason (duplicate, inappropriate, wrong_location, spam, other):',
+      'duplicate',
+    );
     if (!reason) return;
     try {
       await api.post(`/reports/${reportId}/flag`, { reason });
-      setFeedback('Signalement transmis à la modération.');
+      setFeedback(lang === 'fr' ? 'Signalement transmis à la modération.' : 'Report sent to moderation.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action impossible.');
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Action impossible.' : 'Action not possible.'));
     }
   }
 
@@ -124,7 +133,7 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       setNewComment('');
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible d'envoyer le commentaire.");
+      setError(err instanceof Error ? err.message : (lang === 'fr' ? "Impossible d'envoyer le commentaire." : 'Unable to send the comment.'));
     }
   }
 
@@ -133,22 +142,28 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div className="detail-title" style={{ fontSize: 17, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>{report?.problemTypeIcon ?? '📍'}</span>
-          <span>{report ? pickName(report.problemTypeNameFr, report.problemTypeNameEn, lang) : 'Signalement'}</span>
+          <span>{report ? pickName(report.problemTypeNameFr, report.problemTypeNameEn, lang) : (lang === 'fr' ? 'Signalement' : 'Report')}</span>
         </div>
         <button className="detail-panel-close" onClick={onClose}>✕</button>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
-      {!report && !error && <div className="center-msg" style={{ padding: 20 }}>Chargement...</div>}
+      {!report && !error && <div className="center-msg" style={{ padding: 20 }}>{lang === 'fr' ? 'Chargement...' : 'Loading...'}</div>}
 
       {report && (
         <>
           <span className={`pill ${statusPillClass(report.status)}`} style={{ marginBottom: 10, display: 'inline-block' }}>
-            {report.status === 'published_resolved' ? 'Résolu' : report.status === 'pending_moderation' ? '⏳ En attente d\'approbation' : 'Non résolu'}
+            {report.status === 'published_resolved'
+              ? (lang === 'fr' ? 'Résolu' : 'Resolved')
+              : report.status === 'pending_moderation'
+                ? (lang === 'fr' ? "⏳ En attente d'approbation" : '⏳ Pending approval')
+                : (lang === 'fr' ? 'Non résolu' : 'Unresolved')}
           </span>
           {report.status === 'pending_moderation' && (
             <div className="error-banner" style={{ background: 'rgba(59,156,255,0.14)', borderColor: 'var(--official-blue)', color: 'var(--official-blue)' }}>
-              Non visible pour les autres usagers pour l'instant. Tu recevras une notification une fois approuvé et publié.
+              {lang === 'fr'
+                ? "Non visible pour les autres usagers pour l'instant. Tu recevras une notification une fois approuvé et publié."
+                : "Not visible to other users yet. You'll get a notification once it's approved and published."}
             </div>
           )}
 
@@ -196,89 +211,6 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             </div>
           )}
 
-          {report.photos?.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', flexShrink: 0 }}>
-              {report.photos.map((p: any, i: number) => (
-                <img
-                  key={p.id}
-                  src={p.url}
-                  alt="Photo du signalement"
-                  onClick={() => setLightboxIndex(i)}
-                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0, cursor: 'zoom-in' }}
-                />
-              ))}
-            </div>
-          )}
-
-          {lightboxIndex !== null && (
-            <Lightbox
-              photos={report.photos.map((p: any) => p.url)}
-              initialIndex={lightboxIndex}
-              onClose={() => setLightboxIndex(null)}
-            />
-          )}
-
-          <div className="detail-meta-row" style={{ marginBottom: 6 }}>
-            <span>📍 {report.addressText ?? 'Position GPS'}</span>
-            <span>🕓 {new Date(report.created_at).toLocaleString('fr-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
-          </div>
-          <div
-            style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
-            title={lang === 'fr' ? 'Cliquer pour copier' : 'Click to copy'}
-            onClick={() => navigator.clipboard.writeText(report.id)}
-          >
-            🔗 ID : <code>{report.id}</code>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-            👤 Signalé par{' '}
-            {report.authorId ? (
-              <span
-                onClick={() => setShowAuthorProfile(true)}
-                style={{ color: 'var(--accent-signal)', cursor: 'pointer', textDecoration: 'underline' }}
-              >
-                {report.authorDisplayName ?? 'Anonyme'}
-              </span>
-            ) : (
-              'Anonyme'
-            )}
-          </div>
-          {showAuthorProfile && report.authorId && (
-            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} currentUserId={currentUserId} onStartConversation={onStartConversation} />
-          )}
-          {report.municipality_notified === 'yes' && (
-            <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>
-              🏛️ Municipalité avisée{report.municipality_name ? ` — ${report.municipality_name}` : ''}
-            </div>
-          )}
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-            👍 {report.confirmationsCount} confirmations
-          </div>
-
-          {feedback && <div className="success-banner">{feedback}</div>}
-
-          <div className="action-row" style={{ margin: '14px 0' }}>
-            <button className="btn-ghost" onClick={confirm}>👍 Présent</button>
-            <button className="btn-ghost" onClick={suggestResolved}>✔ Résolu</button>
-            <button className="btn-ghost btn-danger" onClick={flag}>🚩</button>
-          </div>
-
-          <div className="section-label" style={{ fontSize: 13 }}>Commentaires ({comments.length})</div>
-          {comments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Aucun commentaire.</div>}
-          {comments.map((c) => (
-            <div key={c.id} className="comment">
-              <div className="comment-author">{c.authorEmail?.split('@')[0]}</div>
-              {c.message}
-            </div>
-          ))}
-          <form onSubmit={submitComment} className="comment-row">
-            <input
-              className="text-input"
-              placeholder="Commenter..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-            />
-            <button className="btn-ghost" type="submit">↵</button>
-          </form>
         </>
       )}
     </div>
