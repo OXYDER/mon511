@@ -672,27 +672,47 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
   // qui respecte ensuite tout dézoom manuel ultérieur.
   useEffect(() => {
     if (!mapRef.current || !focusPinId) return;
-    const clusters = clusterPins(pins, mapRef.current);
-    const owningCluster = clusters.find((c) => c.pins.length > 1 && c.pins.some((p) => p.id === focusPinId));
-    if (owningCluster) {
-      if (owningCluster.pins.length > 2) {
-        mapRef.current.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: mapRef.current.getZoom() + 2, duration: 500 });
-      } else {
-        setSpiderfiedClusterId(owningCluster.id);
+    const map = mapRef.current;
+    let cancelled = false;
+
+    // Cascade de zoom pour révéler le pin sélectionné, même caché dans un
+    // gros regroupement — un seul +2 ne suffit pas toujours à dissoudre
+    // un regroupement de plusieurs dizaines de pins en dessous de 3. On
+    // enchaîne donc les étapes de zoom (chacune déclenchée seulement après
+    // la fin de la précédente, via 'moveend') jusqu'à ce que le pin ne
+    // soit plus dans un regroupement de plus de 2, avec un plafond de
+    // sécurité pour ne jamais boucler indéfiniment.
+    //
+    // IMPORTANT : cette cascade est entièrement contenue dans cette seule
+    // exécution de l'effet (déclenchée par un NOUVEAU focusPinId,
+    // jamais par clusterVersion — voir la note historique plus bas) — une
+    // fois terminée, elle ne se redéclenche jamais toute seule, donc elle
+    // ne se bat pas contre un dézoom manuel ultérieur de l'usager.
+    function reveal(attemptsLeft: number) {
+      if (cancelled || !focusPinId) return;
+      const clusters = clusterPins(pins, map);
+      const owningCluster = clusters.find((c) => c.pins.length > 1 && c.pins.some((p) => p.id === focusPinId));
+
+      if (!owningCluster) {
+        // Plus dans aucun regroupement — soit déjà résolu, soit devenu un
+        // pin seul en cours de route. Le centrer directement, au cas où.
+        const pin = pins.find((p) => p.id === focusPinId);
+        if (pin) map.flyTo({ center: [pin.longitude, pin.latitude], duration: 400 });
+        return;
       }
-      return;
+
+      if (owningCluster.pins.length <= 2) {
+        setSpiderfiedClusterId(owningCluster.id);
+        return;
+      }
+
+      if (attemptsLeft <= 0) return;
+      map.once('moveend', () => reveal(attemptsLeft - 1));
+      map.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: map.getZoom() + 2, duration: 500 });
     }
-    // Le pin sélectionné n'est dans aucun regroupement (déjà seul) — sans
-    // ce cas, sélectionner un signalement depuis une liste (recherche,
-    // fil communautaire, etc.) ne faisait RIEN si le pin n'était pas déjà
-    // visible à l'écran : la carte ne bougeait jamais, impossible de voir
-    // lequel venait d'être sélectionné. On centre simplement dessus, sans
-    // changer le zoom (contrairement au cas de regroupement, pas besoin
-    // de zoomer davantage puisqu'il n'est pas caché dans un groupe).
-    const pin = pins.find((p) => p.id === focusPinId);
-    if (pin) {
-      mapRef.current.flyTo({ center: [pin.longitude, pin.latitude], duration: 500 });
-    }
+
+    reveal(6);
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPinId]);
 
