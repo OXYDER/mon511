@@ -7,6 +7,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ReputationService } from '../reputation/reputation.service';
 import { EmailService } from '../../email/email.service';
 import { formatDisplayName } from '../../common/display-name.util';
+import { PostsService } from '../posts/posts.service';
 
 @Injectable()
 export class ReportsService {
@@ -15,6 +16,7 @@ export class ReportsService {
     private readonly notifications: NotificationsService,
     private readonly reputationService: ReputationService,
     private readonly email: EmailService,
+    private readonly posts: PostsService,
   ) {}
 
   /**
@@ -393,6 +395,17 @@ export class ReportsService {
     // courriel a un problème (SMTP temporairement en panne, etc.).
     if (userId) {
       this.sendSubmissionConfirmation(report.id).catch(() => {});
+
+      // Partage automatique dans le fil communautaire (et donc,
+      // implicitement, sur la page publique de la municipalité concernée
+      // — voir posts.service.ts, qui hérite region_id du signalement
+      // partagé) — plus une case à cocher, tous les signalements
+      // apparaissent maintenant dans le fil par défaut. Même esprit que
+      // le courriel : un échec ici ne doit jamais faire échouer la
+      // création du signalement lui-même, déjà réussie à ce stade.
+      // Jamais pour un signalement anonyme (userId null), qui n'a pas
+      // d'auteur à qui attribuer la publication.
+      this.posts.createPost(userId, { category: 'road_conditions', visibility: 'public', reportId: report.id }).catch(() => {});
     }
 
     return report;

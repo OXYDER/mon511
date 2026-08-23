@@ -31,8 +31,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
   const [addressSuggestions, setAddressSuggestions] = useState<GeocodingResult[]>([]);
   const [showAddressDropdown, setShowAddressDropdown] = useState(false);
   const [municipalityNotified, setMunicipalityNotified] = useState<'yes' | 'no' | 'unknown'>('unknown');
-  const [shareToFeed, setShareToFeed] = useState(false);
-  const [shareVisibility, setShareVisibility] = useState<'public' | 'friends'>('public');
   const [municipalityName, setMunicipalityName] = useState('');
   const [locating, setLocating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -301,17 +299,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
         }
       }
 
-      if (shareToFeed && report?.id) {
-        // Un échec de partage ne doit jamais bloquer la création du
-        // signalement lui-même, déjà réussie à ce stade — même esprit
-        // que l'échec d'un envoi de photo plus haut.
-        await api.post('/posts', {
-          category: 'road_conditions',
-          visibility: shareVisibility,
-          reportId: report.id,
-        }).catch(() => {});
-      }
-
       const chosenType = types.find((t) => t.id === typeId);
       setSubmittedSummary({ typeName: pickName(chosenType?.nameFr ?? 'Signalement', chosenType?.nameEn, lang), typeIcon: chosenType?.icon ?? '📍' });
     } catch (err) {
@@ -518,36 +505,6 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               )}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
                 Aide à prioriser les cas déjà signalés aux autorités.
-              </div>
-            </div>
-
-            <div className="field-group">
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} />
-                <span className="field-label" style={{ margin: 0 }}>📰 Partager aussi dans mon fil communautaire</span>
-              </label>
-              {shareToFeed && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ flex: 1, border: shareVisibility === 'public' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
-                    onClick={() => setShareVisibility('public')}
-                  >
-                    🌐 Public
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    style={{ flex: 1, border: shareVisibility === 'friends' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
-                    onClick={() => setShareVisibility('friends')}
-                  >
-                    🔒 Amis seulement
-                  </button>
-                </div>
-              )}
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                Le signalement reste toujours visible à tout le monde sur la carte, peu importe ce choix — ça contrôle seulement s'il apparaît aussi dans le fil.
               </div>
             </div>
 
