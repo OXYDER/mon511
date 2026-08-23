@@ -1468,6 +1468,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
         </label>
       </div>
+      {currentAreaName && (
+        <div className="stats-badge-float" style={{ marginTop: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-signal)' }} />
+          <strong>{filteredReports.filter((r) => r.addressText?.toLowerCase().includes(currentAreaName.toLowerCase())).length}</strong>
+          <span>{lang === 'fr' ? `à ${currentAreaName}` : `in ${currentAreaName}`}</span>
+        </div>
+      )}
 
       {showLocationChoice && (
         <div className="modal-overlay" onClick={() => setShowLocationChoice(false)}>
