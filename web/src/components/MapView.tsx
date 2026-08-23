@@ -674,11 +674,24 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
     if (!mapRef.current || !focusPinId) return;
     const clusters = clusterPins(pins, mapRef.current);
     const owningCluster = clusters.find((c) => c.pins.length > 1 && c.pins.some((p) => p.id === focusPinId));
-    if (!owningCluster) return;
-    if (owningCluster.pins.length > 2) {
-      mapRef.current.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: mapRef.current.getZoom() + 2, duration: 500 });
-    } else {
-      setSpiderfiedClusterId(owningCluster.id);
+    if (owningCluster) {
+      if (owningCluster.pins.length > 2) {
+        mapRef.current.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: mapRef.current.getZoom() + 2, duration: 500 });
+      } else {
+        setSpiderfiedClusterId(owningCluster.id);
+      }
+      return;
+    }
+    // Le pin sélectionné n'est dans aucun regroupement (déjà seul) — sans
+    // ce cas, sélectionner un signalement depuis une liste (recherche,
+    // fil communautaire, etc.) ne faisait RIEN si le pin n'était pas déjà
+    // visible à l'écran : la carte ne bougeait jamais, impossible de voir
+    // lequel venait d'être sélectionné. On centre simplement dessus, sans
+    // changer le zoom (contrairement au cas de regroupement, pas besoin
+    // de zoomer davantage puisqu'il n'est pas caché dans un groupe).
+    const pin = pins.find((p) => p.id === focusPinId);
+    if (pin) {
+      mapRef.current.flyTo({ center: [pin.longitude, pin.latitude], duration: 500 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusPinId]);
