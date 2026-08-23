@@ -3,6 +3,7 @@ import { api } from '../api';
 import Lightbox from './Lightbox';
 import PublicProfileModal from './PublicProfileModal';
 import { pickName, timeAgo, statusPillClass } from '../i18n';
+import TranslatableText from './TranslatableText';
 
 interface Props {
   reportId: string;
@@ -149,10 +150,6 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             <div className="error-banner" style={{ background: 'rgba(59,156,255,0.14)', borderColor: 'var(--official-blue)', color: 'var(--official-blue)' }}>
               Non visible pour les autres usagers pour l'instant. Tu recevras une notification une fois approuvé et publié.
             </div>
-          )}
-
-          {!editing && report.description && (
-            <div style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.5 }}>{report.description}</div>
           )}
 
           {!editing && report.authorId && currentUserId === report.authorId && (

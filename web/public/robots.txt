@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mon511.ca/sitemap.xml

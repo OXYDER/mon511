@@ -10,9 +10,35 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="theme-color" content="#14161B" />
   <meta name="description" content="mon511.ca — Signalement communautaire de problèmes routiers au Québec, combiné aux données officielles du MTQ et de la SOPFEU." />
+
+  <!-- Même contenu, deux domaines selon la langue — indique clairement
+       aux moteurs de recherche que ce sont deux versions linguistiques
+       d'un même site, pas du contenu dupliqué. -->
+  <link rel="alternate" hreflang="fr" href="https://mon511.ca/" />
+  <link rel="alternate" hreflang="en" href="https://my511.ca/" />
+  <link rel="alternate" hreflang="x-default" href="https://mon511.ca/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="mon511.ca" />
+  <meta property="og:title" content="mon511.ca — Signalement communautaire de problèmes routiers" />
+  <meta property="og:description" content="Signalement communautaire de problèmes routiers au Québec, combiné aux données officielles du MTQ et de la SOPFEU." />
+  <meta property="og:image" content="https://mon511.ca/brand/header.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "mon511.ca",
+    "url": "https://mon511.ca/",
+    "inLanguage": ["fr-CA", "en-CA"],
+    "description": "Signalement communautaire de problèmes routiers au Québec, combiné aux données officielles du MTQ et de la SOPFEU."
+  }
+  </script>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <title>mon511.ca</title>
+  <title>Mon 511</title>
 </head>
 <body>
   <div id="root"></div>

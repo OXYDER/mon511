@@ -239,11 +239,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [currentAreaName, setCurrentAreaName] = useState('');
 
   // Le titre de l'onglet du navigateur suit la ville actuellement visionnée
-  // — comme le champ de recherche, se remet à 'mon511.ca' si aucune ville
-  // n'est encore connue (ex. tout premier chargement).
+  // — comme le champ de recherche, se remet au nom du site selon la
+  // langue active si aucune ville n'est encore connue (ex. tout premier
+  // chargement). "Mon 511" en français, "MY 511" en anglais.
   useEffect(() => {
-    document.title = currentAreaName ? `${currentAreaName} — mon511.ca` : 'mon511.ca';
-  }, [currentAreaName]);
+    const siteName = lang === 'en' ? 'MY 511' : 'Mon 511';
+    document.title = currentAreaName ? `${currentAreaName} — ${siteName}` : siteName;
+  }, [currentAreaName, lang]);
   const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
@@ -255,8 +257,28 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
   function toggleLang() {
     const next: Lang = lang === 'fr' ? 'en' : 'fr';
-    setLang(next);
-    setStoredLang(next);
+    const targetHost = next === 'en' ? 'my511.ca' : 'mon511.ca';
+    const currentHost = window.location.hostname.replace(/^www\./, '');
+
+    // Le domaine et la langue doivent toujours correspondre — my511.ca en
+    // anglais, mon511.ca en français. Si on n'est pas déjà sur le bon
+    // domaine pour la langue choisie, on y redirige (en conservant le
+    // chemin et les paramètres actuels) plutôt que de simplement changer
+    // la langue en mémoire sur le mauvais domaine. Le stockage local
+    // (localStorage) est déjà propre à chaque domaine par nature du
+    // navigateur — aucun risque qu'un choix fait sur l'un « fuite » vers
+    // l'autre une fois cette redirection en place.
+    //
+    // Sur un environnement qui n'est ni l'un ni l'autre domaine (dev
+    // local, aperçu de déploiement, etc.), pas de redirection — on
+    // change simplement la langue en mémoire, comme avant.
+    const isKnownProdDomain = currentHost === 'mon511.ca' || currentHost === 'my511.ca';
+    if (!isKnownProdDomain || currentHost === targetHost) {
+      setLang(next);
+      setStoredLang(next);
+    } else {
+      window.location.href = `${window.location.protocol}//${targetHost}${window.location.pathname}${window.location.search}`;
+    }
   }
 
   useEffect(() => {
@@ -860,7 +882,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       <header className="topbar-float">
         <div className="brand-row">
-          <img src="/brand/header.png" alt="mon511.ca" style={{ height: 54, width: 'auto' }} />
+          <img
+            src={lang === 'en' ? '/brand/header-en.png' : '/brand/header.png'}
+            alt={lang === 'en' ? 'my511.ca' : 'mon511.ca'}
+            style={{ height: 54, width: 'auto' }}
+          />
         </div>
 
         {/* Barre normale — icônes individuelles, cachée seulement en très

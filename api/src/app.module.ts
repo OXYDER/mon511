@@ -23,6 +23,7 @@ import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
 import { MunicipalPortalModule } from './modules/municipal-portal/municipal-portal.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { PostsModule } from './modules/posts/posts.module';
+import { TranslationModule } from './modules/translation/translation.module';
 import { SupportModule } from './modules/support/support.module';
 
 @Module({
@@ -50,6 +51,7 @@ import { SupportModule } from './modules/support/support.module';
     MunicipalPortalModule,
     FriendsModule,
     PostsModule,
+    TranslationModule,
     SupportModule,
   ],
   controllers: [HealthController],
