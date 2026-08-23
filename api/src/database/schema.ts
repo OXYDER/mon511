@@ -378,6 +378,45 @@ export interface MessageReactionsTable {
   created_at: Generated<Timestamp>;
 }
 
+export interface PostsTable {
+  id: Generated<string>;
+  author_id: string;
+  report_id: string | null;
+  category: Generated<'road_conditions' | 'community' | 'general'>;
+  body: string | null;
+  link_url: string | null;
+  visibility: Generated<'public' | 'friends'>;
+  status: Generated<'pending_moderation' | 'published' | 'rejected'>;
+  rejection_reason: string | null;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface PostMediaTable {
+  id: Generated<string>;
+  post_id: string;
+  url: string;
+  media_type: 'photo' | 'video';
+  order_index: Generated<number>;
+  uploaded_at: Generated<Timestamp>;
+}
+
+export interface PostCommentsTable {
+  id: Generated<string>;
+  post_id: string;
+  author_id: string;
+  body: string;
+  created_at: Generated<Timestamp>;
+}
+
+export interface PostReactionsTable {
+  id: Generated<string>;
+  post_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: Generated<Timestamp>;
+}
+
 export interface ReportNotificationsTable {
   id: Generated<string>;
   report_id: string;
@@ -461,6 +500,10 @@ export interface Database {
   message_flags: MessageFlagsTable;
   friendships: FriendshipsTable;
   message_reactions: MessageReactionsTable;
+  posts: PostsTable;
+  post_media: PostMediaTable;
+  post_comments: PostCommentsTable;
+  post_reactions: PostReactionsTable;
   external_data_sources: ExternalDataSourcesTable;
   external_incidents: ExternalIncidentsTable;
   site_settings: SiteSettingsTable;

@@ -22,6 +22,7 @@ const PrivacyPolicyModal = lazy(() => import('../components/PrivacyPolicyModal')
 const NotificationsPanel = lazy(() => import('../components/NotificationsPanel'));
 const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
 const OnboardingTutorial = lazy(() => import('../components/OnboardingTutorial'));
+const CommunityFeedPage = lazy(() => import('../components/CommunityFeedPage'));
 const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
 const PublicProfileModal = lazy(() => import('../components/PublicProfileModal'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
@@ -220,6 +221,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [messagingStartUserId, setMessagingStartUserId] = useState<string | null>(null);
   const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [showCommunityFeed, setShowCommunityFeed] = useState(false);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -873,6 +875,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 {unreadMessagesCount > 0 && <span className="badge-dot">{unreadMessagesCount}</span>}
               </button>
               <button className="icon-btn" title={lang === 'fr' ? 'Amis' : 'Friends'} onClick={() => setShowFriends(true)}>👥</button>
+              <button className="icon-btn" title={lang === 'fr' ? 'Communauté' : 'Community'} onClick={() => setShowCommunityFeed(true)}>📰</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
                 🔔
                 {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
@@ -1703,6 +1706,16 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
       {showTutorial && (
         <OnboardingTutorial lang={lang} onFinish={() => setShowTutorial(false)} />
+      )}
+
+      {showCommunityFeed && (
+        <CommunityFeedPage
+          lang={lang}
+          currentUserId={currentUserId}
+          onClose={() => setShowCommunityFeed(false)}
+          onViewProfile={(userId) => { setShowCommunityFeed(false); setViewingProfileUserId(userId); }}
+          onViewReport={(reportId) => { setShowCommunityFeed(false); openReportById(reportId); }}
+        />
       )}
 
       {/* Mention de droits d'auteur, discrète — même esprit que l'attribution

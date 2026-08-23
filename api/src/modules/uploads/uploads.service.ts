@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { Kysely } from 'kysely';
@@ -84,6 +84,24 @@ export class UploadsService {
       })
       .returningAll()
       .executeTakeFirstOrThrow();
+  }
+
+  /** Téléversement pour une publication du fil communautaire — photo ou
+   * vidéo. La vidéo respecte la bascule admin feed_video_enabled
+   * (site_settings), vérifiée ici plutôt que seulement côté frontend,
+   * pour empêcher un contournement direct de l'API. */
+  async uploadFeedMedia(file: Express.Multer.File, mediaType: 'photo' | 'video') {
+    if (mediaType === 'video') {
+      const setting = await this.db.selectFrom('site_settings').select('value').where('key', '=', 'feed_video_enabled').executeTakeFirst();
+      if (setting?.value === false) {
+        throw new BadRequestException('La vidéo est désactivée pour le fil communautaire en ce moment.');
+      }
+    }
+
+    const key = `posts/${mediaType}/${randomUUID()}-${file.originalname}`;
+    await this.s3.send(new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: file.buffer, ContentType: file.mimetype }));
+    const publicUrl = `${this.config.get('STORAGE_PUBLIC_URL') ?? `http://${this.config.get('STORAGE_ENDPOINT')}:${this.config.get('STORAGE_PORT')}`}/${this.bucket}/${key}`;
+    return { url: publicUrl };
   }
 
   /** Téléversement générique, sans extraction EXIF ni lien avec un
