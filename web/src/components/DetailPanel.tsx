@@ -211,6 +211,93 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             </div>
           )}
 
+          {report.photos?.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', flexShrink: 0 }}>
+              {report.photos.map((p: any, i: number) => (
+                <img
+                  key={p.id}
+                  src={p.url}
+                  alt={lang === 'fr' ? 'Photo du signalement' : 'Report photo'}
+                  onClick={() => setLightboxIndex(i)}
+                  style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 9, flexShrink: 0, cursor: 'zoom-in' }}
+                />
+              ))}
+            </div>
+          )}
+
+          {lightboxIndex !== null && (
+            <Lightbox
+              photos={report.photos.map((p: any) => p.url)}
+              initialIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+            />
+          )}
+
+          {!editing && report.description && (
+            <TranslatableText text={report.description} lang={lang} style={{ fontSize: 12.5, marginBottom: 10 }} />
+          )}
+
+          <div className="detail-meta-row" style={{ marginBottom: 6 }}>
+            <span>📍 {report.addressText ?? (lang === 'fr' ? 'Position GPS' : 'GPS position')}</span>
+            <span>🕓 {new Date(report.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
+          </div>
+          <div
+            style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
+            title={lang === 'fr' ? 'Cliquer pour copier' : 'Click to copy'}
+            onClick={() => navigator.clipboard.writeText(report.id)}
+          >
+            🔗 ID : <code>{report.id}</code>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+            👤 {lang === 'fr' ? 'Signalé par' : 'Reported by'}{' '}
+            {report.authorId ? (
+              <span
+                onClick={() => setShowAuthorProfile(true)}
+                style={{ color: 'var(--accent-signal)', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                {report.authorDisplayName ?? (lang === 'fr' ? 'Anonyme' : 'Anonymous')}
+              </span>
+            ) : (
+              lang === 'fr' ? 'Anonyme' : 'Anonymous'
+            )}
+          </div>
+          {showAuthorProfile && report.authorId && (
+            <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} currentUserId={currentUserId} onStartConversation={onStartConversation} />
+          )}
+          {report.municipality_notified === 'yes' && (
+            <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>
+              🏛️ {lang === 'fr' ? 'Municipalité avisée' : 'Municipality notified'}{report.municipality_name ? ` — ${report.municipality_name}` : ''}
+            </div>
+          )}
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
+            👍 {report.confirmationsCount} {lang === 'fr' ? 'confirmations' : 'confirmations'}
+          </div>
+
+          {feedback && <div className="success-banner">{feedback}</div>}
+
+          <div className="action-row" style={{ margin: '14px 0' }}>
+            <button className="btn-ghost" onClick={confirm}>👍 {lang === 'fr' ? 'Présent' : 'Present'}</button>
+            <button className="btn-ghost" onClick={suggestResolved}>✔ {lang === 'fr' ? 'Résolu' : 'Resolved'}</button>
+            <button className="btn-ghost btn-danger" onClick={flag}>🚩</button>
+          </div>
+
+          <div className="section-label" style={{ fontSize: 13 }}>{lang === 'fr' ? 'Commentaires' : 'Comments'} ({comments.length})</div>
+          {comments.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{lang === 'fr' ? 'Aucun commentaire.' : 'No comments yet.'}</div>}
+          {comments.map((c) => (
+            <div key={c.id} className="comment">
+              <div className="comment-author">{c.authorEmail?.split('@')[0]}</div>
+              {c.message}
+            </div>
+          ))}
+          <form onSubmit={submitComment} className="comment-row">
+            <input
+              className="text-input"
+              placeholder={lang === 'fr' ? 'Commenter...' : 'Comment...'}
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+            />
+            <button className="btn-ghost" type="submit">↵</button>
+          </form>
         </>
       )}
     </div>

@@ -259,6 +259,81 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
             </>
           )}
 
+          {view === 'verify' && (
+            <>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+                {fr ? <>On a envoyé un code à <strong>{email}</strong>. Entre-le ici pour activer ton compte.</>
+                    : <>We sent a code to <strong>{email}</strong>. Enter it here to activate your account.</>}
+              </p>
+              <form onSubmit={submitVerify}>
+                <div className="field-group">
+                  <label className="field-label">{fr ? 'Code à 6 chiffres' : '6-digit code'}</label>
+                  <input
+                    className="text-input"
+                    inputMode="numeric"
+                    maxLength={6}
+                    required
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                    style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                  />
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  {loading ? (fr ? 'Un instant...' : 'One moment...') : (fr ? 'Confirmer' : 'Confirm')}
+                </button>
+              </form>
+              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={resendCode}>
+                {fr ? 'Renvoyer le code' : 'Resend code'}
+              </button>
+            </>
+          )}
+
+          {view === 'forgot-email' && (
+            <>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
+                {fr
+                  ? 'Entre ton courriel — si un compte y est associé, tu recevras un code pour choisir un nouveau mot de passe.'
+                  : "Enter your email — if an account matches it, you'll receive a code to choose a new password."}
+              </p>
+              <form onSubmit={submitForgotEmail}>
+                <div className="field-group">
+                  <label className="field-label">{fr ? 'Courriel' : 'Email'}</label>
+                  <input className="text-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <button className="btn-primary" type="submit" disabled={loading}>
+                  {loading ? (fr ? 'Un instant...' : 'One moment...') : (fr ? 'Envoyer le code' : 'Send code')}
+                </button>
+              </form>
+              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => setView('login')}>
+                {fr ? '← Retour à la connexion' : '← Back to log in'}
+              </button>
+            </>
+          )}
+
+          {view === 'forgot-reset' && (
+            <form onSubmit={submitForgotReset}>
+              <div className="field-group">
+                <label className="field-label">{fr ? 'Code reçu par courriel' : 'Code received by email'}</label>
+                <input
+                  className="text-input"
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                />
+              </div>
+              <div className="field-group">
+                <label className="field-label">{fr ? 'Nouveau mot de passe' : 'New password'}</label>
+                <input className="text-input" type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              </div>
+              <button className="btn-primary" type="submit" disabled={loading}>
+                {loading ? (fr ? 'Un instant...' : 'One moment...') : (fr ? 'Changer le mot de passe' : 'Change password')}
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>
