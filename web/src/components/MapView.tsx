@@ -677,11 +677,12 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
 
     // Cascade de zoom pour révéler le pin sélectionné, même caché dans un
     // gros regroupement — un seul +2 ne suffit pas toujours à dissoudre
-    // un regroupement de plusieurs dizaines de pins en dessous de 3. On
-    // enchaîne donc les étapes de zoom (chacune déclenchée seulement après
-    // la fin de la précédente, via 'moveend') jusqu'à ce que le pin ne
-    // soit plus dans un regroupement de plus de 2, avec un plafond de
-    // sécurité pour ne jamais boucler indéfiniment.
+    // un regroupement de plusieurs dizaines de pins. On enchaîne donc les
+    // étapes de zoom (chacune déclenchée seulement après la fin de la
+    // précédente, via 'moveend') jusqu'à ce que le pin ne soit plus dans
+    // AUCUN regroupement (complètement seul, jamais de déploiement en
+    // étoile ici — voir plus bas pourquoi), avec un plafond de sécurité
+    // pour ne jamais boucler indéfiniment.
     //
     // IMPORTANT : cette cascade est entièrement contenue dans cette seule
     // exécution de l'effet (déclenchée par un NOUVEAU focusPinId,
@@ -701,19 +702,21 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         return;
       }
 
-      if (owningCluster.pins.length <= 2) {
-        setSpiderfiedClusterId(owningCluster.id);
-        return;
-      }
+      // Contrairement au clic direct sur un regroupement (qui, lui,
+      // déploie encore en étoile pour un petit groupe de 2), cette
+      // cascade de sélection continue de zoomer même pour un
+      // regroupement de seulement 2 — le déploiement en étoile ici
+      // entrait en course avec le gestionnaire général de zoom (qui
+      // referme tout déploiement à CHAQUE changement de zoom), causant
+      // un clignotement où le pin se déployait puis se regroupait
+      // aussitôt tout seul. Zoomer jusqu'au pin complètement seul évite
+      // cette course entièrement, plutôt que de la corriger.
 
       // Zoom maximum déjà atteint et le regroupement persiste quand même
-      // (pins géographiquement très rapprochés) — continuer à tenter de
-      // zoomer ne changerait plus rien. Le déploiement en étoile reste la
-      // seule façon de distinguer les pins entre eux dans ce cas.
-      if (map.getZoom() >= map.getMaxZoom() - 0.01) {
-        setSpiderfiedClusterId(owningCluster.id);
-        return;
-      }
+      // (pins géographiquement très rapprochés) — impossible de séparer
+      // davantage, on s'arrête simplement là plutôt que de boucler pour
+      // rien.
+      if (map.getZoom() >= map.getMaxZoom() - 0.01) return;
 
       if (attemptsLeft <= 0) return;
 
