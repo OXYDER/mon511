@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api';
 import { pickName } from '../i18n';
 
@@ -18,7 +19,13 @@ export default function PublicProfileModal({ userId, onClose, lang, currentUserI
     api.get<any>(`/users/${userId}`).then(setProfile).catch((err) => setError(err instanceof Error ? err.message : 'Introuvable.'));
   }, [userId]);
 
-  return (
+  // Rendu via un portail (document.body) plutôt qu'à même l'arborescence
+  // du composant appelant — sans ça, un ancêtre avec backdrop-filter (ex.
+  // le panneau de détail d'un signalement) crée un nouveau contexte de
+  // positionnement CSS pour tout élément position:fixed imbriqué dedans,
+  // ce qui coinçait cette modale dans les limites du petit panneau
+  // plutôt que de couvrir l'écran au complet.
+  return createPortal(
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ width: 380 }}>
         <div className="modal-head">
@@ -88,6 +95,7 @@ export default function PublicProfileModal({ userId, onClose, lang, currentUserI
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
