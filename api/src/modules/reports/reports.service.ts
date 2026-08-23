@@ -329,6 +329,34 @@ export class ReportsService {
    * spatiale avec `regions` (§3 du modèle de données) — l'usager n'a jamais
    * à la sélectionner lui-même.
    */
+  /** Compte de signalements actifs (non résolus + résolus) pour une
+   * municipalité identifiée par NOM plutôt que par ID — utilisé par le
+   * badge "X signalements à <ville>" de la carte, qui ne connaît que le
+   * nom détecté par géolocalisation inverse côté client, pas l'ID de la
+   * région. Réutilise exactement la même correspondance par nom (ilike)
+   * que create() utilise pour associer un signalement à sa municipalité
+   * à la création, pour rester cohérent avec le vrai region_id stocké
+   * plutôt que de deviner à partir du texte de l'adresse (fragile —
+   * l'adresse est un champ optionnel, plusieurs signalements n'en ont
+   * pas). */
+  async countByMunicipalityName(name: string): Promise<number> {
+    const region = await this.db
+      .selectFrom('regions')
+      .select('id')
+      .where('type', '=', 'municipality')
+      .where('name_fr', 'ilike', name.trim())
+      .executeTakeFirst();
+    if (!region) return 0;
+
+    const result = await this.db
+      .selectFrom('reports')
+      .select(sql<number>`count(*)`.as('count'))
+      .where('region_id', '=', region.id)
+      .where('status', 'in', ['published_unresolved', 'published_resolved'])
+      .executeTakeFirst();
+    return Number(result?.count ?? 0);
+  }
+
   async create(userId: string | null, dto: CreateReportDto) {
     const report = await this.db.transaction().execute(async (trx) => {
       let region = await trx

@@ -237,6 +237,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [searchText, setSearchText] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
   const [currentAreaName, setCurrentAreaName] = useState('');
+  const [municipalityReportCount, setMunicipalityReportCount] = useState<number | null>(null);
 
   // Le titre de l'onglet du navigateur suit la ville actuellement visionnée
   // — comme le champ de recherche, se remet au nom du site selon la
@@ -246,6 +247,20 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     const siteName = lang === 'en' ? 'MY 511' : 'Mon 511';
     document.title = currentAreaName ? `${currentAreaName} — ${siteName}` : siteName;
   }, [currentAreaName, lang]);
+
+  // Compte réel de signalements pour la municipalité détectée — passe par
+  // le vrai region_id stocké côté serveur (même correspondance par nom
+  // que celle utilisée à la création d'un signalement), plutôt que de
+  // deviner en comparant du texte d'adresse côté client : l'adresse est
+  // un champ optionnel, plusieurs signalements n'en ont pas du tout, ce
+  // qui rendait l'ancienne approche incapable de les compter.
+  useEffect(() => {
+    if (!currentAreaName) { setMunicipalityReportCount(null); return; }
+    const cityOnly = currentAreaName.split(',')[0].trim();
+    api.get<{ count: number }>(`/reports/count-by-municipality?name=${encodeURIComponent(cityOnly)}`)
+      .then((r) => setMunicipalityReportCount(r.count))
+      .catch(() => setMunicipalityReportCount(null));
+  }, [currentAreaName]);
   const [citySuggestions, setCitySuggestions] = useState<GeocodingResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
@@ -1468,19 +1483,10 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {lang === 'fr' ? 'Voir les résolus' : 'Show resolved'}
         </label>
       </div>
-      {currentAreaName && (
+      {currentAreaName && municipalityReportCount !== null && (
         <div className="stats-badge-float" style={{ bottom: 68 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-signal)' }} />
-          <strong>
-            {(() => {
-              // currentAreaName peut inclure la province (ex. "Sherbrooke,
-              // QC") selon le niveau de zoom — seul le nom de ville avant
-              // la virgule doit être comparé à l'adresse du signalement,
-              // qui elle ne contient jamais la province.
-              const cityOnly = currentAreaName.split(',')[0].trim().toLowerCase();
-              return filteredReports.filter((r) => r.addressText?.toLowerCase().includes(cityOnly)).length;
-            })()}
-          </strong>
+          <strong>{municipalityReportCount}</strong>
           <span>{lang === 'fr' ? `à ${currentAreaName}` : `in ${currentAreaName}`}</span>
         </div>
       )}

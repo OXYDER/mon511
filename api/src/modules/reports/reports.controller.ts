@@ -10,6 +10,11 @@ import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-u
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
+  @Get('count-by-municipality')
+  countByMunicipality(@Query('name') name: string) {
+    return this.reportsService.countByMunicipalityName(name).then((count) => ({ count }));
+  }
+
   @Get('nearby')
   @UseGuards(OptionalJwtAuthGuard)
   findNearby(
