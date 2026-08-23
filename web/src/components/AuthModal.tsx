@@ -12,6 +12,7 @@ interface Props {
 type View = 'login' | 'register' | 'verify' | 'forgot-email' | 'forgot-reset';
 
 export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login', lang = 'fr' }: Props) {
+  const fr = lang === 'fr';
   const [view, setView] = useState<View>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,8 +56,14 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
         setView('verify');
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Une erreur est survenue.';
+      const message = err instanceof Error ? err.message : (fr ? 'Une erreur est survenue.' : 'An error occurred.');
       setError(message);
+      // Ce test cherche un mot précis dans le message d'erreur RENVOYÉ PAR
+      // LE SERVEUR (toujours en français pour l'instant, peu importe la
+      // langue de l'interface — la localisation des messages d'erreur du
+      // serveur est un chantier séparé, non couvert ici) pour détecter le
+      // cas « compte pas encore vérifié » et rediriger vers l'écran de
+      // vérification.
       if (view === 'login' && message.toLowerCase().includes('vérifié')) {
         setView('verify');
       }
@@ -74,7 +81,7 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
       setToken(result.accessToken);
       onAuthenticated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Code invalide.');
+      setError(err instanceof Error ? err.message : (fr ? 'Code invalide.' : 'Invalid code.'));
     } finally {
       setLoading(false);
     }
@@ -85,9 +92,9 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
     setInfo(null);
     try {
       await api.post('/auth/resend-signup-code', { email });
-      setInfo('Nouveau code envoyé — vérifie ton courriel.');
+      setInfo(fr ? 'Nouveau code envoyé — vérifie ton courriel.' : 'New code sent — check your email.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setError(err instanceof Error ? err.message : (fr ? 'Erreur.' : 'Error.'));
     }
   }
 
@@ -97,10 +104,10 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
     setLoading(true);
     try {
       await api.post('/auth/forgot-password', { email });
-      setInfo("Si ce courriel correspond à un compte, un code a été envoyé.");
+      setInfo(fr ? "Si ce courriel correspond à un compte, un code a été envoyé." : 'If this email matches an account, a code has been sent.');
       setView('forgot-reset');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setError(err instanceof Error ? err.message : (fr ? 'Erreur.' : 'Error.'));
     } finally {
       setLoading(false);
     }
@@ -112,23 +119,31 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
     setLoading(true);
     try {
       await api.post('/auth/reset-password', { email, code, newPassword });
-      setInfo('Mot de passe changé — tu peux te connecter.');
+      setInfo(fr ? 'Mot de passe changé — tu peux te connecter.' : 'Password changed — you can now log in.');
       setPassword('');
       setView('login');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setError(err instanceof Error ? err.message : (fr ? 'Erreur.' : 'Error.'));
     } finally {
       setLoading(false);
     }
   }
 
-  const titles: Record<View, string> = {
-    login: 'Connexion',
-    register: 'Créer un compte',
-    verify: 'Vérifie ton courriel',
-    'forgot-email': 'Mot de passe oublié',
-    'forgot-reset': 'Nouveau mot de passe',
-  };
+  const titles: Record<View, string> = fr
+    ? {
+        login: 'Connexion',
+        register: 'Créer un compte',
+        verify: 'Vérifie ton courriel',
+        'forgot-email': 'Mot de passe oublié',
+        'forgot-reset': 'Nouveau mot de passe',
+      }
+    : {
+        login: 'Log in',
+        register: 'Create an account',
+        verify: 'Verify your email',
+        'forgot-email': 'Forgot password',
+        'forgot-reset': 'New password',
+      };
 
   return (
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -149,10 +164,10 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
               </div>
               <div className="tabs">
                 <button className={`tab-item ${view === 'login' ? 'active' : ''}`} onClick={() => { setView('login'); setError(null); }}>
-                  Connexion
+                  {fr ? 'Connexion' : 'Log in'}
                 </button>
                 <button className={`tab-item ${view === 'register' ? 'active' : ''}`} onClick={() => { setView('register'); setError(null); }}>
-                  Créer un compte
+                  {fr ? 'Créer un compte' : 'Create an account'}
                 </button>
               </div>
             </>
@@ -165,32 +180,32 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
             <>
               <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
                 {view === 'login'
-                  ? 'Connecte-toi pour signaler, confirmer ou commenter.'
-                  : 'Rejoins la communauté et aide à garder les routes sécuritaires.'}
+                  ? (fr ? 'Connecte-toi pour signaler, confirmer ou commenter.' : 'Log in to report, confirm, or comment.')
+                  : (fr ? 'Rejoins la communauté et aide à garder les routes sécuritaires.' : 'Join the community and help keep roads safe.')}
               </p>
               <form onSubmit={submitAuth}>
                 {view === 'register' && (
                   <div className="field-group">
-                    <label className="field-label">Prénom</label>
+                    <label className="field-label">{fr ? 'Prénom' : 'First name'}</label>
                     <input className="text-input" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
                   </div>
                 )}
                 {view === 'register' && (
                   <div className="field-group">
-                    <label className="field-label">Nom</label>
+                    <label className="field-label">{fr ? 'Nom' : 'Last name'}</label>
                     <input className="text-input" value={lastName} onChange={(e) => setLastName(e.target.value)} />
                   </div>
                 )}
                 {view === 'register' && (
                   <div className="field-group" style={{ position: 'relative' }}>
-                    <label className="field-label">Adresse</label>
+                    <label className="field-label">{fr ? 'Adresse' : 'Address'}</label>
                     <input
                       className="text-input"
                       value={addressText}
                       onChange={(e) => onAddressChange(e.target.value)}
                       onFocus={() => setShowAddressDropdown(true)}
                       onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
-                      placeholder="Commence à taper ton adresse..."
+                      placeholder={fr ? 'Commence à taper ton adresse...' : 'Start typing your address...'}
                       autoComplete="off"
                     />
                     {showAddressDropdown && addressSuggestions.length > 0 && (
@@ -205,18 +220,18 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
                   </div>
                 )}
                 <div className="field-group">
-                  <label className="field-label">Courriel</label>
+                  <label className="field-label">{fr ? 'Courriel' : 'Email'}</label>
                   <input
                     className="text-input"
                     type="email"
                     required
-                    placeholder="prenom.nom@courriel.com"
+                    placeholder={fr ? 'prenom.nom@courriel.com' : 'name@email.com'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
                 <div className="field-group">
-                  <label className="field-label">Mot de passe</label>
+                  <label className="field-label">{fr ? 'Mot de passe' : 'Password'}</label>
                   <input
                     className="text-input"
                     type="password"
@@ -227,93 +242,23 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
                     onChange={(e) => setPassword(e.target.value)}
                   />
                   {view === 'register' && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>Minimum 10 caractères.</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 5 }}>
+                      {fr ? 'Minimum 10 caractères.' : 'Minimum 10 characters.'}
+                    </div>
                   )}
                 </div>
                 <button className="btn-primary" type="submit" disabled={loading}>
-                  {loading ? 'Un instant...' : view === 'login' ? 'Se connecter' : 'Créer mon compte'}
+                  {loading ? (fr ? 'Un instant...' : 'One moment...') : view === 'login' ? (fr ? 'Se connecter' : 'Log in') : (fr ? 'Créer mon compte' : 'Create my account')}
                 </button>
               </form>
               {view === 'login' && (
                 <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => { setView('forgot-email'); setError(null); setInfo(null); }}>
-                  Mot de passe oublié ?
+                  {fr ? 'Mot de passe oublié ?' : 'Forgot your password?'}
                 </button>
               )}
             </>
           )}
 
-          {view === 'verify' && (
-            <>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
-                On a envoyé un code à <strong>{email}</strong>. Entre-le ici pour activer ton compte.
-              </p>
-              <form onSubmit={submitVerify}>
-                <div className="field-group">
-                  <label className="field-label">Code à 6 chiffres</label>
-                  <input
-                    className="text-input"
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                    placeholder="123456"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                    style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
-                  />
-                </div>
-                <button className="btn-primary" type="submit" disabled={loading}>
-                  {loading ? 'Un instant...' : 'Confirmer'}
-                </button>
-              </form>
-              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={resendCode}>
-                Renvoyer le code
-              </button>
-            </>
-          )}
-
-          {view === 'forgot-email' && (
-            <>
-              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>
-                Entre ton courriel — si un compte y est associé, tu recevras un code pour choisir un nouveau mot de passe.
-              </p>
-              <form onSubmit={submitForgotEmail}>
-                <div className="field-group">
-                  <label className="field-label">Courriel</label>
-                  <input className="text-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-                </div>
-                <button className="btn-primary" type="submit" disabled={loading}>
-                  {loading ? 'Un instant...' : 'Envoyer le code'}
-                </button>
-              </form>
-              <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }} onClick={() => setView('login')}>
-                ← Retour à la connexion
-              </button>
-            </>
-          )}
-
-          {view === 'forgot-reset' && (
-            <form onSubmit={submitForgotReset}>
-              <div className="field-group">
-                <label className="field-label">Code reçu par courriel</label>
-                <input
-                  className="text-input"
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-                  style={{ letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
-                />
-              </div>
-              <div className="field-group">
-                <label className="field-label">Nouveau mot de passe</label>
-                <input className="text-input" type="password" required minLength={10} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-              </div>
-              <button className="btn-primary" type="submit" disabled={loading}>
-                {loading ? 'Un instant...' : 'Changer le mot de passe'}
-              </button>
-            </form>
-          )}
         </div>
       </div>
     </div>
