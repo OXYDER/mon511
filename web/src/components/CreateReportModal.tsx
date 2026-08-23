@@ -256,16 +256,17 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const fr = lang === 'fr';
     if (!coords) {
-      setError("Utilise le bouton de localisation avant d'envoyer le signalement.");
+      setError(fr ? "Utilise le bouton de localisation avant d'envoyer le signalement." : 'Use the location button before submitting the report.');
       return;
     }
     if (photoFiles.length === 0) {
-      setError('Ajoute au moins une photo pour appuyer ton signalement.');
+      setError(fr ? 'Ajoute au moins une photo pour appuyer ton signalement.' : 'Add at least one photo to support your report.');
       return;
     }
     setSubmitting(true);
-    setSubmitProgress('Création du signalement...');
+    setSubmitProgress(fr ? 'Création du signalement...' : 'Creating report...');
     setError(null);
     try {
       const report = await api.post<{ id: string }>('/reports', {
@@ -284,8 +285,8 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
         for (let i = 0; i < photoFiles.length; i++) {
           setSubmitProgress(
             photoFiles.length > 1
-              ? `Envoi de la photo ${i + 1} sur ${photoFiles.length}...`
-              : 'Envoi de la photo...',
+              ? (fr ? `Envoi de la photo ${i + 1} sur ${photoFiles.length}...` : `Uploading photo ${i + 1} of ${photoFiles.length}...`)
+              : (fr ? 'Envoi de la photo...' : 'Uploading photo...'),
           );
           // Compression appliquée seulement ici, juste avant l'envoi —
           // jamais sur le fichier original (celui déjà utilisé plus haut
@@ -300,9 +301,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
       }
 
       const chosenType = types.find((t) => t.id === typeId);
-      setSubmittedSummary({ typeName: pickName(chosenType?.nameFr ?? 'Signalement', chosenType?.nameEn, lang), typeIcon: chosenType?.icon ?? '📍' });
+      setSubmittedSummary({ typeName: pickName(chosenType?.nameFr ?? (fr ? 'Signalement' : 'Report'), chosenType?.nameEn, lang), typeIcon: chosenType?.icon ?? '📍' });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Impossible d'envoyer le signalement.");
+      setError(err instanceof Error ? err.message : (fr ? "Impossible d'envoyer le signalement." : 'Unable to submit the report.'));
     } finally {
       setSubmitting(false);
       setSubmitProgress(null);
@@ -313,7 +314,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) (submittedSummary ? onCreated() : onClose()); }}>
       <div className="modal-box">
         <div className="modal-head">
-          <div className="modal-title">{submittedSummary ? 'Signalement envoyé' : 'Nouveau signalement'}</div>
+          <div className="modal-title">{submittedSummary ? (lang === 'fr' ? 'Signalement envoyé' : 'Report submitted') : (lang === 'fr' ? 'Nouveau signalement' : 'New report')}</div>
           <button className="modal-close" onClick={() => (submittedSummary ? onCreated() : onClose())}>✕</button>
         </div>
         <div className="modal-body">
@@ -321,7 +322,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
             <>
               <div className="success-banner" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5 }}>
                 <span style={{ fontSize: 22 }}>✅</span>
-                <span>Merci ! Ton signalement a bien été envoyé.</span>
+                <span>{lang === 'fr' ? 'Merci ! Ton signalement a bien été envoyé.' : 'Thanks! Your report has been submitted.'}</span>
               </div>
 
               <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 14, marginTop: 4, marginBottom: 18 }}>
@@ -333,15 +334,17 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>{description}</div>
                 )}
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span>📍 {addressText || 'Position GPS'}</span>
+                  <span>📍 {addressText || (lang === 'fr' ? 'Position GPS' : 'GPS position')}</span>
                   {municipalityNotified === 'yes' && (
-                    <span>🏛️ Municipalité avisée{municipalityName ? ` — ${municipalityName}` : ''}</span>
+                    <span>🏛️ {lang === 'fr' ? 'Municipalité avisée' : 'Municipality notified'}{municipalityName ? ` — ${municipalityName}` : ''}</span>
                   )}
-                  {photoFiles.length > 0 && <span>📷 {photoFiles.length} photo{photoFiles.length > 1 ? 's' : ''} jointe{photoFiles.length > 1 ? 's' : ''}</span>}
+                  {photoFiles.length > 0 && (
+                    <span>📷 {photoFiles.length} {lang === 'fr' ? `photo${photoFiles.length > 1 ? 's' : ''} jointe${photoFiles.length > 1 ? 's' : ''}` : `photo${photoFiles.length > 1 ? 's' : ''} attached`}</span>
+                  )}
                 </div>
               </div>
 
-              <button className="btn-primary" onClick={onCreated}>Voir sur la carte</button>
+              <button className="btn-primary" onClick={onCreated}>{lang === 'fr' ? 'Voir sur la carte' : 'View on map'}</button>
             </>
           ) : (
           <>
@@ -350,7 +353,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
           <form onSubmit={submit}>
 
             <div className="field-group">
-              <label className="field-label">Type de problème</label>
+              <label className="field-label">{lang === 'fr' ? 'Type de problème' : 'Problem type'}</label>
               <div className="type-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
                 {types.map((t) => (
                   <div
@@ -366,12 +369,12 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
             </div>
 
             <div className="field-group">
-              <label className="field-label">Photos (au moins 1 requise — max {MAX_PHOTOS})</label>
+              <label className="field-label">{lang === 'fr' ? `Photos (au moins 1 requise — max ${MAX_PHOTOS})` : `Photos (at least 1 required — max ${MAX_PHOTOS})`}</label>
               {photoPreviews.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
                   {photoPreviews.map((src, i) => (
                     <div key={src} style={{ position: 'relative', width: 88, height: 88, flexShrink: 0 }}>
-                      <img src={src} alt="Aperçu" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9 }} />
+                      <img src={src} alt={lang === 'fr' ? 'Aperçu' : 'Preview'} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 9 }} />
                       <button
                         type="button"
                         className="icon-btn"
@@ -393,7 +396,9 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                       textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
                     }}
                   >
-                    🖼️ {photoFiles.length === 0 ? 'Sélectionner une photo' : `Sélectionner une autre photo (${photoFiles.length}/${MAX_PHOTOS})`}
+                    🖼️ {photoFiles.length === 0
+                      ? (lang === 'fr' ? 'Sélectionner une photo' : 'Select a photo')
+                      : (lang === 'fr' ? `Sélectionner une autre photo (${photoFiles.length}/${MAX_PHOTOS})` : `Select another photo (${photoFiles.length}/${MAX_PHOTOS})`)}
                   </div>
                   {isMobileDevice && (
                     <div
@@ -403,7 +408,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                         textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer',
                       }}
                     >
-                      📷 Appareil photo
+                      📷 {lang === 'fr' ? 'Appareil photo' : 'Camera'}
                     </div>
                   )}
                 </div>
@@ -412,31 +417,35 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               {isMobileDevice && (
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhotoSelect} style={{ display: 'none' }} />
               )}
-              {checkingExif && <div className="geo-status">Vérification de la position de la photo...</div>}
+              {checkingExif && <div className="geo-status">{lang === 'fr' ? 'Vérification de la position de la photo...' : "Checking the photo's location..."}</div>}
               {!checkingExif && noExifDataFound && (
                 <div className="geo-status" style={{ color: 'var(--text-muted)' }}>
-                  ℹ️ Cette photo ne contient pas de données de localisation exploitables (fréquent sur mobile — le système retire souvent cette information par mesure de confidentialité). Vérifie que la position ci-dessus est bien la bonne.
+                  ℹ️ {lang === 'fr'
+                    ? 'Cette photo ne contient pas de données de localisation exploitables (fréquent sur mobile — le système retire souvent cette information par mesure de confidentialité). Vérifie que la position ci-dessus est bien la bonne.'
+                    : "This photo doesn't contain usable location data (common on mobile — the system often strips this info for privacy). Make sure the position above is accurate."}
                 </div>
               )}
               {exifMismatch && (
                 <div style={{ marginTop: 8, padding: 10, borderRadius: 9, background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)' }}>
                   <div style={{ fontSize: 11.5, marginBottom: 8, lineHeight: 1.5 }}>
-                    📍 Cette photo semble avoir été prise à <strong>{exifMismatch.exifAddress}</strong>, différent de la position détectée. Utiliser l'emplacement de la photo ?
+                    📍 {lang === 'fr'
+                      ? <>Cette photo semble avoir été prise à <strong>{exifMismatch.exifAddress}</strong>, différent de la position détectée. Utiliser l'emplacement de la photo ?</>
+                      : <>This photo seems to have been taken at <strong>{exifMismatch.exifAddress}</strong>, different from the detected position. Use the photo's location?</>}
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="btn-ghost" onClick={useExifLocation} style={{ flex: 1 }}>Oui</button>
-                    <button type="button" className="btn-ghost" onClick={() => setExifMismatch(null)} style={{ flex: 1 }}>Non</button>
+                    <button type="button" className="btn-ghost" onClick={useExifLocation} style={{ flex: 1 }}>{lang === 'fr' ? 'Oui' : 'Yes'}</button>
+                    <button type="button" className="btn-ghost" onClick={() => setExifMismatch(null)} style={{ flex: 1 }}>{lang === 'fr' ? 'Non' : 'No'}</button>
                   </div>
                 </div>
               )}
             </div>
 
             <div className="field-group" style={{ position: 'relative' }}>
-              <label className="field-label">Localisation</label>
+              <label className="field-label">{lang === 'fr' ? 'Localisation' : 'Location'}</label>
               <div className="geo-btn-row">
                 <input
                   className="text-input"
-                  placeholder="Adresse ou repère"
+                  placeholder={lang === 'fr' ? 'Adresse ou repère' : 'Address or landmark'}
                   value={addressText}
                   onChange={(e) => { setAddressText(e.target.value); setAddressAutoFilled(false); setUsedPhotoLocation(false); setShowAddressDropdown(true); }}
                   onFocus={() => setShowAddressDropdown(true)}
@@ -448,7 +457,7 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                   onClick={locate}
                   disabled={locating}
                   style={{ flexShrink: 0, width: 44 }}
-                  title="Utiliser ma position actuelle"
+                  title={lang === 'fr' ? 'Utiliser ma position actuelle' : 'Use my current position'}
                 >
                   {locating ? '⏳' : '🎯'}
                 </button>
@@ -465,46 +474,54 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               {coords && (
                 <div className="geo-status ok">
                   {usedPhotoLocation ? (
-                    "Position adaptée aux données GPS d'où la photo a été prise."
+                    lang === 'fr' ? "Position adaptée aux données GPS d'où la photo a été prise." : 'Position adjusted to the GPS data from where the photo was taken.'
                   ) : addressAutoFilled ? (
-                    <>
-                      Position précise capturée{locationMethod === 'map_click' ? ' par clic sur la carte' : locationMethod === 'address_search' ? " par recherche d'adresse manuelle" : ''} — précision ±{Math.round(coords.accuracy)} m
-                      {snappedToRoad && ' · alignée sur la route'}
-                      {locationMethod !== 'address_search' && ' · adresse détectée automatiquement'}
-                    </>
+                    lang === 'fr' ? (
+                      <>
+                        Position précise capturée{locationMethod === 'map_click' ? ' par clic sur la carte' : locationMethod === 'address_search' ? " par recherche d'adresse manuelle" : ''} — précision ±{Math.round(coords.accuracy)} m
+                        {snappedToRoad && ' · alignée sur la route'}
+                        {locationMethod !== 'address_search' && ' · adresse détectée automatiquement'}
+                      </>
+                    ) : (
+                      <>
+                        Precise position captured{locationMethod === 'map_click' ? ' by clicking the map' : locationMethod === 'address_search' ? ' by manual address search' : ''} — accuracy ±{Math.round(coords.accuracy)} m
+                        {snappedToRoad && ' · snapped to road'}
+                        {locationMethod !== 'address_search' && ' · address detected automatically'}
+                      </>
+                    )
                   ) : (
-                    'Adresse entrée manuellement — assurez-vous que celle-ci est la plus précise possible.'
+                    lang === 'fr' ? 'Adresse entrée manuellement — assurez-vous que celle-ci est la plus précise possible.' : 'Manually entered address — make sure it is as accurate as possible.'
                   )}
                 </div>
               )}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                Vous pouvez modifier cette adresse si inexacte.
+                {lang === 'fr' ? 'Vous pouvez modifier cette adresse si inexacte.' : 'You can edit this address if it is inaccurate.'}
               </div>
             </div>
 
             <div className="field-group">
-              <label className="field-label">Description</label>
-              <textarea rows={3} placeholder="Décrivez le problème observé..." value={description} onChange={(e) => setDescription(e.target.value)} />
+              <label className="field-label">{lang === 'fr' ? 'Description' : 'Description'}</label>
+              <textarea rows={3} placeholder={lang === 'fr' ? 'Décrivez le problème observé...' : 'Describe the problem you observed...'} value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
 
             <div className="field-group">
-              <label className="field-label">La municipalité a-t-elle été avisée ?</label>
+              <label className="field-label">{lang === 'fr' ? 'La municipalité a-t-elle été avisée ?' : 'Has the municipality been notified?'}</label>
               <select value={municipalityNotified} onChange={(e) => setMunicipalityNotified(e.target.value as any)}>
-                <option value="unknown">Je ne sais pas</option>
-                <option value="yes">Oui</option>
-                <option value="no">Non</option>
+                <option value="unknown">{lang === 'fr' ? 'Je ne sais pas' : "I don't know"}</option>
+                <option value="yes">{lang === 'fr' ? 'Oui' : 'Yes'}</option>
+                <option value="no">{lang === 'fr' ? 'Non' : 'No'}</option>
               </select>
               {municipalityNotified === 'yes' && (
                 <input
                   className="text-input"
                   style={{ marginTop: 8 }}
-                  placeholder="Ex. Ville de Sherbrooke"
+                  placeholder={lang === 'fr' ? 'Ex. Ville de Sherbrooke' : 'E.g. City of Sherbrooke'}
                   value={municipalityName}
                   onChange={(e) => setMunicipalityName(e.target.value)}
                 />
               )}
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-                Aide à prioriser les cas déjà signalés aux autorités.
+                {lang === 'fr' ? 'Aide à prioriser les cas déjà signalés aux autorités.' : 'Helps prioritize cases already reported to authorities.'}
               </div>
             </div>
 
@@ -512,13 +529,14 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
               {submitting ? (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                   <span className="spinner-inline" />
-                  {submitProgress ?? 'Envoi...'}
+                  {submitProgress ?? (lang === 'fr' ? 'Envoi...' : 'Sending...')}
                 </span>
               ) : (
-                'Envoyer le signalement'
+                lang === 'fr' ? 'Envoyer le signalement' : 'Submit report'
               )}
             </button>
           </form>
+
           </>
           )}
         </div>
