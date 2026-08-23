@@ -17,7 +17,11 @@ export default function AboutModal({ onClose, lang, onOpenTerms, onOpenPrivacyPo
         </div>
         <div className="modal-body">
           <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <img src="/brand/logo-full.png" alt="mon511.ca" style={{ width: '100%', maxWidth: 280 }} />
+            <img
+              src={lang === 'en' ? '/brand/logo-full-en.png' : '/brand/logo-full.png'}
+              alt={lang === 'en' ? 'my511.ca' : 'mon511.ca'}
+              style={{ width: '100%', maxWidth: 280 }}
+            />
           </div>
 
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 18 }}>

@@ -61,6 +61,7 @@ export default function App() {
       {authModalMode && (
         <AuthModal
           initialMode={authModalMode}
+          lang={getStoredLang()}
           onClose={() => setAuthModalMode(null)}
           onAuthenticated={() => {
             setAuthenticated(true);

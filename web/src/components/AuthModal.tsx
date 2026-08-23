@@ -6,11 +6,12 @@ interface Props {
   onClose: () => void;
   onAuthenticated: () => void;
   initialMode?: 'login' | 'register';
+  lang?: 'fr' | 'en';
 }
 
 type View = 'login' | 'register' | 'verify' | 'forgot-email' | 'forgot-reset';
 
-export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login' }: Props) {
+export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login', lang = 'fr' }: Props) {
   const [view, setView] = useState<View>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -140,7 +141,11 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
           {(view === 'login' || view === 'register') && (
             <>
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                <img src="/brand/logo-full.png" alt="mon511.ca" style={{ width: '100%', maxWidth: 260 }} />
+                <img
+                  src={lang === 'en' ? '/brand/logo-full-en.png' : '/brand/logo-full.png'}
+                  alt={lang === 'en' ? 'my511.ca' : 'mon511.ca'}
+                  style={{ width: '100%', maxWidth: 260 }}
+                />
               </div>
               <div className="tabs">
                 <button className={`tab-item ${view === 'login' ? 'active' : ''}`} onClick={() => { setView('login'); setError(null); }}>
