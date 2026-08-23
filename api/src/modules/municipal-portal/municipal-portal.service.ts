@@ -60,7 +60,7 @@ export class MunicipalPortalService {
       .selectFrom('posts')
       .innerJoin('users', 'users.id', 'posts.author_id')
       .select([
-        'posts.id', 'posts.category', 'posts.body', 'posts.link_url as linkUrl', 'posts.created_at', 'posts.report_id as reportId',
+        'posts.id', 'posts.author_id', 'posts.category', 'posts.body', 'posts.link_url as linkUrl', 'posts.created_at', 'posts.report_id as reportId',
         'users.avatar_url as authorAvatarUrl', 'users.email as authorEmail',
         'users.first_name as authorFirstName', 'users.last_name as authorLastName',
         'users.privacy_settings as authorPrivacySettings',
