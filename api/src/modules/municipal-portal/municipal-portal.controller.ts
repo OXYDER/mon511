@@ -18,6 +18,12 @@ export class MunicipalPortalController {
     return this.service.searchRegions(search);
   }
 
+  @Get('public/:regionId')
+  @UseGuards(JwtAuthGuard)
+  findPublicMunicipalityPage(@Param('regionId') regionId: string) {
+    return this.service.findPublicMunicipalityPage(regionId);
+  }
+
   @Post('request-access')
   @UseGuards(JwtAuthGuard)
   requestAccess(

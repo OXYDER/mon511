@@ -3,6 +3,7 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { EmailService } from '../../email/email.service';
+import { formatDisplayName } from '../../common/display-name.util';
 
 @Injectable()
 export class MunicipalPortalService {
@@ -27,6 +28,63 @@ export class MunicipalPortalService {
       .orderBy('name_fr', 'asc')
       .limit(8)
       .execute();
+  }
+
+  /** Page publique d'une municipalité — accessible à tout le monde, pas
+   * seulement les usagers connectés. Existe pour TOUTE municipalité dès
+   * maintenant, peu importe si elle a déjà été « réclamée » par un
+   * premier membre ou non — voir requestAccess() pour la façon dont ce
+   * gestionnaire est attribué automatiquement, sans lien avec l'existence
+   * de cette page elle-même. */
+  async findPublicMunicipalityPage(regionId: string) {
+    const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr']).where('id', '=', regionId).where('type', '=', 'municipality').executeTakeFirst();
+    if (!region) throw new NotFoundException('Municipalité introuvable.');
+
+    const hasManager = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select('users.id')
+      .where('users.region_id', '=', regionId)
+      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+      .executeTakeFirst();
+
+    const stats = await this.db
+      .selectFrom('reports')
+      .select(['status', sql<number>`count(*)`.as('count')])
+      .where('region_id', '=', regionId)
+      .where('status', 'in', ['published_unresolved', 'published_resolved'])
+      .groupBy('status')
+      .execute();
+
+    const posts = await this.db
+      .selectFrom('posts')
+      .innerJoin('users', 'users.id', 'posts.author_id')
+      .select([
+        'posts.id', 'posts.category', 'posts.body', 'posts.link_url as linkUrl', 'posts.created_at', 'posts.report_id as reportId',
+        'users.avatar_url as authorAvatarUrl', 'users.email as authorEmail',
+        'users.first_name as authorFirstName', 'users.last_name as authorLastName',
+        'users.privacy_settings as authorPrivacySettings',
+      ])
+      .where('posts.region_id', '=', regionId)
+      .where('posts.status', '=', 'published')
+      .where('posts.visibility', '=', 'public')
+      .orderBy('posts.created_at', 'desc')
+      .limit(30)
+      .execute();
+
+    return {
+      regionId: region.id,
+      regionName: region.nameFr,
+      hasManager: !!hasManager,
+      stats: {
+        unresolved: Number(stats.find((s) => s.status === 'published_unresolved')?.count ?? 0),
+        resolved: Number(stats.find((s) => s.status === 'published_resolved')?.count ?? 0),
+      },
+      posts: posts.map((p) => ({
+        ...p,
+        authorDisplayName: formatDisplayName(p.authorFirstName, p.authorLastName, (p.authorPrivacySettings as any)?.last_name_display, p.authorEmail),
+      })),
+    };
   }
 
   async requestAccess(userId: string, regionId: string, jobTitle: string, message: string | undefined) {

@@ -9,6 +9,7 @@ interface Props {
   onClose: () => void;
   onViewProfile: (userId: string) => void;
   onViewReport: (reportId: string) => void;
+  onOpenMunicipality: (regionId: string) => void;
 }
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -24,7 +25,7 @@ function CategoryBadge({ category, lang }: { category: string; lang: 'fr' | 'en'
   return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{cat.icon} {lang === 'fr' ? cat.fr : cat.en}</span>;
 }
 
-export default function CommunityFeedPage({ lang, currentUserId, onClose, onViewProfile, onViewReport }: Props) {
+export default function CommunityFeedPage({ lang, currentUserId, onClose, onViewProfile, onViewReport, onOpenMunicipality }: Props) {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +36,8 @@ export default function CommunityFeedPage({ lang, currentUserId, onClose, onView
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
   const [reactingToPostId, setReactingToPostId] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [municipalitySearch, setMunicipalitySearch] = useState('');
+  const [municipalityResults, setMunicipalityResults] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   async function load() {
@@ -51,6 +54,14 @@ export default function CommunityFeedPage({ lang, currentUserId, onClose, onView
   }
 
   useEffect(() => { load(); }, [activeCategory]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (municipalitySearch.trim().length < 2) { setMunicipalityResults([]); return; }
+    const timeout = setTimeout(() => {
+      api.get<any[]>(`/municipal-portal/search-regions?search=${encodeURIComponent(municipalitySearch)}`).then(setMunicipalityResults).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [municipalitySearch]);
 
   async function toggleComments(postId: string) {
     setExpandedComments((prev) => {
@@ -104,6 +115,29 @@ export default function CommunityFeedPage({ lang, currentUserId, onClose, onView
         </div>
 
         <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+          <div style={{ position: 'relative', marginBottom: 12, flexShrink: 0 }}>
+            <input
+              className="text-input"
+              style={{ width: '100%', fontSize: 12.5 }}
+              placeholder={fr ? '🏛️ Voir la page d\'une municipalité...' : '🏛️ View a municipality page...'}
+              value={municipalitySearch}
+              onChange={(e) => setMunicipalitySearch(e.target.value)}
+            />
+            {municipalityResults.length > 0 && (
+              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 10, marginTop: 4, zIndex: 5, boxShadow: 'var(--shadow-panel)', overflow: 'hidden' }}>
+                {municipalityResults.map((r) => (
+                  <div
+                    key={r.regionId}
+                    className="search-dropdown-item"
+                    onClick={() => { onOpenMunicipality(r.regionId); setMunicipalitySearch(''); setMunicipalityResults([]); }}
+                  >
+                    {r.regionNameFr}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', flexShrink: 0 }}>
             <button className={`btn-ghost ${!activeCategory ? 'active' : ''}`} style={{ fontSize: 11.5, padding: '6px 12px', flexShrink: 0 }} onClick={() => setActiveCategory(null)}>
               {fr ? 'Tout' : 'All'}

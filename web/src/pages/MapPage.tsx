@@ -23,6 +23,7 @@ const NotificationsPanel = lazy(() => import('../components/NotificationsPanel')
 const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
 const OnboardingTutorial = lazy(() => import('../components/OnboardingTutorial'));
 const CommunityFeedPage = lazy(() => import('../components/CommunityFeedPage'));
+const MunicipalityPage = lazy(() => import('../components/MunicipalityPage'));
 const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
 const PublicProfileModal = lazy(() => import('../components/PublicProfileModal'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
@@ -222,6 +223,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [viewingProfileUserId, setViewingProfileUserId] = useState<string | null>(null);
   const [showTutorial, setShowTutorial] = useState(false);
   const [showCommunityFeed, setShowCommunityFeed] = useState(false);
+  const [viewingMunicipalityId, setViewingMunicipalityId] = useState<string | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -1715,6 +1717,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onClose={() => setShowCommunityFeed(false)}
           onViewProfile={(userId) => { setShowCommunityFeed(false); setViewingProfileUserId(userId); }}
           onViewReport={(reportId) => { setShowCommunityFeed(false); openReportById(reportId); }}
+          onOpenMunicipality={(regionId) => { setShowCommunityFeed(false); setViewingMunicipalityId(regionId); }}
+        />
+      )}
+
+      {viewingMunicipalityId && (
+        <MunicipalityPage
+          regionId={viewingMunicipalityId}
+          lang={lang}
+          onClose={() => setViewingMunicipalityId(null)}
+          onViewProfile={(userId) => { setViewingMunicipalityId(null); setViewingProfileUserId(userId); }}
+          onViewReport={(reportId) => { setViewingMunicipalityId(null); openReportById(reportId); }}
         />
       )}
 
