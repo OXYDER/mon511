@@ -1,4 +1,8 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body, Controller, Get, Header, Param, Patch, Post, Query, Res, UseGuards, UseInterceptors,
+  UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { MunicipalPortalService } from './municipal-portal.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -67,6 +71,44 @@ export class MunicipalPortalController {
   // devient automatiquement municipal_admin (voir requestAccess), et peut
   // ensuite gérer lui-même ses propres modérateurs et le contenu de sa
   // municipalité. ----------
+
+  @Post('my-region/logo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadMyRegionLogo(
+    @CurrentUser() user: CurrentUserPayload,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 3 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp|svg)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.service.uploadMyRegionLogo(user.userId, file);
+  }
+
+  @Post('admin/regions/:regionId/logo')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadRegionLogo(
+    @Param('regionId') regionId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 3 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp|svg)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.service.uploadLogoForRegion(regionId, file);
+  }
 
   @Get('my-region/access-requests')
   @UseGuards(JwtAuthGuard, RolesGuard)

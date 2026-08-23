@@ -3,6 +3,7 @@ import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
 import { EmailService } from '../../email/email.service';
+import { UploadsService } from '../uploads/uploads.service';
 import { formatDisplayName } from '../../common/display-name.util';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class MunicipalPortalService {
   constructor(
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly email: EmailService,
+    private readonly uploads: UploadsService,
   ) {}
 
   // ---------- Demande d'accès ----------
@@ -37,7 +39,7 @@ export class MunicipalPortalService {
    * gestionnaire est attribué automatiquement, sans lien avec l'existence
    * de cette page elle-même. */
   async findPublicMunicipalityPage(regionId: string) {
-    const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr']).where('id', '=', regionId).where('type', '=', 'municipality').executeTakeFirst();
+    const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr', 'logo_url as logoUrl']).where('id', '=', regionId).where('type', '=', 'municipality').executeTakeFirst();
     if (!region) throw new NotFoundException('Municipalité introuvable.');
 
     const hasManager = await this.db
@@ -75,6 +77,7 @@ export class MunicipalPortalService {
     return {
       regionId: region.id,
       regionName: region.nameFr,
+      logoUrl: region.logoUrl,
       hasManager: !!hasManager,
       stats: {
         unresolved: Number(stats.find((s) => s.status === 'published_unresolved')?.count ?? 0),
@@ -262,6 +265,21 @@ export class MunicipalPortalService {
     if (!user?.region_id) throw new ForbiddenException("Ton compte n'est rattaché à aucune municipalité.");
     const sub = await this.db.selectFrom('municipality_subscriptions').select('tier').where('region_id', '=', user.region_id).executeTakeFirst();
     return { regionId: user.region_id, tier: sub?.tier ?? 'free' };
+  }
+
+  /** Téléverse le logo de SA PROPRE municipalité — municipal_admin
+   * seulement, scopé automatiquement via getScopeOrThrow. */
+  async uploadMyRegionLogo(userId: string, file: Express.Multer.File) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.uploadLogoForRegion(regionId, file);
+  }
+
+  /** Téléverse le logo de N'IMPORTE QUELLE municipalité — admin du site
+   * seulement, regionId fourni explicitement par le contrôleur. */
+  async uploadLogoForRegion(regionId: string, file: Express.Multer.File) {
+    const { url } = await this.uploads.uploadGenericFile('municipality-logos', file);
+    await this.db.updateTable('regions').set({ logo_url: url }).where('id', '=', regionId).execute();
+    return { url };
   }
 
   async findPendingAccessRequestsForReviewer(userId: string) {

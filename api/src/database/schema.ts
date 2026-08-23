@@ -15,6 +15,7 @@ export interface RegionsTable {
   name_en: string;
   deployment_status: 'active' | 'partial' | 'inactive';
   source_mcode: string | null;
+  logo_url: string | null;
   created_at: Generated<Timestamp>;
 }
 

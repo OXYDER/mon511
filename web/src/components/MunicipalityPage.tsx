@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { useEffect, useRef, useState } from 'react';
+import { api, getUserRole } from '../api';
 import { timeAgo } from '../i18n';
 
 interface Props {
@@ -20,6 +20,26 @@ export default function MunicipalityPage({ regionId, lang, onClose, onViewProfil
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const isSiteAdmin = ['admin', 'super_admin'].includes(getUserRole() ?? '');
+
+  async function handleLogoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const { url } = await api.post<{ url: string }>(`/municipal-portal/admin/regions/${regionId}/logo`, formData);
+      setData((prev: any) => (prev ? { ...prev, logoUrl: url } : prev));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
   const fr = lang === 'fr';
 
   useEffect(() => {
@@ -33,7 +53,12 @@ export default function MunicipalityPage({ regionId, lang, onClose, onViewProfil
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-box" style={{ width: 480, maxWidth: '95vw', display: 'flex', flexDirection: 'column', height: '86vh' }}>
         <div className="modal-head">
-          <div className="modal-title">{loading ? (fr ? 'Chargement...' : 'Loading...') : data?.regionName}</div>
+          <div className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {data?.logoUrl && (
+              <img src={data.logoUrl} alt="" style={{ width: 28, height: 28, objectFit: 'contain', borderRadius: 6 }} />
+            )}
+            {loading ? (fr ? 'Chargement...' : 'Loading...') : data?.regionName}
+          </div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -43,6 +68,14 @@ export default function MunicipalityPage({ regionId, lang, onClose, onViewProfil
 
           {data && (
             <>
+              {isSiteAdmin && (
+                <div style={{ marginBottom: 16 }}>
+                  <input ref={logoInputRef} type="file" accept="image/*" onChange={handleLogoSelect} style={{ display: 'none' }} />
+                  <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                    {uploadingLogo ? (fr ? 'Téléversement...' : 'Uploading...') : (fr ? '🖼️ Téléverser le logo' : '🖼️ Upload logo')}
+                  </button>
+                </div>
+              )}
               {!data.hasManager && (
                 <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, fontSize: 12, marginBottom: 16, lineHeight: 1.5 }}>
                   {fr
