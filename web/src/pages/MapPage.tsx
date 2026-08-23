@@ -1469,9 +1469,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </label>
       </div>
       {currentAreaName && (
-        <div className="stats-badge-float" style={{ marginTop: 6 }}>
+        <div className="stats-badge-float" style={{ bottom: 68 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent-signal)' }} />
-          <strong>{filteredReports.filter((r) => r.addressText?.toLowerCase().includes(currentAreaName.toLowerCase())).length}</strong>
+          <strong>
+            {(() => {
+              // currentAreaName peut inclure la province (ex. "Sherbrooke,
+              // QC") selon le niveau de zoom — seul le nom de ville avant
+              // la virgule doit être comparé à l'adresse du signalement,
+              // qui elle ne contient jamais la province.
+              const cityOnly = currentAreaName.split(',')[0].trim().toLowerCase();
+              return filteredReports.filter((r) => r.addressText?.toLowerCase().includes(cityOnly)).length;
+            })()}
+          </strong>
           <span>{lang === 'fr' ? `à ${currentAreaName}` : `in ${currentAreaName}`}</span>
         </div>
       )}
