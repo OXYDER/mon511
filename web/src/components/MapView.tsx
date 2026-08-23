@@ -706,9 +706,33 @@ export default function MapView({ center, pins, lines = [], userLocation = null,
         return;
       }
 
+      // Zoom maximum déjà atteint et le regroupement persiste quand même
+      // (pins géographiquement très rapprochés) — continuer à tenter de
+      // zoomer ne changerait plus rien. Le déploiement en étoile reste la
+      // seule façon de distinguer les pins entre eux dans ce cas.
+      if (map.getZoom() >= map.getMaxZoom() - 0.01) {
+        setSpiderfiedClusterId(owningCluster.id);
+        return;
+      }
+
       if (attemptsLeft <= 0) return;
-      map.once('moveend', () => reveal(attemptsLeft - 1));
-      map.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: map.getZoom() + 2, duration: 500 });
+
+      // Protection contre un blocage silencieux : si la carte est déjà
+      // proche du zoom maximum, flyTo peut être limité (« clampé ») à une
+      // position quasi identique à l'actuelle — dans ce cas, l'événement
+      // 'moveend' peut ne jamais se déclencher (aucun mouvement réel), et
+      // la cascade resterait alors bloquée indéfiniment à attendre un
+      // événement qui ne vient jamais. On protège avec un délai de repli :
+      // si 'moveend' n'arrive pas assez vite, on continue quand même.
+      let settled = false;
+      const proceed = () => {
+        if (settled) return;
+        settled = true;
+        reveal(attemptsLeft - 1);
+      };
+      map.once('moveend', proceed);
+      setTimeout(proceed, 700);
+      map.flyTo({ center: [owningCluster.lng, owningCluster.lat], zoom: Math.min(map.getZoom() + 2, map.getMaxZoom()), duration: 500 });
     }
 
     reveal(6);
