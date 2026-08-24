@@ -283,6 +283,20 @@ export class ExternalDataService {
         let lat = latKey ? parseFloat(item[latKey]) : null;
         let lng = lngKey ? parseFloat(item[lngKey]) : null;
 
+        // Repli pour les structures imbriquées type Tourinsoft/SIT Québec
+        // (coordonnées sous item.Geolocalisations[0].Latitude/.Longitude).
+        if ((lat === null || isNaN(lat)) && Array.isArray(item.Geolocalisations) && item.Geolocalisations[0]) {
+          lat = parseFloat(item.Geolocalisations[0].Latitude);
+          lng = parseFloat(item.Geolocalisations[0].Longitude);
+        }
+
+        // Repli pour OpenChargeMap (bornes de recharge) — coordonnées et
+        // titre imbriqués sous item.AddressInfo plutôt qu'au niveau
+        // racine de l'objet.
+        if ((lat === null || isNaN(lat)) && item.AddressInfo) {
+          lat = parseFloat(item.AddressInfo.Latitude);
+          lng = parseFloat(item.AddressInfo.Longitude);
+        }
 
         const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
 
