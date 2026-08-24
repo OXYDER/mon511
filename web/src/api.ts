@@ -24,6 +24,7 @@ export interface LayerPrefs {
   debit_circulation: boolean;
   feux_foret: boolean;
   cabanes_a_sucre: boolean;
+  bornes_recharge: boolean;
 }
 
 export const DEFAULT_LAYER_PREFS: LayerPrefs = {
@@ -38,6 +39,7 @@ export const DEFAULT_LAYER_PREFS: LayerPrefs = {
   debit_circulation: false,
   feux_foret: false,
   cabanes_a_sucre: false,
+  bornes_recharge: false,
 };
 
 /** Repli localStorage pour les usagers non connectés — les usagers connectés

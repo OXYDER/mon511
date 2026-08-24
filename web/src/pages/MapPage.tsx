@@ -136,6 +136,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [friendsReports, setFriendsReports] = useState<any[]>([]);
   const [externalIncidents, setExternalIncidents] = useState<ExternalIncident[]>([]);
   const [circulationIncidents, setCirculationIncidents] = useState<ExternalIncident[]>([]);
+  const [chargingStations, setChargingStations] = useState<ExternalIncident[]>([]);
   const [allCabanes, setAllCabanes] = useState<ExternalIncident[]>([]);
   const [problemTypes, setProblemTypes] = useState<ProblemType[]>([]);
   const [layerPrefs, setLayerPrefs] = useState<LayerPrefs>({
@@ -147,6 +148,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     debit_circulation: false,
     feux_foret: false,
     cabanes_a_sucre: false,
+    bornes_recharge: false,
   });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -419,6 +421,26 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       setCirculationIncidents(circulation);
     } catch {
       setCirculationIncidents([]);
+    }
+    // Même raison — les bornes de recharge (potentiellement plusieurs
+    // milliers combinées entre les deux sources) pourraient elles aussi
+    // écraser les types plus rares dans la limite partagée de la couche
+    // générale. Chargées inconditionnellement (comme circulation ci-
+    // dessus) — toggleLayer() ne redéclenche jamais ce chargement, donc
+    // le gater sur layerPrefs.bornes_recharge ferait en sorte que rien
+    // n'apparaisse tant que la carte ne bouge pas après avoir activé la
+    // couche. Seul l'affichage (visibleChargingStations) est filtré par
+    // le préférence.
+    try {
+      const stations = await api.get<ExternalIncident[]>(
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 1500000)}&feedKey=openchargemap_qc`,
+      );
+      const stationsMtl = await api.get<ExternalIncident[]>(
+        `/external-data/incidents/nearby?lat=${lat}&lng=${lng}&radius=${Math.min(Math.max(radius, 50000), 1500000)}&feedKey=bornes_recharge_montreal`,
+      );
+      setChargingStations([...stations, ...stationsMtl]);
+    } catch {
+      setChargingStations([]);
     }
   }
 
@@ -782,6 +804,8 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     (inc) => layerPrefs.debit_circulation,
   );
 
+  const visibleChargingStations = chargingStations.filter((inc) => layerPrefs.bornes_recharge);
+
   const visibleFeux = externalIncidents.filter(
     (inc) => inc.feedKey === 'sopfeu_feux_actifs' && layerPrefs.feux_foret && withinBounds(inc.latitude, inc.longitude),
   );
@@ -837,6 +861,11 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     ...visibleCabanes.map((inc) => ({
       id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
       icon: '🍁', colorVar: 'official' as const, onClick: () => openExternal(inc),
+      selected: selection?.type === 'external' && selection.id === inc.id,
+    })),
+    ...visibleChargingStations.map((inc) => ({
+      id: inc.id, latitude: inc.latitude, longitude: inc.longitude,
+      icon: '🔌', colorVar: 'official' as const, onClick: () => openExternal(inc),
       selected: selection?.type === 'external' && selection.id === inc.id,
     })),
   ];
@@ -1397,9 +1426,13 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔥 {lang === 'fr' ? 'Feux de forêt' : 'Forest fires'}</span>
             <ToggleSwitch on={layerPrefs.feux_foret} onToggle={() => toggleLayer('feux_foret')} />
           </div>
-          <div className="layer-toggle" style={{ marginBottom: 0 }}>
+          <div className="layer-toggle" style={{ marginBottom: 8 }}>
             <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🍁 {lang === 'fr' ? 'Cabanes à sucre' : 'Sugar shacks'}</span>
             <ToggleSwitch on={layerPrefs.cabanes_a_sucre} onToggle={() => toggleLayer('cabanes_a_sucre')} />
+          </div>
+          <div className="layer-toggle" style={{ marginBottom: 0 }}>
+            <span style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 6 }}>🔌 {lang === 'fr' ? 'Bornes de recharge' : 'Charging stations'}</span>
+            <ToggleSwitch on={layerPrefs.bornes_recharge} onToggle={() => toggleLayer('bornes_recharge')} />
           </div>
         </div>
       )}

@@ -95,6 +95,7 @@ export class ExternalDataService {
     if (!source) return { synced: false, reason: 'source introuvable' };
     if (source.format === 'geojson') return this.syncGeojsonSource(source);
     if (source.format === 'json') return this.syncJsonSource(source);
+    if (source.format === 'csv') return this.syncCsvSource(source);
     return { synced: false, reason: `format ${source.format} non supporté par ce parseur pour l'instant` };
   }
 
@@ -162,6 +163,94 @@ export class ExternalDataService {
    * que d'en supposer un seul, faute d'avoir vu un échantillon confirmé
    * avant le premier déploiement de cette source.
    */
+  /**
+   * Sync pour les flux CSV (ex. bornes de recharge — Données Québec).
+   * Analyseur volontairement simple (sans dépendance) plutôt qu'une vraie
+   * librairie CSV : suffisant pour un CSV gouvernemental bien structuré,
+   * gère les champs entre guillemets contenant des virgules (adresses).
+   * Détecte le délimiteur (virgule ou point-virgule, ce dernier parfois
+   * utilisé par les jeux de données québécois) à partir de la ligne
+   * d'en-tête.
+   */
+  private async syncCsvSource(source: any) {
+    try {
+      const res = await fetch(source.feed_url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      if (lines.length < 2) return this.finalizeSync(source, []);
+
+      const delimiter = (lines[0].split(';').length > lines[0].split(',').length) ? ';' : ',';
+      const parseLine = (line: string): string[] => {
+        const cells: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            inQuotes = !inQuotes;
+          } else if (ch === delimiter && !inQuotes) {
+            cells.push(current.trim());
+            current = '';
+          } else {
+            current += ch;
+          }
+        }
+        cells.push(current.trim());
+        return cells;
+      };
+
+      const headers = parseLine(lines[0]).map((h) => h.trim());
+      const latIdx = headers.findIndex((h) => /^lat(itude)?$/i.test(h));
+      const lngIdx = headers.findIndex((h) => /^lon(gitude)?$/i.test(h));
+
+      const seenExternalIds: string[] = [];
+
+      for (let r = 1; r < lines.length; r++) {
+        const cells = parseLine(lines[r]);
+        const item: Record<string, string> = {};
+        headers.forEach((h, i) => { item[h] = cells[i] ?? ''; });
+
+        const lat = latIdx >= 0 ? parseFloat(cells[latIdx]) : NaN;
+        const lng = lngIdx >= 0 ? parseFloat(cells[lngIdx]) : NaN;
+        if (isNaN(lat) || isNaN(lng)) continue;
+
+        const externalId = String(item.NOM_BORNE_RECHARGE || item.ID || item.id || `${r}-${lat}-${lng}`);
+        seenExternalIds.push(externalId);
+        const title = item.NOM_BORNE_RECHARGE || item.NOM || item.Nom || source.name;
+
+        await this.db
+          .insertInto('external_incidents')
+          .values({
+            source_id: source.id,
+            external_id: externalId,
+            location: sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)` as any,
+            raw_geometry: null,
+            title,
+            description: null,
+            category: source.feed_key,
+            raw_data: item,
+            last_seen_at: new Date() as any,
+            is_stale: false,
+          })
+          .onConflict((oc) =>
+            oc.columns(['source_id', 'external_id']).doUpdateSet({
+              last_seen_at: new Date() as any,
+              is_stale: false,
+              raw_data: item,
+              title,
+            }),
+          )
+          .execute();
+      }
+
+      return this.finalizeSync(source, seenExternalIds);
+    } catch (error) {
+      return this.failSync(source, error);
+    }
+  }
+
   private async syncJsonSource(source: any) {
     try {
       const res = await fetch(source.feed_url);
@@ -185,7 +274,7 @@ export class ExternalDataService {
         const item = rawItem;
 
         const externalId = String(
-          item.id ?? item.noFeu ?? item.NoFeu ?? item.numero ?? item.SyndicObjectID ?? JSON.stringify(item).slice(0, 100),
+          item.id ?? item.ID ?? item.noFeu ?? item.NoFeu ?? item.numero ?? item.SyndicObjectID ?? JSON.stringify(item).slice(0, 100),
         );
         seenExternalIds.push(externalId);
 
@@ -194,18 +283,12 @@ export class ExternalDataService {
         let lat = latKey ? parseFloat(item[latKey]) : null;
         let lng = lngKey ? parseFloat(item[lngKey]) : null;
 
-        // Repli pour les structures imbriquées type Tourinsoft/SIT Québec
-        // (coordonnées sous item.Geolocalisations[0].Latitude/.Longitude).
-        if ((lat === null || isNaN(lat)) && Array.isArray(item.Geolocalisations) && item.Geolocalisations[0]) {
-          lat = parseFloat(item.Geolocalisations[0].Latitude);
-          lng = parseFloat(item.Geolocalisations[0].Longitude);
-        }
 
         const hasCoords = lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng);
 
         const title =
           item.Designation ?? item.SyndicObjectName ?? item.Identifications?.[0]?.Nomdefiche ??
-          item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
+          item.AddressInfo?.Title ?? item.nom ?? item.Nom ?? item.municipalite ?? item.Municipalite ?? `${source.name} #${externalId}`;
 
         await this.db
           .insertInto('external_incidents')
