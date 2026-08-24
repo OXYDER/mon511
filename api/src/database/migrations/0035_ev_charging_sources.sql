@@ -1,13 +1,18 @@
 -- Bornes de recharge électrique — deux sources complémentaires :
 --
--- 1. OpenChargeMap : couverture de tout le Québec.
+-- 1. OpenChargeMap : couverture de tout le Québec, via une boîte
+--    englobante (nord-ouest à sud-est) plutôt qu'un simple pays — le
+--    paramètre "statelevel" utilisé dans une version précédente de
+--    cette migration N'EXISTE PAS dans leur vraie API (vérifié contre
+--    leur documentation officielle après coup), ce qui faisait échouer
+--    silencieusement le filtrage par province.
 -- 2. Données Québec / Ville de Montréal : gratuite, aucune clé requise,
 --    mais couvre SEULEMENT le territoire de Montréal (voir métadonnées du
 --    jeu de données) — un bon complément officiel, pas un remplacement.
 INSERT INTO external_data_sources (name, provider, feed_key, feed_url, format, license_note, sync_frequency_minutes, active) VALUES
   (
     'Bornes de recharge (OpenChargeMap)', 'OpenChargeMap', 'openchargemap_qc',
-    'https://api.openchargemap.io/v3/poi/?output=json&countrycode=CA&statelevel=QC&maxresults=8000&compact=false&verbose=false&key=34cc3c8e-85c2-4639-bd0c-2e74827519c2',
+    'https://api.openchargemap.io/v3/poi/?output=json&countrycode=CA&boundingbox=%2862.6%2C-79.8%29%2C%2845.0%2C-57.1%29&maxresults=8000&compact=false&verbose=false&key=34cc3c8e-85c2-4639-bd0c-2e74827519c2',
     'json', 'OpenChargeMap — licence ouverte, voir openchargemap.org/site/developerinfo', 240, true
   ),
   (
