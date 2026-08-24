@@ -145,6 +145,9 @@ export class ExternalDataService {
               raw_data: props,
               title,
               description,
+              location: centroid
+                ? (sql`ST_SetSRID(ST_MakePoint(${centroid[0]}, ${centroid[1]}), 4326)` as any)
+                : null,
               raw_geometry: feature.geometry ?? null,
             }),
           )
@@ -240,6 +243,7 @@ export class ExternalDataService {
               is_stale: false,
               raw_data: item,
               title,
+              location: sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)` as any,
             }),
           )
           .execute();
@@ -324,6 +328,7 @@ export class ExternalDataService {
               is_stale: false,
               raw_data: item,
               title,
+              location: hasCoords ? (sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)` as any) : null,
             }),
           )
           .execute();
