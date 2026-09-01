@@ -32,6 +32,38 @@ export class MunicipalPortalService {
       .execute();
   }
 
+  /** Statut d'accès au portail municipal pour l'usager courant — utilisé
+   * par le frontend pour savoir quel écran montrer (formulaire de
+   * demande / page d'attente / vrai portail). Trois états possibles :
+   * 'none' (jamais demandé, ou demande déjà refusée), 'pending'
+   * (demande envoyée, en attente de validation), 'approved' (déjà
+   * municipal_staff ou municipal_admin). */
+  async getMyAccessStatus(userId: string) {
+    const user = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .leftJoin('regions', 'regions.id', 'users.region_id')
+      .select(['roles.name as roleName', 'regions.name_fr as regionName'])
+      .where('users.id', '=', userId)
+      .executeTakeFirst();
+
+    if (user && (user.roleName === 'municipal_staff' || user.roleName === 'municipal_admin')) {
+      return { status: 'approved' as const, role: user.roleName, regionName: user.regionName };
+    }
+
+    const pending = await this.db
+      .selectFrom('municipality_access_requests')
+      .innerJoin('regions', 'regions.id', 'municipality_access_requests.region_id')
+      .select('regions.name_fr as regionName')
+      .where('user_id', '=', userId)
+      .where('status', '=', 'pending')
+      .executeTakeFirst();
+
+    if (pending) return { status: 'pending' as const, regionName: pending.regionName };
+
+    return { status: 'none' as const };
+  }
+
   /** Page publique d'une municipalité — accessible à tout le monde, pas
    * seulement les usagers connectés. Existe pour TOUTE municipalité dès
    * maintenant, peu importe si elle a déjà été « réclamée » par un
@@ -105,29 +137,33 @@ export class MunicipalPortalService {
       .returningAll()
       .executeTakeFirstOrThrow();
 
-    // Premier membre approuvé pour cette municipalité — devient
-    // automatiquement gestionnaire principal (municipal_admin), sans
-    // attendre l'approbation d'un admin du site : personne d'autre
-    // n'existe encore pour approuver, et attendre bloquerait
-    // indéfiniment la toute première inscription d'une municipalité.
-    const existingStaff = await this.db
-      .selectFrom('users')
-      .innerJoin('roles', 'roles.id', 'users.role_id')
-      .select('users.id')
-      .where('users.region_id', '=', regionId)
-      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
-      .executeTakeFirst();
-
-    if (!existingStaff) {
-      await this.applyApproval(request.id, userId, regionId, 'municipal_admin', userId);
+    // L'auto-approbation du premier membre a été retirée — même la toute
+    // première demande pour une municipalité doit maintenant passer par
+    // une vraie validation manuelle d'un admin du site, sans exception.
+    // Une approbation instantanée sans aucune vérification aurait permis
+    // à n'importe qui de revendiquer n'importe quelle municipalité non
+    // réclamée sans contrôle.
+    const user = await this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirst();
+    const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', regionId).executeTakeFirst();
+    if (user) {
+      this.email
+        .send(
+          user.email,
+          'Demande reçue — en attente de validation — mon511.ca',
+          `Ta demande d'accès au portail municipal pour ${region?.name_fr ?? 'cette municipalité'} a bien été reçue. Elle est maintenant en attente de validation par notre équipe — tu recevras un courriel dès qu'elle sera traitée.`,
+        )
+        .catch(() => {});
     }
 
     return request;
   }
 
-  /** Logique d'approbation partagée — réutilisée par l'auto-approbation du
-   * premier membre ET l'approbation manuelle (par un admin du site ou par
-   * le gestionnaire municipal déjà en place pour cette région). */
+  /** Logique d'approbation partagée — réutilisée par l'approbation
+   * manuelle (par un admin du site, ou par le gestionnaire municipal
+   * déjà en place pour cette région, pour les demandes suivant la
+   * première). L'auto-approbation du premier membre a été retirée —
+   * voir requestAccess() — mais cette fonction reste réutilisée pour
+   * toute approbation manuelle, peu importe qui l'effectue. */
   private async applyApproval(requestId: string, targetUserId: string, regionId: string, roleName: 'municipal_staff' | 'municipal_admin', reviewerId: string) {
     const role = await this.db.selectFrom('roles').select('id').where('name', '=', roleName).executeTakeFirstOrThrow();
 

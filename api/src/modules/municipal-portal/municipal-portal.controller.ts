@@ -22,6 +22,12 @@ export class MunicipalPortalController {
     return this.service.searchRegions(search);
   }
 
+  @Get('my-access-status')
+  @UseGuards(JwtAuthGuard)
+  getMyAccessStatus(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyAccessStatus(user.userId);
+  }
+
   @Get('public/:regionId')
   @UseGuards(JwtAuthGuard)
   findPublicMunicipalityPage(@Param('regionId') regionId: string) {
