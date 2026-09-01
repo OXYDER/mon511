@@ -78,6 +78,16 @@ export interface ProblemTypesTable {
   active: Generated<boolean>;
 }
 
+export interface IncidentsTable {
+  id: Generated<string>;
+  region_id: string | null;
+  problem_type_id: string;
+  location: string; // geometry(Point, 4326), manipulé via ST_* dans les requêtes
+  first_reported_at: Generated<Timestamp>;
+  last_reported_at: Generated<Timestamp>;
+  created_at: Generated<Timestamp>;
+}
+
 export interface ReportsTable {
   id: Generated<string>;
   user_id: string | null;
@@ -91,6 +101,7 @@ export interface ReportsTable {
   municipality_notified: Generated<'yes' | 'no' | 'unknown'>;
   municipality_name: string | null;
   municipality_case_number: string | null;
+  incident_id: string | null;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
   resolved_at: Timestamp | null;
@@ -492,6 +503,7 @@ export interface Database {
   verification_codes: VerificationCodesTable;
   problem_categories: ProblemCategoriesTable;
   problem_types: ProblemTypesTable;
+  incidents: IncidentsTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

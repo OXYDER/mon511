@@ -357,6 +357,64 @@ export class ReportsService {
     return Number(result?.count ?? 0);
   }
 
+  /** Rattrapage rétroactif — regroupe en incidents les signalements créés
+   * AVANT que ce système existe (incident_id encore NULL). Réutilise
+   * exactement la même logique que create() (même seuil de 40m, même
+   * exigence de type/région identiques), appliquée dans l'ORDRE
+   * CHRONOLOGIQUE de création — pour que le résultat soit identique à ce
+   * qui se serait produit si le regroupement avait existé depuis le
+   * début. Déclenchement manuel depuis l'admin (comme les sources de
+   * données externes), pas automatique au démarrage — potentiellement
+   * lent selon le nombre de signalements à traiter. */
+  async backfillIncidents(): Promise<{ processed: number; incidentsCreated: number; attachedToExisting: number }> {
+    const ungrouped = await this.db
+      .selectFrom('reports')
+      .select(['id', 'region_id', 'problem_type_id', sql<number>`ST_X(location::geometry)`.as('lng'), sql<number>`ST_Y(location::geometry)`.as('lat')])
+      .where('incident_id', 'is', null)
+      .where('region_id', 'is not', null)
+      .orderBy('created_at', 'asc')
+      .execute();
+
+    let incidentsCreated = 0;
+    let attachedToExisting = 0;
+
+    for (const r of ungrouped) {
+      const nearbyOpenIncident = await this.db
+        .selectFrom('incidents')
+        .select('id')
+        .where('region_id', '=', r.region_id!)
+        .where('problem_type_id', '=', r.problem_type_id)
+        .where(sql<boolean>`ST_DWithin(ST_Transform(location, 32198), ST_Transform(ST_SetSRID(ST_MakePoint(${r.lng}, ${r.lat}), 4326), 32198), 40)`)
+        .where(sql<boolean>`EXISTS (SELECT 1 FROM reports rr WHERE rr.incident_id = incidents.id AND rr.status IN ('pending_moderation', 'published_unresolved'))`)
+        .orderBy(sql`ST_Distance(ST_Transform(location, 32198), ST_Transform(ST_SetSRID(ST_MakePoint(${r.lng}, ${r.lat}), 4326), 32198))`, 'asc')
+        .limit(1)
+        .executeTakeFirst();
+
+      let incidentId: string;
+      if (nearbyOpenIncident) {
+        incidentId = nearbyOpenIncident.id;
+        await this.db.updateTable('incidents').set({ last_reported_at: new Date() as any }).where('id', '=', incidentId).execute();
+        attachedToExisting++;
+      } else {
+        const newIncident = await this.db
+          .insertInto('incidents')
+          .values({
+            region_id: r.region_id!,
+            problem_type_id: r.problem_type_id,
+            location: sql`ST_SetSRID(ST_MakePoint(${r.lng}, ${r.lat}), 4326)` as any,
+          })
+          .returning('id')
+          .executeTakeFirstOrThrow();
+        incidentId = newIncident.id;
+        incidentsCreated++;
+      }
+
+      await this.db.updateTable('reports').set({ incident_id: incidentId }).where('id', '=', r.id).execute();
+    }
+
+    return { processed: ungrouped.length, incidentsCreated, attachedToExisting };
+  }
+
   async create(userId: string | null, dto: CreateReportDto) {
     const report = await this.db.transaction().execute(async (trx) => {
       let region = await trx
@@ -384,12 +442,59 @@ export class ReportsService {
           .executeTakeFirst();
       }
 
+      // Regroupement en incidents — un incident représente UN problème
+      // physique réel (ex. un nid-de-poule précis) qui peut recevoir
+      // plusieurs signalements citoyens distincts, pour que le portail
+      // municipal travaille sur "un problème", pas "8 tickets
+      // identiques". STANDARD ÉTABLI : même municipalité, même type de
+      // problème, à moins de 40 mètres d'un incident encore ouvert (au
+      // moins un signalement pas encore résolu/rejeté qui lui est
+      // rattaché) — volontairement beaucoup plus serré que le
+      // regroupement en "zones" du rapport municipal (250m, une mesure
+      // statistique plus large) : ici, on affirme que c'est LE MÊME
+      // défaut physique, pas juste "le même secteur". 40m tient compte
+      // de l'imprécision GPS typique d'un téléphone tout en restant
+      // assez serré pour éviter de fusionner deux problèmes distincts
+      // mais rapprochés. Si l'incident le plus proche n'a plus aucun
+      // signalement actif (tous résolus/rejetés), on considère qu'il
+      // s'agit d'un NOUVEAU problème plutôt que de rouvrir l'ancien.
+      let incidentId: string | null = null;
+      if (region?.id) {
+        const nearbyOpenIncident = await trx
+          .selectFrom('incidents')
+          .select('id')
+          .where('region_id', '=', region.id)
+          .where('problem_type_id', '=', dto.problemTypeId)
+          .where(sql<boolean>`ST_DWithin(ST_Transform(location, 32198), ST_Transform(ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326), 32198), 40)`)
+          .where(sql<boolean>`EXISTS (SELECT 1 FROM reports r WHERE r.incident_id = incidents.id AND r.status IN ('pending_moderation', 'published_unresolved'))`)
+          .orderBy(sql`ST_Distance(ST_Transform(location, 32198), ST_Transform(ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326), 32198))`, 'asc')
+          .limit(1)
+          .executeTakeFirst();
+
+        if (nearbyOpenIncident) {
+          incidentId = nearbyOpenIncident.id;
+          await trx.updateTable('incidents').set({ last_reported_at: new Date() as any }).where('id', '=', incidentId).execute();
+        } else {
+          const newIncident = await trx
+            .insertInto('incidents')
+            .values({
+              region_id: region.id,
+              problem_type_id: dto.problemTypeId,
+              location: sql`ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326)` as any,
+            })
+            .returning('id')
+            .executeTakeFirstOrThrow();
+          incidentId = newIncident.id;
+        }
+      }
+
       const report = await trx
         .insertInto('reports')
         .values({
           user_id: userId,
           problem_type_id: dto.problemTypeId,
           region_id: region?.id ?? null,
+          incident_id: incidentId,
           location: sql`ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326)` as any,
           gps_accuracy_m: dto.gpsAccuracyM ?? null,
           address_text: dto.addressText ?? null,

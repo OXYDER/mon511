@@ -4,11 +4,20 @@ import { CreateReportDto } from './dto/create-report.dto';
 import { SuggestResolutionDto } from './dto/suggest-resolution.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../auth/guards/optional-jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser, CurrentUserPayload } from '../../auth/decorators/current-user.decorator';
 
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
+
+  @Post('admin/backfill-incidents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  backfillIncidents() {
+    return this.reportsService.backfillIncidents();
+  }
 
   @Get('count-by-municipality')
   countByMunicipality(@Query('name') name: string) {

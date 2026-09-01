@@ -151,6 +151,13 @@ export class MunicipalPortalController {
     return this.service.findMyRegionReportsQueue(user.userId);
   }
 
+  @Get('my-region/incidents/:groupKey/reports')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findIncidentReports(@Param('groupKey') groupKey: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findIncidentReports(user.userId, groupKey);
+  }
+
   @Post('my-region/reports/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

@@ -554,8 +554,52 @@ export class MunicipalPortalService {
     return this.getReportSettingsForRegion(regionId);
   }
 
+  /** File de signalements du portail municipal — REGROUPÉE PAR INCIDENT
+   * plutôt qu'un signalement individuel à la fois (voir
+   * reports.service.ts pour la logique de regroupement à la création).
+   * Les signalements sans incident_id (pas encore rattrapés, ou hors de
+   * toute région connue) forment chacun leur propre groupe d'un seul
+   * signalement — jamais perdus, juste pas encore fusionnés avec
+   * d'autres. Le signalement le plus ancien de chaque groupe sert de
+   * représentant (adresse, type, photo). */
   async findMyRegionReportsQueue(userId: string) {
     const { regionId } = await this.getScopeOrThrow(userId);
+
+    return sql<{
+      groupKey: string; incidentId: string | null; representativeReportId: string;
+      problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null;
+      reportCount: number; firstReportedAt: Date; lastReportedAt: Date; thumbnailUrl: string | null;
+    }>`
+      WITH grouped AS (
+        SELECT
+          COALESCE(incident_id::text, id::text) AS group_key,
+          incident_id, id, problem_type_id, address_text, created_at,
+          ROW_NUMBER() OVER (PARTITION BY COALESCE(incident_id::text, id::text) ORDER BY created_at ASC) AS rn
+        FROM reports
+        WHERE region_id = ${regionId} AND status IN ('pending_moderation', 'published_unresolved')
+      )
+      SELECT
+        g.group_key AS "groupKey", g.incident_id AS "incidentId", g.id AS "representativeReportId",
+        pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon", g.address_text AS "addressText",
+        (SELECT count(*) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key AND r2.status != 'rejected') AS "reportCount",
+        (SELECT min(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "firstReportedAt",
+        (SELECT max(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "lastReportedAt",
+        (SELECT url FROM report_photos WHERE report_photos.report_id = g.id ORDER BY uploaded_at ASC LIMIT 1) AS "thumbnailUrl"
+      FROM grouped g
+      INNER JOIN problem_types pt ON pt.id = g.problem_type_id
+      WHERE g.rn = 1
+      ORDER BY "lastReportedAt" DESC
+    `.execute(this.db).then((r) => r.rows);
+  }
+
+  /** Détail des signalements individuels d'un incident (ou d'un groupe
+   * d'un seul, si jamais rattaché) — pour voir "8 signalements" en
+   * cliquant sur la carte groupée du portail. */
+  async findIncidentReports(userId: string, groupKey: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    // groupKey est soit un vrai incident_id, soit l'id d'un signalement
+    // seul (jamais rattaché à un incident) — les deux cas sont couverts
+    // par la même comparaison COALESCE que la requête groupée ci-dessus.
     return this.db
       .selectFrom('reports')
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
@@ -565,8 +609,8 @@ export class MunicipalPortalService {
         sql<string | null>`(SELECT url FROM report_photos WHERE report_photos.report_id = reports.id ORDER BY uploaded_at ASC LIMIT 1)`.as('thumbnailUrl'),
       ])
       .where('reports.region_id', '=', regionId)
-      .where('reports.status', 'in', ['pending_moderation', 'published_unresolved'])
-      .orderBy('reports.created_at', 'desc')
+      .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${groupKey}`)
+      .orderBy('reports.created_at', 'asc')
       .execute();
   }
 

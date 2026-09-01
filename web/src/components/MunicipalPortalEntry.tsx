@@ -289,23 +289,64 @@ function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
 }
 
 function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
-  const [reports, setReports] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [expandedReports, setExpandedReports] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   useEffect(() => {
-    api.get<any[]>('/municipal-portal/my-region/reports/queue').then(setReports).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/reports/queue').then(setGroups).catch(() => {});
   }, []);
+
+  async function toggleExpand(groupKey: string) {
+    if (expandedKey === groupKey) { setExpandedKey(null); return; }
+    setExpandedKey(groupKey);
+    const reports = await api.get<any[]>(`/municipal-portal/my-region/incidents/${groupKey}/reports`).catch(() => []);
+    setExpandedReports(reports);
+  }
 
   return (
     <div>
-      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Tous les signalements' : 'All reports'} ({reports.length})</div>
-      {reports.map((r) => (
-        <div key={r.id} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5 }}>
-          {r.thumbnailUrl ? <img src={r.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{r.problemTypeIcon ?? '📍'}</div>}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600 }}>{r.problemTypeNameFr}</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.address_text ?? '—'}</div>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Tous les signalements' : 'All reports'} ({groups.length} {fr ? 'incidents' : 'incidents'})</div>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+        {fr
+          ? "Les signalements du même problème, proches les uns des autres, sont regroupés — clique pour voir les déclarations individuelles."
+          : 'Reports of the same problem, close to each other, are grouped — click to see individual declarations.'}
+      </p>
+      {groups.map((g) => (
+        <div key={g.groupKey}>
+          <div
+            onClick={() => toggleExpand(g.groupKey)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5, cursor: 'pointer' }}
+          >
+            {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                {g.reportCount > 1
+                  ? (fr ? `${g.reportCount} signalements citoyens` : `${g.reportCount} citizen reports`)
+                  : (fr ? '1 signalement' : '1 report')}
+                {' · '}
+                {fr ? 'Premier' : 'First'} {new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}
+                {g.reportCount > 1 && <> · {fr ? 'Dernier' : 'Last'} {new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</>}
+              </div>
+            </div>
+            {g.reportCount > 1 && (
+              <div style={{ background: 'var(--accent-signal)', color: '#14161B', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                {g.reportCount}
+              </div>
+            )}
           </div>
+          {expandedKey === g.groupKey && (
+            <div style={{ padding: '4px 0 10px 54px' }}>
+              {expandedReports.map((r) => (
+                <div key={r.id} style={{ fontSize: 11.5, color: 'var(--text-muted)', padding: '4px 0' }}>
+                  {new Date(r.created_at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  {r.description && <> — {r.description}</>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
     </div>
