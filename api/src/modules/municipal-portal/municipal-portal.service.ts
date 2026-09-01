@@ -294,7 +294,7 @@ export class MunicipalPortalService {
 
   static readonly REPORT_STAT_KEYS = [
     'active_by_type', 'resolved_period', 'new_period', 'removed_period',
-    'ranking', 'resolution_performance', 'top_streets', 'most_confirmed',
+    'ranking', 'resolution_performance', 'problematic_zones', 'most_confirmed',
   ] as const;
 
   /** Calcule toutes les statistiques disponibles pour une municipalité,
@@ -309,7 +309,7 @@ export class MunicipalPortalService {
     const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr']).where('id', '=', regionId).executeTakeFirst();
     if (!region) throw new NotFoundException('Municipalité introuvable.');
 
-    const [activeByType, resolvedCount, newCount, removedCount, ranking, resolutionPerf, topStreets, mostConfirmed] = await Promise.all([
+    const [activeByType, resolvedCount, newCount, removedCount, ranking, resolutionPerf, problematicZones, mostConfirmed] = await Promise.all([
       // Signalements actifs, par type
       this.db
         .selectFrom('reports')
@@ -378,23 +378,40 @@ export class MunicipalPortalService {
         .where('region_id', '=', regionId)
         .executeTakeFirst(),
 
-      // Rues/routes les plus problématiques — heuristique simple :
-      // portion avant la première virgule de l'adresse (format habituel
-      // "123 rue Principale, Ville, QC"), pas de champ "rue" structuré
-      // dans le schéma actuel.
-      this.db
-        .selectFrom('reports')
-        .select([
-          sql<string>`split_part(address_text, ',', 1)`.as('street'),
-          sql<number>`count(*)`.as('count'),
-        ])
-        .where('region_id', '=', regionId)
-        .where('status', 'in', ['published_unresolved', 'published_resolved'])
-        .where('address_text', 'is not', null)
-        .groupBy(sql`split_part(address_text, ',', 1)`)
-        .orderBy('count', 'desc')
-        .limit(15)
-        .execute(),
+      // Zones routières les plus problématiques — REGROUPEMENT GÉOGRAPHIQUE
+      // réel (PostGIS ST_ClusterDBSCAN), pas seulement le texte de
+      // l'adresse. Le nom de rue seul (numéro civique retiré) sert de
+      // partition — le regroupement par distance ne se fait donc jamais
+      // entre deux rues différentes — puis les signalements à moins de
+      // 150 mètres les uns des autres sur cette même rue sont regroupés
+      // en une seule « zone ». STANDARD ÉTABLI : 150 mètres correspond
+      // approximativement à un pâté de maisons typique au Québec — assez
+      // pour regrouper des signalements clairement dans le même secteur
+      // problématique, sans fusionner des extrémités éloignées d'une
+      // longue route. minpoints=2 exclut les signalements isolés (pas
+      // vraiment une « zone » à eux seuls) — voir WHERE cluster_id IS
+      // NOT NULL plus bas.
+      sql<{ streetName: string; minCivic: number | null; maxCivic: number | null; count: number; centerLat: number; centerLng: number }>`
+        SELECT street_name AS "streetName", min(civic_number) AS "minCivic", max(civic_number) AS "maxCivic",
+               count(*) AS count, avg(ST_Y(location::geometry)) AS "centerLat", avg(ST_X(location::geometry)) AS "centerLng"
+        FROM (
+          SELECT
+            regexp_replace(split_part(address_text, ',', 1), '^\s*\d+[A-Za-z]?\s*', '') AS street_name,
+            (substring(split_part(address_text, ',', 1) FROM '^\s*(\d+)'))::int AS civic_number,
+            location,
+            ST_ClusterDBSCAN(location, eps := 150, minpoints := 2) OVER (
+              PARTITION BY regexp_replace(split_part(address_text, ',', 1), '^\s*\d+[A-Za-z]?\s*', '')
+            ) AS cluster_id
+          FROM reports
+          WHERE region_id = ${regionId}
+            AND status IN ('published_unresolved', 'published_resolved')
+            AND address_text IS NOT NULL
+        ) clustered
+        WHERE cluster_id IS NOT NULL
+        GROUP BY street_name, cluster_id
+        ORDER BY count DESC
+        LIMIT 15
+      `.execute(this.db).then((r) => r.rows),
 
       // Signalements avec le plus de confirmations "Présent"
       this.db
@@ -437,7 +454,16 @@ export class MunicipalPortalService {
           ? Math.round((Number(resolutionPerf.avgResolutionSeconds) / 86400) * 10) / 10
           : null,
       },
-      topStreets: topStreets.map((s) => ({ street: s.street?.trim() || '—', count: Number(s.count) })),
+      problematicZones: problematicZones.map((z) => ({
+        streetName: z.streetName?.trim() || '—',
+        // Plage réelle des numéros civiques regroupés dans cette zone —
+        // un seul numéro si tous les signalements du groupe partagent le
+        // même (rare mais possible), sinon min-max.
+        civicRange: z.minCivic === z.maxCivic ? String(z.minCivic ?? '') : `${z.minCivic}-${z.maxCivic}`,
+        count: Number(z.count),
+        centerLat: Number(z.centerLat),
+        centerLng: Number(z.centerLng),
+      })),
       mostConfirmed: mostConfirmed.map((r) => ({
         id: r.id, addressText: r.addressText, typeName: r.typeName, icon: r.icon, confirmationsCount: Number(r.confirmationsCount),
       })),
@@ -763,12 +789,24 @@ export class MunicipalPortalService {
         `<p style="font-size:13px;margin:0;">Taux de résolution : <strong>${stats.resolutionPerformance.rate !== null ? stats.resolutionPerformance.rate + ' %' : 'N/D'}</strong><br />Temps moyen de résolution : <strong>${stats.resolutionPerformance.avgResolutionDays !== null ? stats.resolutionPerformance.avgResolutionDays + ' jours' : 'N/D'}</strong></p>`,
       );
     }
-    if (enabledStats.includes('top_streets')) {
-      const rows = stats.topStreets.slice(0, 10).map((s) => `<tr><td style="padding:4px 8px;">${s.street}</td><td style="padding:4px 8px;text-align:right;">${s.count}</td></tr>`).join('');
-      html += section('Rues les plus problématiques', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucune</td></tr>'}</table>`);
+    if (enabledStats.includes('problematic_zones')) {
+      const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+      // Zoom 17 — assez rapproché pour bien voir les signalements
+      // individuels d'une zone d'environ 150 mètres (le standard de
+      // regroupement établi ci-dessus, voir computeReportStats).
+      const rows = stats.problematicZones.slice(0, 10).map((z) => {
+        const label = z.civicRange ? `${z.civicRange} ${z.streetName}` : z.streetName;
+        const url = `${frontendUrl}/?lat=${z.centerLat}&lng=${z.centerLng}&zoom=17`;
+        return `<tr><td style="padding:4px 8px;"><a href="${url}" style="color:#FF5A1F;text-decoration:none;">${label}</a></td><td style="padding:4px 8px;text-align:right;">${z.count}</td></tr>`;
+      }).join('');
+      html += section('Zones routières les plus problématiques', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucune</td></tr>'}</table>`);
     }
     if (enabledStats.includes('most_confirmed')) {
-      const rows = stats.mostConfirmed.map((r) => `<tr><td style="padding:4px 8px;">${r.icon ?? '📍'} ${r.typeName} — ${r.addressText ?? 'Adresse inconnue'}</td><td style="padding:4px 8px;text-align:right;">👍 ${r.confirmationsCount}</td></tr>`).join('');
+      const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+      const rows = stats.mostConfirmed.map((r) => {
+        const url = `${frontendUrl}/?report=${r.id}`;
+        return `<tr><td style="padding:4px 8px;">${r.icon ?? '📍'} ${r.typeName} — <a href="${url}" style="color:#FF5A1F;text-decoration:none;">${r.addressText ?? 'Voir le signalement'}</a></td><td style="padding:4px 8px;text-align:right;">👍 ${r.confirmationsCount}</td></tr>`;
+      }).join('');
       html += section('Signalements les plus confirmés ("Présent")', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucun</td></tr>'}</table>`);
     }
 

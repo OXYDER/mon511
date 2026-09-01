@@ -1052,7 +1052,7 @@ function MunicipalitiesAdmin() {
     removed_period: 'Retirés durant la période',
     ranking: 'Classement TOP 100 vs autres municipalités',
     resolution_performance: 'Taux et temps moyen de résolution',
-    top_streets: 'Rues les plus problématiques',
+    problematic_zones: 'Zones routières les plus problématiques',
     most_confirmed: 'Signalements les plus confirmés ("Présent")',
   };
 

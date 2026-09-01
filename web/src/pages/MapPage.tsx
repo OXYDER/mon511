@@ -711,6 +711,17 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       // chaque rafraîchissement de la page.
       window.history.replaceState({}, '', window.location.pathname);
     }
+
+    // Liens directs vers un point géographique précis — utilisé par les
+    // « zones routières les plus problématiques » du rapport municipal
+    // périodique, pour centrer la carte sur la zone plutôt que d'ouvrir
+    // un lien Google Maps externe.
+    const linkLat = params.get('lat');
+    const linkLng = params.get('lng');
+    if (linkLat && linkLng) {
+      setMapCamera({ lat: parseFloat(linkLat), lng: parseFloat(linkLng), zoom: params.get('zoom') ? Number(params.get('zoom')) : 17 });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
