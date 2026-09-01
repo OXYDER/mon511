@@ -184,8 +184,8 @@ export class MunicipalPortalController {
   @Patch('my-region/report/settings')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_admin')
-  updateMyRegionReportSettings(@CurrentUser() user: CurrentUserPayload, @Body() body: { frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
-    return this.service.updateMyRegionReportSettings(user.userId, body.frequency, body.enabledStats);
+  updateMyRegionReportSettings(@CurrentUser() user: CurrentUserPayload, @Body() body: { enabled: boolean; frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
+    return this.service.updateMyRegionReportSettings(user.userId, body.enabled, body.frequency, body.enabledStats);
   }
 
   @Get('admin/regions/:regionId/report/settings')
@@ -198,8 +198,8 @@ export class MunicipalPortalController {
   @Patch('admin/regions/:regionId/report/settings')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')
-  updateRegionReportSettings(@Param('regionId') regionId: string, @Body() body: { frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
-    return this.service.updateReportSettingsForRegion(regionId, body.frequency, body.enabledStats);
+  updateRegionReportSettings(@Param('regionId') regionId: string, @Body() body: { enabled: boolean; frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
+    return this.service.updateReportSettingsForRegion(regionId, body.enabled, body.frequency, body.enabledStats);
   }
 
   @Post('admin/regions/:regionId/report/test-send')

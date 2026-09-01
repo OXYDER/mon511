@@ -308,6 +308,7 @@ export interface MunicipalitySubscriptionsTable {
 
 export interface MunicipalityReportSettingsTable {
   region_id: string;
+  enabled: Generated<boolean>;
   frequency: Generated<'weekly' | 'monthly'>;
   enabled_stats: Generated<string[]>;
   last_report_sent_at: Timestamp | null;

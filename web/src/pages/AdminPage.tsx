@@ -1038,6 +1038,23 @@ function MunicipalitiesAdmin() {
   const [form, setForm] = useState<any>({});
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportSettings, setReportSettings] = useState<{ enabled: boolean; frequency: 'weekly' | 'monthly'; enabled_stats: string[] } | null>(null);
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportFeedback, setReportFeedback] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState('');
+  const [testSending, setTestSending] = useState(false);
+  const [testFeedback, setTestFeedback] = useState<string | null>(null);
+
+  const REPORT_STAT_LABELS: Record<string, string> = {
+    active_by_type: 'Signalements actifs par type',
+    resolved_period: 'Résolus durant la période',
+    new_period: 'Nouveaux durant la période',
+    removed_period: 'Retirés durant la période',
+    ranking: 'Classement TOP 100 vs autres municipalités',
+    resolution_performance: 'Taux et temps moyen de résolution',
+    top_streets: 'Rues les plus problématiques',
+    most_confirmed: 'Signalements les plus confirmés ("Présent")',
+  };
 
   async function load() {
     try {
@@ -1063,15 +1080,52 @@ function MunicipalitiesAdmin() {
       contactWebsite: m.contact_website ?? '',
       mailingAddress: m.mailing_address ?? '',
       postalCode: m.postal_code ?? '',
-      autoSendEnabled: m.auto_send_enabled,
     });
     setFeedback(null);
+    setReportSettings(null);
+    setReportFeedback(null);
+    setTestFeedback(null);
+    api.get<any>(`/municipal-portal/admin/regions/${m.region_id}/report/settings`).then(setReportSettings).catch(() => {});
   }
 
-  async function toggleAutoSend(m: any) {
-    await api.patch(`/municipality-integrations/${m.id}/auto-send`, { enabled: !m.auto_send_enabled });
-    load();
-    if (selected?.id === m.id) setForm((f: any) => ({ ...f, autoSendEnabled: !f.autoSendEnabled }));
+  function toggleReportStat(key: string) {
+    setReportSettings((prev) => {
+      if (!prev) return prev;
+      const has = prev.enabled_stats.includes(key);
+      return { ...prev, enabled_stats: has ? prev.enabled_stats.filter((k) => k !== key) : [...prev.enabled_stats, key] };
+    });
+  }
+
+  async function saveReportSettings() {
+    if (!selected || !reportSettings) return;
+    setReportSaving(true);
+    setReportFeedback(null);
+    try {
+      await api.patch(`/municipal-portal/admin/regions/${selected.region_id}/report/settings`, {
+        enabled: reportSettings.enabled,
+        frequency: reportSettings.frequency,
+        enabledStats: reportSettings.enabled_stats,
+      });
+      setReportFeedback('Enregistré.');
+    } catch (err) {
+      setReportFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setReportSaving(false);
+    }
+  }
+
+  async function sendTestReport() {
+    if (!selected || !testEmail.trim()) return;
+    setTestSending(true);
+    setTestFeedback(null);
+    try {
+      await api.post(`/municipal-portal/admin/regions/${selected.region_id}/report/test-send`, { email: testEmail });
+      setTestFeedback(`Envoyé à ${testEmail}.`);
+    } catch (err) {
+      setTestFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setTestSending(false);
+    }
   }
 
   async function save() {
@@ -1080,7 +1134,10 @@ function MunicipalitiesAdmin() {
     try {
       await api.post('/municipality-integrations', {
         regionId: selected.region_id,
-        autoSendEnabled: form.autoSendEnabled,
+        // L'envoi individuel par signalement approuvé est retiré du flux
+        // (voir moderation.service.ts) — toujours false, gardé ici juste
+        // parce que le champ est requis par ce endpoint historique.
+        autoSendEnabled: false,
         contactEmail: form.contactEmail || undefined,
         contactPhone: form.contactPhone || undefined,
         contactWebsite: form.contactWebsite || undefined,
@@ -1132,11 +1189,6 @@ function MunicipalitiesAdmin() {
               <div className="rc-title">{m.regionNameFr}</div>
               <div className="rc-meta">{m.contact_email ?? 'Aucun courriel'}</div>
             </div>
-            <ToggleSwitch
-              on={m.auto_send_enabled}
-              onToggle={(e?: any) => { e?.stopPropagation?.(); toggleAutoSend(m); }}
-              title={m.auto_send_enabled ? 'Envoi automatique activé' : 'Envoi automatique désactivé'}
-            />
           </div>
         ))}
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
@@ -1156,10 +1208,66 @@ function MunicipalitiesAdmin() {
             <div className="detail-title" style={{ fontSize: 17, marginBottom: 4 }}>{selected.regionNameFr}</div>
             {selected.mrc_name && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 16 }}>{selected.mrc_name}{selected.population ? ` · ${selected.population.toLocaleString('fr-CA')} habitants` : ''}</div>}
 
-            <div className="privacy-row">
-              <span>Envoi automatique des signalements approuvés</span>
-              <ToggleSwitch on={form.autoSendEnabled} onToggle={() => setForm((f: any) => ({ ...f, autoSendEnabled: !f.autoSendEnabled }))} />
-            </div>
+            <div className="section-label" style={{ marginTop: 0 }}>Rapport périodique</div>
+            {!reportSettings && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Chargement...</div>}
+            {reportSettings && (
+              <>
+                <div className="privacy-row">
+                  <span>Activer le rapport périodique</span>
+                  <ToggleSwitch on={reportSettings.enabled} onToggle={() => setReportSettings((s) => (s ? { ...s, enabled: !s.enabled } : s))} />
+                </div>
+
+                {reportSettings.enabled && (
+                  <>
+                    <div className="field-group" style={{ marginTop: 12 }}>
+                      <label className="field-label">Fréquence d'envoi</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          className="btn-ghost"
+                          style={{ flex: 1, border: reportSettings.frequency === 'weekly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+                          onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'weekly' } : s))}
+                        >
+                          Hebdomadaire
+                        </button>
+                        <button
+                          className="btn-ghost"
+                          style={{ flex: 1, border: reportSettings.frequency === 'monthly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+                          onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'monthly' } : s))}
+                        >
+                          Mensuelle
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="field-group">
+                      <label className="field-label">Statistiques affichées (courriel et portail)</label>
+                      {Object.entries(REPORT_STAT_LABELS).map(([key, label]) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 12.5 }}>
+                          <input type="checkbox" checked={reportSettings.enabled_stats.includes(key)} onChange={() => toggleReportStat(key)} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                <button className="btn-primary" onClick={saveReportSettings} disabled={reportSaving} style={{ marginTop: 4 }}>
+                  {reportSaving ? 'Enregistrement...' : 'Enregistrer le rapport'}
+                </button>
+                {reportFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{reportFeedback}</div>}
+
+                <div className="field-group" style={{ marginTop: 16 }}>
+                  <label className="field-label">Envoyer un test (30 derniers jours, statistiques actuelles)</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input className="text-input" type="email" placeholder="ton.courriel@exemple.com" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} />
+                    <button className="btn-ghost" onClick={sendTestReport} disabled={testSending || !testEmail.trim()}>
+                      {testSending ? 'Envoi...' : '✉️ Tester'}
+                    </button>
+                  </div>
+                  {testFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{testFeedback}</div>}
+                </div>
+              </>
+            )}
 
             <div className="field-group" style={{ marginTop: 16 }}>
               <label className="field-label">Courriel de contact</label>

@@ -459,25 +459,28 @@ export class MunicipalPortalService {
     if (existing) return existing;
     // Pas encore de ligne pour cette municipalité — valeurs par défaut,
     // sans créer la ligne tant que rien n'a été modifié explicitement.
+    // Désactivé par défaut — une municipalité doit choisir explicitement
+    // de recevoir le rapport.
     return {
       region_id: regionId,
+      enabled: false,
       frequency: 'monthly' as const,
       enabled_stats: [...MunicipalPortalService.REPORT_STAT_KEYS],
       last_report_sent_at: null,
     };
   }
 
-  async updateMyRegionReportSettings(userId: string, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
+  async updateMyRegionReportSettings(userId: string, enabled: boolean, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
     const { regionId } = await this.getScopeOrThrow(userId);
-    return this.updateReportSettingsForRegion(regionId, frequency, enabledStats);
+    return this.updateReportSettingsForRegion(regionId, enabled, frequency, enabledStats);
   }
 
-  async updateReportSettingsForRegion(regionId: string, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
+  async updateReportSettingsForRegion(regionId: string, enabled: boolean, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
     const validKeys = enabledStats.filter((k) => (MunicipalPortalService.REPORT_STAT_KEYS as readonly string[]).includes(k));
     await this.db
       .insertInto('municipality_report_settings')
-      .values({ region_id: regionId, frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any })
-      .onConflict((oc) => oc.column('region_id').doUpdateSet({ frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any }))
+      .values({ region_id: regionId, enabled, frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any })
+      .onConflict((oc) => oc.column('region_id').doUpdateSet({ enabled, frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any }))
       .execute();
     return this.getReportSettingsForRegion(regionId);
   }
@@ -777,6 +780,8 @@ export class MunicipalPortalService {
    * la fréquence configurée (semaine ou mois précédent). */
   async sendPeriodicReportEmail(regionId: string) {
     const settings = await this.getReportSettingsForRegion(regionId);
+    if (!settings.enabled) return { sent: false, reason: 'rapport désactivé pour cette municipalité' };
+
     const now = new Date();
     const periodEnd = now;
     const periodStart = new Date(now);

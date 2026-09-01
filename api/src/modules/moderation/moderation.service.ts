@@ -315,7 +315,12 @@ export class ModerationService {
               .sendTemplated('report_approved', report.email, commonVars, { ctaLabel: 'Voir mon signalement', ctaUrl: reportUrl })
               .catch(() => {});
           }
-          await this.municipalityIntegrations.notifyMunicipality(reportId);
+          // L'envoi individuel par signalement approuvé a été remplacé par
+          // le rapport périodique (hebdomadaire ou mensuel, voir
+          // municipal-portal.service.ts → sendPeriodicReportEmail) — un
+          // envoi par courriel à chaque approbation devenait vite
+          // agaçant pour les municipalités actives. Ne plus appeler
+          // municipalityIntegrations.notifyMunicipality() ici.
         } else {
           const lifecycle = await this.db
             .selectFrom('site_settings')
