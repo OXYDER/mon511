@@ -51,11 +51,13 @@ const ADMIN_SIDEBAR: { group: string; items: { key: Tab; icon: string; label: st
 
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="app-full" style={{ position: 'fixed', background: 'var(--bg-asphalt)', overflowY: 'auto' }}>
       <header className="topbar-float" style={{ position: 'sticky', background: 'var(--bg-asphalt)' }}>
-        <div className="brand-row">
+        <div className="brand-row" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="admin-hamburger-btn" onClick={() => setMobileNavOpen((v) => !v)} aria-label="Menu" style={{ pointerEvents: 'auto' }}>☰</button>
           <span className="brand-mark">511</span>
           <span className="brand-name">Administration</span>
         </div>
@@ -63,14 +65,15 @@ export default function AdminPage({ onClose }: Props) {
       </header>
 
       <div className="admin-layout" style={{ maxWidth: 1500, margin: '0 auto', padding: '20px 24px 60px' }}>
-        <div className="admin-sidebar" style={{ width: 210, flexShrink: 0, position: 'sticky', top: 90 }}>
+        {mobileNavOpen && <div className="admin-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+        <div className={`admin-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: 210, flexShrink: 0, position: 'sticky', top: 90 }}>
           {ADMIN_SIDEBAR.map((section) => (
             <div key={section.group} style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 10px', letterSpacing: 0.5, fontWeight: 600 }}>{section.group}</div>
               {section.items.map((item) => (
                 <div
                   key={item.key}
-                  onClick={() => setTab(item.key)}
+                  onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 13,
                     background: tab === item.key ? 'var(--panel-hover)' : 'transparent',

@@ -597,12 +597,49 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .modal-body { padding: 20px 22px 24px; }
 
 .admin-layout { display: flex; gap: 24px; align-items: flex-start; }
+/* Caché sur bureau — visible seulement en dessous du point de rupture
+   mobile (voir la media query plus bas), où il remplace la navigation
+   latérale toujours visible par un tiroir masqué/révélé. */
+.admin-hamburger-btn {
+  display: none; background: none; border: none; color: var(--text-body); font-size: 20px;
+  cursor: pointer; padding: 4px 6px; line-height: 1;
+}
+.admin-sidebar-backdrop { display: none; }
 
 /* Panneau flottant responsive : sur petit écran, prend toute la largeur en bas */
 @media (max-width: 760px) {
   .admin-layout { flex-direction: column; }
-  .admin-sidebar { width: 100% !important; position: static !important; display: flex; flex-wrap: wrap; gap: 4px 12px; }
-  .admin-sidebar > div { margin-bottom: 0 !important; }
+  .admin-hamburger-btn { display: inline-flex; }
+  /* Tiroir masqué par défaut plutôt qu'empilé au-dessus du contenu —
+     un menu hamburger classique se sent plus naturel qu'un
+     regroupement de sections poussant tout le contenu vers le bas. */
+  .admin-sidebar {
+    display: none;
+  }
+  .admin-sidebar.mobile-open {
+    display: block; position: fixed; top: 64px; left: 0; bottom: 0; z-index: 501;
+    width: 260px !important; max-width: 80vw; background: var(--bg-asphalt-2);
+    padding: 16px; overflow-y: auto; box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+  }
+  /* Élément conditionnellement rendu dans le JSX seulement quand le
+     tiroir est ouvert — s'il existe dans le DOM, il doit toujours
+     s'afficher, pas besoin d'une classe supplémentaire. */
+  .admin-sidebar-backdrop {
+    display: block; position: fixed; inset: 0; top: 64px; z-index: 500;
+    background: rgba(0,0,0,0.5);
+  }
+
+  /* Même patron que .admin-sidebar, mais positionné en absolu à
+     l'intérieur de la modale du portail municipal plutôt qu'en fixed
+     plein écran (celle-ci a déjà ses propres limites, .modal-box). */
+  .portal-hamburger-btn { position: absolute; top: 8px; left: 8px; z-index: 6; }
+  .portal-sidebar-backdrop { position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,0.5); }
+  .portal-sidebar { display: none; }
+  .portal-sidebar.mobile-open {
+    display: block; position: absolute; top: 0; left: 0; bottom: 0; z-index: 6;
+    width: 220px !important; max-width: 80vw; background: var(--panel-solid);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4); padding-top: 44px;
+  }
 
   .filters-panel-float, .detail-panel-float {
     /* La pile d'icônes occupe l'espace de right:28px à right:72px environ

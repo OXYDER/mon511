@@ -178,11 +178,14 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
 
 function ApprovedScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
   const [tab, setTab] = useState('dashboard');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const fr = lang === 'fr';
 
   return (
-    <div style={{ display: 'flex', minHeight: 420 }}>
-      <div style={{ width: 190, flexShrink: 0, borderRight: '1px solid var(--panel-border)', padding: '16px 10px' }}>
+    <div className="portal-layout" style={{ display: 'flex', minHeight: 420, position: 'relative' }}>
+      <button className="admin-hamburger-btn portal-hamburger-btn" onClick={() => setMobileNavOpen((v) => !v)} aria-label="Menu">☰</button>
+      {mobileNavOpen && <div className="admin-sidebar-backdrop portal-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+      <div className={`portal-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: 190, flexShrink: 0, borderRight: '1px solid var(--panel-border)', padding: '16px 10px' }}>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 8px 10px', fontWeight: 600 }}>{regionName}</div>
         {SIDEBAR_SECTIONS.map((section, i) => (
           <div key={i} style={{ marginBottom: 12 }}>
@@ -190,7 +193,7 @@ function ApprovedScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: 
             {section.items.map((item) => (
               <div
                 key={item.key}
-                onClick={() => setTab(item.key)}
+                onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
                   background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
