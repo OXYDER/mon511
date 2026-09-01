@@ -306,6 +306,15 @@ export interface MunicipalitySubscriptionsTable {
   updated_by: string | null;
 }
 
+export interface MunicipalityReportSettingsTable {
+  region_id: string;
+  frequency: Generated<'weekly' | 'monthly'>;
+  enabled_stats: Generated<string[]>;
+  last_report_sent_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ReportMunicipalTrackingTable {
   report_id: string;
   region_id: string;
@@ -517,5 +526,6 @@ export interface Database {
   support_ticket_attachments: SupportTicketAttachmentsTable;
   municipality_access_requests: MunicipalityAccessRequestsTable;
   municipality_subscriptions: MunicipalitySubscriptionsTable;
+  municipality_report_settings: MunicipalityReportSettingsTable;
   report_municipal_tracking: ReportMunicipalTrackingTable;
 }

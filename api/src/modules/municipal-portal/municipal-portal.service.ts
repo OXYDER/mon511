@@ -290,6 +290,193 @@ export class MunicipalPortalService {
   /** File de modération des signalements — SEULEMENT ceux de la propre
    * municipalité de l'appelant, contrairement à la file générale des
    * modérateurs du site qui voit tout. */
+  // ---------- Statistiques du rapport périodique ----------
+
+  static readonly REPORT_STAT_KEYS = [
+    'active_by_type', 'resolved_period', 'new_period', 'removed_period',
+    'ranking', 'resolution_performance', 'top_streets', 'most_confirmed',
+  ] as const;
+
+  /** Calcule toutes les statistiques disponibles pour une municipalité,
+   * sur la période donnée — utilisé à la fois par le courriel
+   * périodique et par l'affichage dans le portail municipal, pour
+   * garantir que les deux montrent exactement les mêmes chiffres.
+   * Le filtrage par statistiques activées (enabled_stats) se fait
+   * PAR L'APPELANT, pas ici — cette méthode calcule toujours tout,
+   * plus simple et pas assez coûteux pour justifier un calcul
+   * conditionnel. */
+  async computeReportStats(regionId: string, periodStart: Date, periodEnd: Date) {
+    const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr']).where('id', '=', regionId).executeTakeFirst();
+    if (!region) throw new NotFoundException('Municipalité introuvable.');
+
+    const [activeByType, resolvedCount, newCount, removedCount, ranking, resolutionPerf, topStreets, mostConfirmed] = await Promise.all([
+      // Signalements actifs, par type
+      this.db
+        .selectFrom('reports')
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .select(['problem_types.name_fr as typeName', 'problem_types.icon', sql<number>`count(*)`.as('count')])
+        .where('reports.region_id', '=', regionId)
+        .where('reports.status', '=', 'published_unresolved')
+        .groupBy(['problem_types.name_fr', 'problem_types.icon'])
+        .orderBy('count', 'desc')
+        .execute(),
+
+      // Résolus durant la période
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('region_id', '=', regionId)
+        .where('status', '=', 'published_resolved')
+        .where('resolved_at', '>=', periodStart as any)
+        .where('resolved_at', '<=', periodEnd as any)
+        .executeTakeFirst(),
+
+      // Nouveaux durant la période
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('region_id', '=', regionId)
+        .where('created_at', '>=', periodStart as any)
+        .where('created_at', '<=', periodEnd as any)
+        .executeTakeFirst(),
+
+      // Retirés (rejetés) durant la période — pas de colonne dédiée
+      // "rejected_at", updated_at est une approximation raisonnable
+      // (un signalement rejeté n'est normalement plus modifié après).
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('region_id', '=', regionId)
+        .where('status', '=', 'rejected')
+        .where('updated_at', '>=', periodStart as any)
+        .where('updated_at', '<=', periodEnd as any)
+        .executeTakeFirst(),
+
+      // Classement TOP 100 — TOUTES les municipalités du Québec, même
+      // celles sans compte mon511 (comparaison basée uniquement sur le
+      // compte de signalements réels, pas sur l'existence d'un
+      // gestionnaire). Plus de signalements actifs = pire rang.
+      this.db
+        .selectFrom('reports')
+        .innerJoin('regions', 'regions.id', 'reports.region_id')
+        .select(['regions.id as regionId', 'regions.name_fr as regionName', sql<number>`count(*)`.as('count')])
+        .where('regions.type', '=', 'municipality')
+        .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
+        .groupBy(['regions.id', 'regions.name_fr'])
+        .orderBy('count', 'desc')
+        .limit(100)
+        .execute(),
+
+      // Taux de résolution + temps moyen de résolution
+      this.db
+        .selectFrom('reports')
+        .select([
+          sql<number>`count(*) filter (where status in ('published_unresolved', 'published_resolved'))`.as('totalPublished'),
+          sql<number>`count(*) filter (where status = 'published_resolved')`.as('resolvedCount'),
+          sql<number>`avg(extract(epoch from (resolved_at - created_at))) filter (where status = 'published_resolved' and resolved_at is not null)`.as('avgResolutionSeconds'),
+        ])
+        .where('region_id', '=', regionId)
+        .executeTakeFirst(),
+
+      // Rues/routes les plus problématiques — heuristique simple :
+      // portion avant la première virgule de l'adresse (format habituel
+      // "123 rue Principale, Ville, QC"), pas de champ "rue" structuré
+      // dans le schéma actuel.
+      this.db
+        .selectFrom('reports')
+        .select([
+          sql<string>`split_part(address_text, ',', 1)`.as('street'),
+          sql<number>`count(*)`.as('count'),
+        ])
+        .where('region_id', '=', regionId)
+        .where('status', 'in', ['published_unresolved', 'published_resolved'])
+        .where('address_text', 'is not', null)
+        .groupBy(sql`split_part(address_text, ',', 1)`)
+        .orderBy('count', 'desc')
+        .limit(15)
+        .execute(),
+
+      // Signalements avec le plus de confirmations "Présent"
+      this.db
+        .selectFrom('reports')
+        .innerJoin('report_confirmations', 'report_confirmations.report_id', 'reports.id')
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .select([
+          'reports.id', 'reports.address_text as addressText', 'problem_types.name_fr as typeName', 'problem_types.icon',
+          sql<number>`count(report_confirmations.id)`.as('confirmationsCount'),
+        ])
+        .where('reports.region_id', '=', regionId)
+        .where('reports.status', 'in', ['published_unresolved', 'published_resolved'])
+        .groupBy(['reports.id', 'reports.address_text', 'problem_types.name_fr', 'problem_types.icon'])
+        .orderBy('confirmationsCount', 'desc')
+        .limit(10)
+        .execute(),
+    ]);
+
+    const myRank = ranking.findIndex((r) => r.regionId === regionId);
+
+    return {
+      regionId: region.id,
+      regionName: region.nameFr,
+      periodStart,
+      periodEnd,
+      activeByType: activeByType.map((r) => ({ typeName: r.typeName, icon: r.icon, count: Number(r.count) })),
+      resolvedPeriod: Number(resolvedCount?.count ?? 0),
+      newPeriod: Number(newCount?.count ?? 0),
+      removedPeriod: Number(removedCount?.count ?? 0),
+      ranking: {
+        top100: ranking.map((r, i) => ({ rank: i + 1, regionId: r.regionId, regionName: r.regionName, count: Number(r.count) })),
+        myRank: myRank >= 0 ? myRank + 1 : null,
+        totalRanked: ranking.length,
+      },
+      resolutionPerformance: {
+        rate: resolutionPerf && Number(resolutionPerf.totalPublished) > 0
+          ? Math.round((Number(resolutionPerf.resolvedCount) / Number(resolutionPerf.totalPublished)) * 100)
+          : null,
+        avgResolutionDays: resolutionPerf?.avgResolutionSeconds
+          ? Math.round((Number(resolutionPerf.avgResolutionSeconds) / 86400) * 10) / 10
+          : null,
+      },
+      topStreets: topStreets.map((s) => ({ street: s.street?.trim() || '—', count: Number(s.count) })),
+      mostConfirmed: mostConfirmed.map((r) => ({
+        id: r.id, addressText: r.addressText, typeName: r.typeName, icon: r.icon, confirmationsCount: Number(r.confirmationsCount),
+      })),
+    };
+  }
+
+  async getMyRegionReportSettings(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.getReportSettingsForRegion(regionId);
+  }
+
+  async getReportSettingsForRegion(regionId: string) {
+    const existing = await this.db.selectFrom('municipality_report_settings').selectAll().where('region_id', '=', regionId).executeTakeFirst();
+    if (existing) return existing;
+    // Pas encore de ligne pour cette municipalité — valeurs par défaut,
+    // sans créer la ligne tant que rien n'a été modifié explicitement.
+    return {
+      region_id: regionId,
+      frequency: 'monthly' as const,
+      enabled_stats: [...MunicipalPortalService.REPORT_STAT_KEYS],
+      last_report_sent_at: null,
+    };
+  }
+
+  async updateMyRegionReportSettings(userId: string, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.updateReportSettingsForRegion(regionId, frequency, enabledStats);
+  }
+
+  async updateReportSettingsForRegion(regionId: string, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
+    const validKeys = enabledStats.filter((k) => (MunicipalPortalService.REPORT_STAT_KEYS as readonly string[]).includes(k));
+    await this.db
+      .insertInto('municipality_report_settings')
+      .values({ region_id: regionId, frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any })
+      .onConflict((oc) => oc.column('region_id').doUpdateSet({ frequency, enabled_stats: JSON.stringify(validKeys) as any, updated_at: new Date() as any }))
+      .execute();
+    return this.getReportSettingsForRegion(regionId);
+  }
+
   async findMyRegionReportsQueue(userId: string) {
     const { regionId } = await this.getScopeOrThrow(userId);
     return this.db
