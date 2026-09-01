@@ -596,8 +596,14 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
 .modal-close { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; }
 .modal-body { padding: 20px 22px 24px; }
 
+.admin-layout { display: flex; gap: 24px; align-items: flex-start; }
+
 /* Panneau flottant responsive : sur petit écran, prend toute la largeur en bas */
 @media (max-width: 760px) {
+  .admin-layout { flex-direction: column; }
+  .admin-sidebar { width: 100% !important; position: static !important; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .admin-sidebar > div { margin-bottom: 0 !important; }
+
   .filters-panel-float, .detail-panel-float {
     /* La pile d'icônes occupe l'espace de right:28px à right:72px environ
        (44px de large) — sans en tenir compte ici, les icônes se

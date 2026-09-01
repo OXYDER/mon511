@@ -11,6 +11,44 @@ interface Props {
 
 type Tab = 'queue' | 'types' | 'external' | 'users' | 'municipalities' | 'allReports' | 'emailTemplates' | 'support' | 'municipalPortal' | 'messaging' | 'settings';
 
+const ADMIN_SIDEBAR: { group: string; items: { key: Tab; icon: string; label: string }[] }[] = [
+  {
+    group: 'MODÉRATION',
+    items: [
+      { key: 'queue', icon: '●', label: 'File de modération' },
+      { key: 'allReports', icon: '▣', label: 'Tous les signalements' },
+    ],
+  },
+  {
+    group: 'DONNÉES',
+    items: [
+      { key: 'types', icon: '◆', label: 'Catégories & types' },
+      { key: 'external', icon: '⌖', label: 'Données officielles' },
+      { key: 'municipalities', icon: '🏛', label: 'Municipalités' },
+    ],
+  },
+  {
+    group: 'UTILISATEURS',
+    items: [{ key: 'users', icon: '♟', label: 'Utilisateurs' }],
+  },
+  {
+    group: 'COMMUNICATION',
+    items: [
+      { key: 'messaging', icon: '✉', label: 'Messagerie' },
+      { key: 'emailTemplates', icon: '✉', label: 'Courriels' },
+      { key: 'support', icon: '?', label: 'Support' },
+    ],
+  },
+  {
+    group: 'PORTAIL MUNICIPAL',
+    items: [{ key: 'municipalPortal', icon: '🏛', label: 'Gestion du portail' }],
+  },
+  {
+    group: 'SYSTÈME',
+    items: [{ key: 'settings', icon: '⚙', label: 'Paramètres' }],
+  },
+];
+
 export default function AdminPage({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>('queue');
 
@@ -24,54 +62,43 @@ export default function AdminPage({ onClose }: Props) {
         <button className="btn-ghost" onClick={onClose} style={{ pointerEvents: 'auto' }}>← Retour à la carte</button>
       </header>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 24px 60px' }}>
-        <div className="tabs" style={{ maxWidth: 620, marginBottom: 24, flexWrap: 'wrap' }}>
-          <button className={`tab-item ${tab === 'queue' ? 'active' : ''}`} onClick={() => setTab('queue')}>
-            File de modération
-          </button>
-          <button className={`tab-item ${tab === 'types' ? 'active' : ''}`} onClick={() => setTab('types')}>
-            Catégories &amp; types
-          </button>
-          <button className={`tab-item ${tab === 'external' ? 'active' : ''}`} onClick={() => setTab('external')}>
-            Données officielles
-          </button>
-          <button className={`tab-item ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
-            Utilisateurs
-          </button>
-          <button className={`tab-item ${tab === 'municipalities' ? 'active' : ''}`} onClick={() => setTab('municipalities')}>
-            Municipalités
-          </button>
-          <button className={`tab-item ${tab === 'allReports' ? 'active' : ''}`} onClick={() => setTab('allReports')}>
-            Tous les signalements
-          </button>
-          <button className={`tab-item ${tab === 'emailTemplates' ? 'active' : ''}`} onClick={() => setTab('emailTemplates')}>
-            Courriels
-          </button>
-          <button className={`tab-item ${tab === 'support' ? 'active' : ''}`} onClick={() => setTab('support')}>
-            Support
-          </button>
-          <button className={`tab-item ${tab === 'municipalPortal' ? 'active' : ''}`} onClick={() => setTab('municipalPortal')}>
-            Portail municipal
-          </button>
-          <button className={`tab-item ${tab === 'messaging' ? 'active' : ''}`} onClick={() => setTab('messaging')}>
-            Messagerie
-          </button>
-          <button className={`tab-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
-            Paramètres
-          </button>
+      <div className="admin-layout" style={{ maxWidth: 1500, margin: '0 auto', padding: '20px 24px 60px' }}>
+        <div className="admin-sidebar" style={{ width: 210, flexShrink: 0, position: 'sticky', top: 90 }}>
+          {ADMIN_SIDEBAR.map((section) => (
+            <div key={section.group} style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 10px', letterSpacing: 0.5, fontWeight: 600 }}>{section.group}</div>
+              {section.items.map((item) => (
+                <div
+                  key={item.key}
+                  onClick={() => setTab(item.key)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 13,
+                    background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
+                    color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
+                    fontWeight: tab === item.key ? 600 : 400,
+                  }}
+                >
+                  <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
 
-        {tab === 'queue' && <ModerationQueue />}
-        {tab === 'types' && <ProblemTypesAdmin />}
-        {tab === 'external' && <ExternalDataAdmin />}
-        {tab === 'users' && <UsersAdmin />}
-        {tab === 'municipalities' && <MunicipalitiesAdmin />}
-        {tab === 'allReports' && <AllReportsAdmin />}
-        {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
-        {tab === 'support' && <SupportTicketsAdmin />}
-        {tab === 'municipalPortal' && <MunicipalPortalAdmin />}
-        {tab === 'messaging' && <MessagingAdmin />}
-        {tab === 'settings' && <SiteSettingsAdmin />}
+        <div style={{ flex: 1, minWidth: 0, maxWidth: 1100 }}>
+          {tab === 'queue' && <ModerationQueue />}
+          {tab === 'types' && <ProblemTypesAdmin />}
+          {tab === 'external' && <ExternalDataAdmin />}
+          {tab === 'users' && <UsersAdmin />}
+          {tab === 'municipalities' && <MunicipalitiesAdmin />}
+          {tab === 'allReports' && <AllReportsAdmin />}
+          {tab === 'emailTemplates' && <EmailTemplatesAdmin />}
+          {tab === 'support' && <SupportTicketsAdmin />}
+          {tab === 'municipalPortal' && <MunicipalPortalAdmin />}
+          {tab === 'messaging' && <MessagingAdmin />}
+          {tab === 'settings' && <SiteSettingsAdmin />}
+        </div>
       </div>
     </div>
   );
