@@ -1182,147 +1182,145 @@ function MunicipalitiesAdmin() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-      {error && <div className="error-banner" style={{ width: '100%', marginBottom: 4 }}>{error}</div>}
-      <div style={{ flex: '1 1 320px', minWidth: 280 }}>
-        <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-          Municipalités ({total})
-        </div>
-        <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
-          Source : Répertoire des municipalités du Québec (MAMH). L'envoi automatique est désactivé
-          par défaut pour chacune — à activer ici une fois l'adresse vérifiée.
-        </p>
-        <div className="field-group">
-          <input
-            className="text-input"
-            placeholder="Rechercher une municipalité..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <button
-          className="btn-ghost"
-          style={{ marginBottom: 14, fontSize: 11.5 }}
-          onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-        >
-          {sortDir === 'asc' ? '↓ Ascendant (A-Z)' : '↑ Descendant (Z-A)'}
-        </button>
-        {results.map((m) => (
-          <div
-            key={m.id}
-            className="report-card"
-            style={{ borderColor: selected?.id === m.id ? 'var(--accent-signal)' : undefined }}
-            onClick={() => selectMunicipality(m)}
-          >
-            <div className="rc-icon-hex">🏛️</div>
-            <div className="rc-body">
-              <div className="rc-title">{m.regionNameFr}</div>
-              <div className="rc-meta">{m.contact_email ?? 'Aucun courriel'}</div>
-            </div>
-          </div>
-        ))}
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
-          <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)', alignSelf: 'center' }}>
-            {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
-          </span>
-          <button className="btn-ghost" disabled={offset + LIMIT >= total} onClick={() => setOffset(offset + LIMIT)}>Suivant →</button>
-        </div>
+    <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+        Municipalités ({total})
       </div>
+      <p style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        Source : Répertoire des municipalités du Québec (MAMH). L'envoi automatique est désactivé
+        par défaut pour chacune — à activer ici une fois l'adresse vérifiée.
+      </p>
+      <div className="field-group">
+        <input
+          className="text-input"
+          placeholder="Rechercher une municipalité..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      <button
+        className="btn-ghost"
+        style={{ marginBottom: 14, fontSize: 11.5 }}
+        onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+      >
+        {sortDir === 'asc' ? '↓ Ascendant (A-Z)' : '↑ Descendant (Z-A)'}
+      </button>
+      {results.map((m) => {
+        const isExpanded = selected?.id === m.id;
+        return (
+          <div key={m.id}>
+            <div
+              className="report-card"
+              style={{ borderColor: isExpanded ? 'var(--accent-signal)' : undefined, borderRadius: isExpanded ? '12px 12px 0 0' : undefined }}
+              onClick={() => selectMunicipality(m)}
+            >
+              <div className="rc-icon-hex">🏛️</div>
+              <div className="rc-body">
+                <div className="rc-title">{m.regionNameFr}</div>
+                <div className="rc-meta">{m.contact_email ?? 'Aucun courriel'}</div>
+              </div>
+            </div>
 
-      <div style={{ flex: '2 1 380px', minWidth: 300, background: 'var(--panel)', border: '1px solid var(--panel-border)', borderRadius: 12, padding: 20 }}>
-        {!selected && <div className="center-msg">Sélectionne une municipalité à gauche.</div>}
-        {selected && (
-          <>
-            {feedback && <div className="success-banner">{feedback}</div>}
-            <div className="detail-title" style={{ fontSize: 17, marginBottom: 4 }}>{selected.regionNameFr}</div>
-            {selected.mrc_name && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 16 }}>{selected.mrc_name}{selected.population ? ` · ${selected.population.toLocaleString('fr-CA')} habitants` : ''}</div>}
+            {isExpanded && (
+              <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginBottom: 8 }}>
+                {feedback && <div className="success-banner">{feedback}</div>}
+                {selected.mrc_name && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 16 }}>{selected.mrc_name}{selected.population ? ` · ${selected.population.toLocaleString('fr-CA')} habitants` : ''}</div>}
 
-            <div className="section-label" style={{ marginTop: 0 }}>Rapport périodique</div>
-            {!reportSettings && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Chargement...</div>}
-            {reportSettings && (
-              <>
-                <div className="privacy-row">
-                  <span>Activer le rapport périodique</span>
-                  <ToggleSwitch on={reportSettings.enabled} onToggle={() => setReportSettings((s) => (s ? { ...s, enabled: !s.enabled } : s))} />
-                </div>
-
-                {reportSettings.enabled && (
+                <div className="section-label" style={{ marginTop: 0 }}>Rapport périodique</div>
+                {!reportSettings && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Chargement...</div>}
+                {reportSettings && (
                   <>
-                    <div className="field-group" style={{ marginTop: 12 }}>
-                      <label className="field-label">Fréquence d'envoi</label>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button
-                          className="btn-ghost"
-                          style={{ flex: 1, border: reportSettings.frequency === 'weekly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
-                          onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'weekly' } : s))}
-                        >
-                          Hebdomadaire
-                        </button>
-                        <button
-                          className="btn-ghost"
-                          style={{ flex: 1, border: reportSettings.frequency === 'monthly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
-                          onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'monthly' } : s))}
-                        >
-                          Mensuelle
-                        </button>
-                      </div>
+                    <div className="privacy-row">
+                      <span>Activer le rapport périodique</span>
+                      <ToggleSwitch on={reportSettings.enabled} onToggle={() => setReportSettings((s) => (s ? { ...s, enabled: !s.enabled } : s))} />
                     </div>
 
-                    <div className="field-group">
-                      <label className="field-label">Statistiques affichées (courriel et portail)</label>
-                      {Object.entries(REPORT_STAT_LABELS).map(([key, label]) => (
-                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 12.5 }}>
-                          <input type="checkbox" checked={reportSettings.enabled_stats.includes(key)} onChange={() => toggleReportStat(key)} />
-                          {label}
-                        </label>
-                      ))}
+                    {reportSettings.enabled && (
+                      <>
+                        <div className="field-group" style={{ marginTop: 12 }}>
+                          <label className="field-label">Fréquence d'envoi</label>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button
+                              className="btn-ghost"
+                              style={{ flex: 1, border: reportSettings.frequency === 'weekly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+                              onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'weekly' } : s))}
+                            >
+                              Hebdomadaire
+                            </button>
+                            <button
+                              className="btn-ghost"
+                              style={{ flex: 1, border: reportSettings.frequency === 'monthly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+                              onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'monthly' } : s))}
+                            >
+                              Mensuelle
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="field-group">
+                          <label className="field-label">Statistiques affichées (courriel et portail)</label>
+                          {Object.entries(REPORT_STAT_LABELS).map(([key, label]) => (
+                            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 12.5 }}>
+                              <input type="checkbox" checked={reportSettings.enabled_stats.includes(key)} onChange={() => toggleReportStat(key)} />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    <button className="btn-primary" onClick={saveReportSettings} disabled={reportSaving} style={{ marginTop: 4 }}>
+                      {reportSaving ? 'Enregistrement...' : 'Enregistrer le rapport'}
+                    </button>
+                    {reportFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{reportFeedback}</div>}
+
+                    <div className="field-group" style={{ marginTop: 16 }}>
+                      <label className="field-label">Envoyer un test (30 derniers jours, statistiques actuelles)</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input className="text-input" type="email" placeholder="ton.courriel@exemple.com" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} />
+                        <button className="btn-ghost" onClick={sendTestReport} disabled={testSending || !testEmail.trim()}>
+                          {testSending ? 'Envoi...' : '✉️ Tester'}
+                        </button>
+                      </div>
+                      {testFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{testFeedback}</div>}
                     </div>
                   </>
                 )}
 
-                <button className="btn-primary" onClick={saveReportSettings} disabled={reportSaving} style={{ marginTop: 4 }}>
-                  {reportSaving ? 'Enregistrement...' : 'Enregistrer le rapport'}
-                </button>
-                {reportFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{reportFeedback}</div>}
-
                 <div className="field-group" style={{ marginTop: 16 }}>
-                  <label className="field-label">Envoyer un test (30 derniers jours, statistiques actuelles)</label>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input className="text-input" type="email" placeholder="ton.courriel@exemple.com" value={testEmail} onChange={(e) => setTestEmail(e.target.value)} />
-                    <button className="btn-ghost" onClick={sendTestReport} disabled={testSending || !testEmail.trim()}>
-                      {testSending ? 'Envoi...' : '✉️ Tester'}
-                    </button>
-                  </div>
-                  {testFeedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{testFeedback}</div>}
+                  <label className="field-label">Courriel de contact</label>
+                  <input className="text-input" value={form.contactEmail} onChange={(e) => setForm((f: any) => ({ ...f, contactEmail: e.target.value }))} />
                 </div>
-              </>
+                <div className="field-group">
+                  <label className="field-label">Téléphone</label>
+                  <input className="text-input" value={form.contactPhone} onChange={(e) => setForm((f: any) => ({ ...f, contactPhone: e.target.value }))} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Site web</label>
+                  <input className="text-input" value={form.contactWebsite} onChange={(e) => setForm((f: any) => ({ ...f, contactWebsite: e.target.value }))} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Adresse postale</label>
+                  <input className="text-input" value={form.mailingAddress} onChange={(e) => setForm((f: any) => ({ ...f, mailingAddress: e.target.value }))} />
+                </div>
+                <div className="field-group">
+                  <label className="field-label">Code postal</label>
+                  <input className="text-input" value={form.postalCode} onChange={(e) => setForm((f: any) => ({ ...f, postalCode: e.target.value }))} />
+                </div>
+
+                <button className="btn-primary" onClick={save}>Enregistrer</button>
+              </div>
             )}
-
-            <div className="field-group" style={{ marginTop: 16 }}>
-              <label className="field-label">Courriel de contact</label>
-              <input className="text-input" value={form.contactEmail} onChange={(e) => setForm((f: any) => ({ ...f, contactEmail: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Téléphone</label>
-              <input className="text-input" value={form.contactPhone} onChange={(e) => setForm((f: any) => ({ ...f, contactPhone: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Site web</label>
-              <input className="text-input" value={form.contactWebsite} onChange={(e) => setForm((f: any) => ({ ...f, contactWebsite: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Adresse postale</label>
-              <input className="text-input" value={form.mailingAddress} onChange={(e) => setForm((f: any) => ({ ...f, mailingAddress: e.target.value }))} />
-            </div>
-            <div className="field-group">
-              <label className="field-label">Code postal</label>
-              <input className="text-input" value={form.postalCode} onChange={(e) => setForm((f: any) => ({ ...f, postalCode: e.target.value }))} />
-            </div>
-
-            <button className="btn-primary" onClick={save}>Enregistrer</button>
-          </>
-        )}
+          </div>
+        );
+      })}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10 }}>
+        <button className="btn-ghost" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIMIT))}>← Précédent</button>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          {offset + 1}–{Math.min(offset + LIMIT, total)} / {total}
+        </span>
+        <button className="btn-ghost" disabled={offset + LIMIT >= total} onClick={() => setOffset(offset + LIMIT)}>Suivant →</button>
       </div>
     </div>
   );
