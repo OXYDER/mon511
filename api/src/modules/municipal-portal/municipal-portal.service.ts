@@ -570,6 +570,108 @@ export class MunicipalPortalService {
       .execute();
   }
 
+  /** Tableau de bord du portail municipal — cartes de statut (basées sur
+   * internal_status déjà existant, voir report_municipal_tracking),
+   * résumé, signalements prioritaires (les plus confirmés par les
+   * citoyens — pas encore de vrai champ priorité dans le schéma, cette
+   * heuristique est un point de départ raisonnable) et activité
+   * récente (tirée des vrais changements de suivi interne déjà
+   * enregistrés, pas un nouveau journal séparé). */
+  async getMyRegionDashboard(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    const [byStatus, resolvedTotal, lateCount, resolutionPerf, priority, activity] = await Promise.all([
+      // Cartes par statut interne — 'new' par défaut si aucune ligne de
+      // suivi n'existe encore pour ce signalement.
+      this.db
+        .selectFrom('reports')
+        .leftJoin('report_municipal_tracking', 'report_municipal_tracking.report_id', 'reports.id')
+        .select([sql<string>`coalesce(report_municipal_tracking.internal_status, 'new')`.as('internalStatus'), sql<number>`count(*)`.as('count')])
+        .where('reports.region_id', '=', regionId)
+        .where('reports.status', '=', 'published_unresolved')
+        .groupBy(sql`coalesce(report_municipal_tracking.internal_status, 'new')`)
+        .execute(),
+
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('region_id', '=', regionId)
+        .where('status', '=', 'published_resolved')
+        .executeTakeFirst(),
+
+      // En retard — non résolu depuis plus de 7 jours. Seuil de départ
+      // raisonnable, ajustable plus tard si besoin.
+      this.db
+        .selectFrom('reports')
+        .select(sql<number>`count(*)`.as('count'))
+        .where('region_id', '=', regionId)
+        .where('status', '=', 'published_unresolved')
+        .where(sql<boolean>`created_at < now() - interval '7 days'`)
+        .executeTakeFirst(),
+
+      this.db
+        .selectFrom('reports')
+        .select([
+          sql<number>`count(*) filter (where status = 'published_resolved')`.as('resolvedCount'),
+          sql<number>`count(*) filter (where status = 'published_resolved' and resolved_at - created_at <= interval '7 days')`.as('resolvedUnder7d'),
+          sql<number>`avg(extract(epoch from (resolved_at - created_at))) filter (where status = 'published_resolved' and resolved_at is not null)`.as('avgResolutionSeconds'),
+        ])
+        .where('region_id', '=', regionId)
+        .executeTakeFirst(),
+
+      this.db
+        .selectFrom('reports')
+        .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+        .select([
+          'reports.id', 'reports.address_text as addressText', 'reports.created_at',
+          'problem_types.name_fr as typeName', 'problem_types.icon',
+          sql<number>`(SELECT count(*) FROM report_confirmations WHERE report_confirmations.report_id = reports.id)`.as('confirmationsCount'),
+        ])
+        .where('reports.region_id', '=', regionId)
+        .where('reports.status', '=', 'published_unresolved')
+        .orderBy(sql`(SELECT count(*) FROM report_confirmations WHERE report_confirmations.report_id = reports.id)`, 'desc')
+        .limit(5)
+        .execute(),
+
+      this.db
+        .selectFrom('report_municipal_tracking')
+        .innerJoin('reports', 'reports.id', 'report_municipal_tracking.report_id')
+        .leftJoin('users', 'users.id', 'report_municipal_tracking.updated_by')
+        .select([
+          'report_municipal_tracking.internal_status as internalStatus', 'report_municipal_tracking.updated_at as updatedAt',
+          'reports.id as reportId', 'reports.address_text as addressText', 'users.first_name as updatedByFirstName',
+        ])
+        .where('report_municipal_tracking.region_id', '=', regionId)
+        .orderBy('report_municipal_tracking.updated_at', 'desc')
+        .limit(10)
+        .execute(),
+    ]);
+
+    const statusMap: Record<string, number> = {};
+    byStatus.forEach((s) => { statusMap[s.internalStatus] = Number(s.count); });
+    const activeTotal = Object.values(statusMap).reduce((a, b) => a + b, 0);
+
+    return {
+      counts: {
+        new: statusMap['new'] ?? 0,
+        acknowledged: statusMap['acknowledged'] ?? 0,
+        inProgress: statusMap['in_progress'] ?? 0,
+        done: statusMap['done'] ?? 0,
+        resolved: Number(resolvedTotal?.count ?? 0),
+        late: Number(lateCount?.count ?? 0),
+      },
+      summary: {
+        activeTotal,
+        avgResolutionDays: resolutionPerf?.avgResolutionSeconds ? Math.round((Number(resolutionPerf.avgResolutionSeconds) / 86400) * 10) / 10 : null,
+        resolvedUnder7dPct: resolutionPerf && Number(resolutionPerf.resolvedCount) > 0
+          ? Math.round((Number(resolutionPerf.resolvedUnder7d) / Number(resolutionPerf.resolvedCount)) * 100)
+          : null,
+      },
+      priority: priority.map((p) => ({ ...p, confirmationsCount: Number(p.confirmationsCount) })),
+      activity,
+    };
+  }
+
   private async assertReportInRegion(regionId: string, reportId: string) {
     const report = await this.db.selectFrom('reports').select('region_id').where('id', '=', reportId).executeTakeFirst();
     if (!report) throw new NotFoundException('Signalement introuvable.');

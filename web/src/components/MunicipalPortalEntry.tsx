@@ -13,10 +13,7 @@ interface Props {
  * pourrait être périmé) :
  * - 'none' : formulaire de demande d'accès
  * - 'pending' : page d'attente, aucune interaction possible
- * - 'approved' : le vrai portail (pour l'instant minimal — le reste du
- *   portail, file de signalements/publications régionales, reste à
- *   construire, mais au moins l'accès est maintenant correctement
- *   gardé par rôle plutôt que de planter pour un compte non autorisé)
+ * - 'approved' : le vrai portail, avec navigation latérale
  *
  * IMPORTANT : un compte sans le rôle municipal_staff/municipal_admin
  * ne voit donc JAMAIS le contenu du portail, peu importe ce qu'il
@@ -37,16 +34,16 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
 
   return createPortal(
     <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ width: 440 }}>
+      <div className="modal-box" style={{ width: status?.status === 'approved' ? 780 : 440, maxWidth: '95vw' }}>
         <div className="modal-head">
           <div className="modal-title">{fr ? 'Portail municipal' : 'Municipal portal'}</div>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <div className="modal-body">
+        <div className="modal-body" style={{ padding: status?.status === 'approved' ? 0 : undefined }}>
           {loading && <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>}
           {!loading && status?.status === 'none' && <RequestAccessForm lang={lang} onSubmitted={() => setStatus({ status: 'pending' })} />}
           {!loading && status?.status === 'pending' && <PendingScreen lang={lang} regionName={status.regionName} />}
-          {!loading && status?.status === 'approved' && <ApprovedScreen lang={lang} regionName={status.regionName} role={status.role} />}
+          {!loading && status?.status === 'approved' && <ApprovedScreen lang={lang} regionName={status.regionName} />}
         </div>
       </div>
     </div>,
@@ -150,19 +147,248 @@ function PendingScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
   );
 }
 
-function ApprovedScreen({ lang, regionName, role }: { lang: 'fr' | 'en'; regionName?: string; role?: string }) {
+const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; label: { fr: string; en: string }; ready: boolean }[] }[] = [
+  { group: '', items: [{ key: 'dashboard', icon: '▦', label: { fr: 'Tableau de bord', en: 'Dashboard' }, ready: true }] },
+  {
+    group: 'SIGNALEMENTS',
+    items: [{ key: 'reports', icon: '◉', label: { fr: 'Tous les signalements', en: 'All reports' }, ready: true }],
+  },
+  {
+    group: 'OPÉRATIONS',
+    items: [
+      { key: 'map', icon: '⌖', label: { fr: 'Carte', en: 'Map' }, ready: false },
+      { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: false },
+    ],
+  },
+  {
+    group: 'ANALYSE',
+    items: [
+      { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: false },
+      { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: false },
+    ],
+  },
+  {
+    group: 'ADMINISTRATION',
+    items: [
+      { key: 'team', icon: '♟', label: { fr: 'Équipe', en: 'Team' }, ready: false },
+      { key: 'settings', icon: '⚙', label: { fr: 'Paramètres', en: 'Settings' }, ready: true },
+    ],
+  },
+];
+
+function ApprovedScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
+  const [tab, setTab] = useState('dashboard');
   const fr = lang === 'fr';
+
+  return (
+    <div style={{ display: 'flex', minHeight: 420 }}>
+      <div style={{ width: 190, flexShrink: 0, borderRight: '1px solid var(--panel-border)', padding: '16px 10px' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 8px 10px', fontWeight: 600 }}>{regionName}</div>
+        {SIDEBAR_SECTIONS.map((section, i) => (
+          <div key={i} style={{ marginBottom: 12 }}>
+            {section.group && <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 8px', letterSpacing: 0.5 }}>{section.group}</div>}
+            {section.items.map((item) => (
+              <div
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
+                  background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
+                  color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
+                  opacity: item.ready ? 1 : 0.6,
+                }}
+              >
+                <span style={{ width: 16, textAlign: 'center' }}>{item.icon}</span>
+                {fr ? item.label.fr : item.label.en}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
+        {tab === 'dashboard' && <DashboardView lang={lang} regionName={regionName} />}
+        {tab === 'reports' && <ReportsListView lang={lang} />}
+        {tab === 'settings' && <ReportSettingsView lang={lang} />}
+        {['map', 'interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            {fr ? 'Bientôt disponible.' : 'Coming soon.'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
+  const [data, setData] = useState<any>(null);
+  const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<any>('/municipal-portal/my-region/dashboard').then(setData).catch(() => {});
+  }, []);
+
+  if (!data) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  const cards = [
+    { key: 'new', icon: '🔴', label: fr ? 'Nouveaux' : 'New', value: data.counts.new },
+    { key: 'acknowledged', icon: '🟠', label: fr ? 'Reconnus' : 'Acknowledged', value: data.counts.acknowledged },
+    { key: 'inProgress', icon: '🟣', label: fr ? 'En cours' : 'In progress', value: data.counts.inProgress },
+    { key: 'done', icon: '🔵', label: fr ? 'Complétés (interne)' : 'Done (internal)', value: data.counts.done },
+    { key: 'resolved', icon: '🟢', label: fr ? 'Résolus' : 'Resolved', value: data.counts.resolved },
+    { key: 'late', icon: '⏰', label: fr ? 'En retard' : 'Late', value: data.counts.late },
+  ];
+
   return (
     <div>
-      <p style={{ fontSize: 13, marginBottom: 16 }}>
-        {fr ? `Tu gères ${regionName ?? 'ta municipalité'} en tant que ` : `You manage ${regionName ?? 'your municipality'} as `}
-        <strong>{role === 'municipal_admin' ? (fr ? 'gestionnaire principal' : 'principal manager') : (fr ? 'employé municipal' : 'municipal staff')}</strong>.
-      </p>
-      <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        {fr
-          ? "Le reste du portail (file des signalements, publications, statistiques) est en construction — reviens bientôt."
-          : "The rest of the portal (reports queue, posts, statistics) is under construction — check back soon."}
-      </p>
+      <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 2 }}>{fr ? `Bonjour, ${regionName}` : `Hello, ${regionName}`}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18 }}>
+        {fr ? "Voici l'état actuel de votre territoire." : "Here's the current state of your territory."}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+        {cards.map((c) => (
+          <div key={c.key} style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: '12px 10px', textAlign: 'center' }}>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{c.icon} {c.value}</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 20 }}>
+        {data.summary.activeTotal} {fr ? 'signalements actifs' : 'active reports'}
+        {data.summary.avgResolutionDays !== null && <> · {fr ? 'délai moyen' : 'avg time'} {data.summary.avgResolutionDays} {fr ? 'jours' : 'days'}</>}
+        {data.summary.resolvedUnder7dPct !== null && <> · {data.summary.resolvedUnder7dPct}% {fr ? 'traités sous 7 jours' : 'handled under 7 days'}</>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Signalements prioritaires' : 'Priority reports'}</div>
+          {data.priority.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun.' : 'None.'}</div>}
+          {data.priority.map((p: any) => (
+            <div key={p.id} style={{ fontSize: 12, padding: '6px 0', borderBottom: '1px solid var(--panel-border)' }}>
+              {p.icon ?? '📍'} {p.typeName} — {p.addressText ?? '—'} <span style={{ color: 'var(--text-muted)' }}>({p.confirmationsCount} 👍)</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Activité récente' : 'Recent activity'}</div>
+          {data.activity.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucune.' : 'None.'}</div>}
+          {data.activity.map((a: any, i: number) => (
+            <div key={i} style={{ fontSize: 11.5, padding: '5px 0', borderBottom: '1px solid var(--panel-border)', color: 'var(--text-muted)' }}>
+              {new Date(a.updatedAt).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} — {a.addressText ?? '—'} ({a.internalStatus})
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
+  const [reports, setReports] = useState<any[]>([]);
+  const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<any[]>('/municipal-portal/my-region/reports/queue').then(setReports).catch(() => {});
+  }, []);
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Tous les signalements' : 'All reports'} ({reports.length})</div>
+      {reports.map((r) => (
+        <div key={r.id} style={{ display: 'flex', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5 }}>
+          {r.thumbnailUrl ? <img src={r.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{r.problemTypeIcon ?? '📍'}</div>}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>{r.problemTypeNameFr}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 11.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.address_text ?? '—'}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
+  const fr = lang === 'fr';
+  const [reportSettings, setReportSettings] = useState<{ enabled: boolean; frequency: 'weekly' | 'monthly'; enabled_stats: string[] } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const STAT_LABELS: Record<string, string> = {
+    active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
+    resolved_period: fr ? 'Résolus durant la période' : 'Resolved during period',
+    new_period: fr ? 'Nouveaux durant la période' : 'New during period',
+    removed_period: fr ? 'Retirés durant la période' : 'Removed during period',
+    ranking: fr ? 'Classement TOP 100 vs autres municipalités' : 'TOP 100 ranking vs other municipalities',
+    resolution_performance: fr ? 'Taux et temps moyen de résolution' : 'Resolution rate and avg time',
+    problematic_zones: fr ? 'Zones routières les plus problématiques' : 'Most problematic road zones',
+    most_confirmed: fr ? 'Signalements les plus confirmés ("Présent")' : 'Most confirmed reports ("Present")',
+  };
+
+  useEffect(() => {
+    api.get<any>('/municipal-portal/my-region/report/settings').then(setReportSettings).catch(() => {});
+  }, []);
+
+  function toggleStat(key: string) {
+    setReportSettings((prev) => {
+      if (!prev) return prev;
+      const has = prev.enabled_stats.includes(key);
+      return { ...prev, enabled_stats: has ? prev.enabled_stats.filter((k) => k !== key) : [...prev.enabled_stats, key] };
+    });
+  }
+
+  async function save() {
+    if (!reportSettings) return;
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await api.patch('/municipal-portal/my-region/report/settings', reportSettings);
+      setFeedback(fr ? 'Enregistré.' : 'Saved.');
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!reportSettings) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Rapport périodique' : 'Periodic report'}</div>
+      <div className="privacy-row">
+        <span>{fr ? 'Activer le rapport périodique' : 'Enable periodic report'}</span>
+        <input type="checkbox" checked={reportSettings.enabled} onChange={() => setReportSettings((s) => (s ? { ...s, enabled: !s.enabled } : s))} />
+      </div>
+      {reportSettings.enabled && (
+        <>
+          <div className="field-group" style={{ marginTop: 12 }}>
+            <label className="field-label">{fr ? "Fréquence d'envoi" : 'Frequency'}</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn-ghost" style={{ flex: 1, border: reportSettings.frequency === 'weekly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'weekly' } : s))}>
+                {fr ? 'Hebdomadaire' : 'Weekly'}
+              </button>
+              <button className="btn-ghost" style={{ flex: 1, border: reportSettings.frequency === 'monthly' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => setReportSettings((s) => (s ? { ...s, frequency: 'monthly' } : s))}>
+                {fr ? 'Mensuelle' : 'Monthly'}
+              </button>
+            </div>
+          </div>
+          <div className="field-group">
+            <label className="field-label">{fr ? 'Statistiques affichées' : 'Displayed statistics'}</label>
+            {Object.entries(STAT_LABELS).map(([key, label]) => (
+              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', cursor: 'pointer', fontSize: 12.5 }}>
+                <input type="checkbox" checked={reportSettings.enabled_stats.includes(key)} onChange={() => toggleStat(key)} />
+                {label}
+              </label>
+            ))}
+          </div>
+        </>
+      )}
+      <button className="btn-primary" onClick={save} disabled={saving} style={{ marginTop: 4 }}>
+        {saving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
+      </button>
+      {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{feedback}</div>}
     </div>
   );
 }

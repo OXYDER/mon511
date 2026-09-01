@@ -137,6 +137,13 @@ export class MunicipalPortalController {
     return this.service.rejectAccessRequest(id, user.userId, false);
   }
 
+  @Get('my-region/dashboard')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionDashboard(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionDashboard(user.userId);
+  }
+
   @Get('my-region/reports/queue')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')
