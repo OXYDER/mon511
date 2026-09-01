@@ -698,13 +698,23 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   }, [searchText]);
 
   useEffect(() => {
-    locateAndLoad();
-    loadAllCabanes();
-
     // Liens directs venant des courriels (signalement reçu/approuvé/refusé,
-    // rappel de validité) — jusqu'ici jamais lus, le lien n'ouvrait rien.
+    // rappel de validité, zones problématiques du rapport municipal) —
+    // vérifiés AVANT d'appeler locateAndLoad(), pas après : la
+    // géolocalisation du navigateur est asynchrone (attend la permission),
+    // donc son résultat arrivait plus tard et écrasait la position déjà
+    // fixée par le lien, peu importe l'ordre des instructions. Sauter
+    // complètement locateAndLoad() quand un lien direct est présent
+    // élimine cette course plutôt que d'essayer de la gagner.
     const params = new URLSearchParams(window.location.search);
     const reportId = params.get('report') ?? params.get('editReport');
+    const linkLat = params.get('lat');
+    const linkLng = params.get('lng');
+    const hasDirectLink = !!reportId || !!(linkLat && linkLng);
+
+    if (!hasDirectLink) locateAndLoad();
+    loadAllCabanes();
+
     if (reportId) {
       openReportById(reportId);
       // Nettoie l'URL après coup — évite de rouvrir le même signalement à
@@ -716,8 +726,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     // « zones routières les plus problématiques » du rapport municipal
     // périodique, pour centrer la carte sur la zone plutôt que d'ouvrir
     // un lien Google Maps externe.
-    const linkLat = params.get('lat');
-    const linkLng = params.get('lng');
     if (linkLat && linkLng) {
       setMapCamera({ lat: parseFloat(linkLat), lng: parseFloat(linkLng), zoom: params.get('zoom') ? Number(params.get('zoom')) : 17 });
       window.history.replaceState({}, '', window.location.pathname);

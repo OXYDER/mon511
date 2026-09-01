@@ -399,7 +399,12 @@ export class MunicipalPortalService {
             regexp_replace(split_part(address_text, ',', 1), '^\s*\d+[A-Za-z]?\s*', '') AS street_name,
             (substring(split_part(address_text, ',', 1) FROM '^\s*(\d+)'))::int AS civic_number,
             location,
-            ST_ClusterDBSCAN(location, eps := 150, minpoints := 2) OVER (
+            -- ST_Transform vers EPSG:32198 (NAD83 / Québec Lambert, en
+            -- MÈTRES) est essentiel ici — location est en SRID 4326
+            -- (degrés). Sans cette transformation, eps := 150 serait
+            -- interprété comme 150 DEGRÉS (une distance absurde, plus
+            -- grande que tout le Québec), pas 150 mètres.
+            ST_ClusterDBSCAN(ST_Transform(location, 32198), eps := 150, minpoints := 2) OVER (
               PARTITION BY regexp_replace(split_part(address_text, ',', 1), '^\s*\d+[A-Za-z]?\s*', '')
             ) AS cluster_id
           FROM reports
