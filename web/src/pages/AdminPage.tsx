@@ -89,6 +89,7 @@ function ModerationQueue() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [decidedFeedback, setDecidedFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [decideError, setDecideError] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   const sortedQueue = [...queue].sort((a, b) => {
@@ -127,6 +128,7 @@ function ModerationQueue() {
       return;
     }
     setExpandedId(id);
+    setDecideError(null);
     loadDetail(id);
   }
 
@@ -155,7 +157,7 @@ function ModerationQueue() {
   async function decide(decision: 'approve' | 'reject') {
     if (!expandedId) return;
     if (decision === 'reject' && !reason.trim()) {
-      setError('Un motif est obligatoire pour refuser un signalement.');
+      setDecideError('Un motif est obligatoire pour refuser un signalement.');
       return;
     }
     try {
@@ -167,9 +169,10 @@ function ModerationQueue() {
       // modérateur ouvre lui-même le prochain quand il est prêt.
       setDecidedFeedback(decision === 'approve' ? 'Signalement approuvé.' : 'Signalement refusé.');
       setReason('');
+      setDecideError(null);
       loadQueue();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Action impossible.');
+      setDecideError(err instanceof Error ? err.message : 'Action impossible.');
     }
   }
 
@@ -184,10 +187,9 @@ function ModerationQueue() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         En attente d'approbation ({queue.length})
       </div>
@@ -234,7 +236,6 @@ function ModerationQueue() {
                 directement sous la carte cliquée. */}
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(r.id)}>← Retour à la liste</button>
                 {!detail && <div className="center-msg">Chargement...</div>}
                 {detail && (
                   <>
@@ -358,6 +359,12 @@ function ModerationQueue() {
                           </button>
                           <button className="btn-ghost btn-danger" onClick={() => decide('reject')}>✕ Refuser</button>
                         </div>
+                        {decideError && (
+                          <div style={{ marginTop: 10 }}>
+                            <div className="error-banner" style={{ marginBottom: 8 }}>{decideError}</div>
+                            <button className="btn-ghost" style={{ fontSize: 12.5 }} onClick={() => setDecideError(null)}>← Retour au signalement</button>
+                          </div>
+                        )}
                       </>
                     )}
                   </>
@@ -400,27 +407,31 @@ function FlaggedReportsAdmin() {
     load();
   }
 
-  if (error) return <div className="error-banner" style={{ marginBottom: 24 }}>{error}</div>;
-  if (flagged.length === 0) return null;
+  if (flagged.length === 0 && !error) return null;
 
   return (
-    <div style={{ marginBottom: 28 }}>
-      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-        🚩 Signalements d'abus à traiter ({flagged.length})
-      </div>
-      {flagged.map((r) => (
-        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
-          <div className="rc-body">
-            <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
-            <div className="rc-meta">{r.flagCount} signalement(s) · motifs : {r.reasons.join(', ')}</div>
+    <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {flagged.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+            🚩 Signalements d'abus à traiter ({flagged.length})
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn-ghost" onClick={() => dismiss(r.id)}>Ignorer</button>
-            <button className="btn-ghost btn-danger" onClick={() => remove(r.id)}>Retirer</button>
-          </div>
+          {flagged.map((r) => (
+            <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+              <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+              <div className="rc-body">
+                <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
+                <div className="rc-meta">{r.flagCount} signalement(s) · motifs : {r.reasons.join(', ')}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn-ghost" onClick={() => dismiss(r.id)}>Ignorer</button>
+                <button className="btn-ghost btn-danger" onClick={() => remove(r.id)}>Retirer</button>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -449,27 +460,31 @@ function ResolutionSuggestionsAdmin() {
     load();
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-  if (suggestions.length === 0) return null;
+  if (suggestions.length === 0 && !error) return null;
 
   return (
     <div>
-      <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-        ✔ Suggestions "résolu" à confirmer ({suggestions.length})
-      </div>
-      {suggestions.map((r) => (
-        <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
-          <div className="rc-body">
-            <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
-            <div className="rc-meta">{r.suggestionCount} suggestion(s) · poids total {r.totalWeight}</div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {suggestions.length > 0 && (
+        <div>
+          <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
+            ✔ Suggestions "résolu" à confirmer ({suggestions.length})
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn-ghost" style={{ color: 'var(--status-resolved)' }} onClick={() => accept(r.id)}>Confirmer</button>
-            <button className="btn-ghost" onClick={() => dismiss(r.id)}>Rejeter</button>
-          </div>
+          {suggestions.map((r) => (
+            <div key={r.id} className="report-card" style={{ cursor: 'default' }}>
+              <div className="rc-icon-hex">{r.problemTypeIcon ?? '📍'}</div>
+              <div className="rc-body">
+                <div className="rc-title">{r.problemTypeNameFr} — {r.address_text ?? 'Position GPS'}</div>
+                <div className="rc-meta">{r.suggestionCount} suggestion(s) · poids total {r.totalWeight}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn-ghost" style={{ color: 'var(--status-resolved)' }} onClick={() => accept(r.id)}>Confirmer</button>
+                <button className="btn-ghost" onClick={() => dismiss(r.id)}>Rejeter</button>
+              </div>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -514,10 +529,9 @@ function ExternalDataAdmin() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Sources externes (MTMD)
       </div>
@@ -581,14 +595,18 @@ function ProblemTypesAdmin() {
   function toggleExpand(t: any) {
     if (expandedId === t.id) { setExpandedId(null); return; }
     setExpandedId(t.id);
+    setSaveError(null);
     setEditNameFr(t.name_fr ?? '');
     setEditNameEn(t.name_en ?? '');
     setEditIcon(t.icon ?? '');
     setEditCategoryId(t.category_id ?? '');
   }
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   async function saveEdit(id: string) {
     setSaving(true);
+    setSaveError(null);
     try {
       await api.patch(`/problem-types/${id}`, {
         nameFr: editNameFr, nameEn: editNameEn, icon: editIcon, categoryId: editCategoryId,
@@ -596,16 +614,15 @@ function ProblemTypesAdmin() {
       setExpandedId(null);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setSaveError(err instanceof Error ? err.message : 'Erreur.');
     } finally {
       setSaving(false);
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Types de problèmes ({types.length})
       </div>
@@ -631,7 +648,6 @@ function ProblemTypesAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <div className="field-group" style={{ flex: 1 }}>
                     <label className="field-label">Nom (français)</label>
@@ -659,6 +675,12 @@ function ProblemTypesAdmin() {
                 <button className="btn-primary" onClick={() => saveEdit(t.id)} disabled={saving}>
                   {saving ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
+                {saveError && (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="error-banner" style={{ marginBottom: 8 }}>{saveError}</div>
+                    <button className="btn-ghost" style={{ fontSize: 12.5 }} onClick={() => setSaveError(null)}>← Retour au type</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -734,10 +756,9 @@ function UsersAdmin() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Utilisateurs ({users.length})
       </div>
@@ -794,8 +815,6 @@ function UsersAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(u)}>← Retour à la liste</button>
-                {saveError && <div className="error-banner">{saveError}</div>}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <div className="field-group" style={{ flex: 1 }}>
                     <label className="field-label">Prénom</label>
@@ -817,6 +836,12 @@ function UsersAdmin() {
                 <button className="btn-primary" onClick={() => saveEdit(u.id)} disabled={saving}>
                   {saving ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
+                {saveError && (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="error-banner" style={{ marginBottom: 8 }}>{saveError}</div>
+                    <button className="btn-ghost" style={{ fontSize: 12.5 }} onClick={() => setSaveError(null)}>← Retour à l'usager</button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -885,8 +910,6 @@ function SiteSettingsAdmin() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   const booleanSettings = settings.filter((s) => typeof s.value === 'boolean');
   const otherSettings = settings.filter((s) => typeof s.value !== 'boolean' && s.key !== 'lifecycle_days' && s.key !== 'site_banner');
 
@@ -900,6 +923,7 @@ function SiteSettingsAdmin() {
 
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Comportement de la plateforme
       </div>
@@ -1070,10 +1094,9 @@ function MunicipalitiesAdmin() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      {error && <div className="error-banner" style={{ width: '100%', marginBottom: 4 }}>{error}</div>}
       <div style={{ flex: '1 1 320px', minWidth: 280 }}>
         <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
           Municipalités ({total})
@@ -1191,6 +1214,7 @@ function AllReportsAdmin() {
   const [editTypeId, setEditTypeId] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<any[]>([]);
   const [newPhotoFiles, setNewPhotoFiles] = useState<File[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -1226,6 +1250,7 @@ function AllReportsAdmin() {
     setEditStatus(r.status);
     setPhotos([]);
     setNewPhotoFiles([]);
+    setSaveError(null);
     api.get<any>(`/moderation/${r.id}`).then((detail) => setPhotos(detail.photos ?? [])).catch(() => {});
   }
 
@@ -1257,6 +1282,7 @@ function AllReportsAdmin() {
 
   async function saveEdit(id: string) {
     setSaving(true);
+    setSaveError(null);
     try {
       await api.patch(`/moderation/all-reports/${id}`, {
         description: editDescription, addressText: editAddress, problemTypeId: editTypeId, status: editStatus,
@@ -1264,7 +1290,7 @@ function AllReportsAdmin() {
       setExpandedId(null);
       load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur.');
+      setSaveError(err instanceof Error ? err.message : 'Erreur.');
     } finally {
       setSaving(false);
     }
@@ -1315,10 +1341,9 @@ function AllReportsAdmin() {
     setSelectedIds((prev) => (prev.size === results.length ? new Set() : new Set(results.map((r) => r.id))));
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Tous les signalements ({total})
       </div>
@@ -1411,7 +1436,6 @@ function AllReportsAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }} onClick={(e) => e.stopPropagation()}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(r)}>← Retour à la liste</button>
                 <div className="field-group">
                   <label className="field-label">Photos</label>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -1484,6 +1508,12 @@ function AllReportsAdmin() {
                     🗑️ Supprimer définitivement
                   </button>
                 </div>
+                {saveError && (
+                  <div style={{ marginTop: 10 }}>
+                    <div className="error-banner" style={{ marginBottom: 8 }}>{saveError}</div>
+                    <button className="btn-ghost" style={{ fontSize: 12.5 }} onClick={() => setSaveError(null)}>← Retour au signalement</button>
+                  </div>
+                )}
               </div>
             )}
             </div>
@@ -1570,10 +1600,9 @@ function EmailTemplatesAdmin() {
     }
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Gabarits de courriels ({templates.length})
       </div>
@@ -1595,7 +1624,6 @@ function EmailTemplatesAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
                   {t.available_variables.map((v: string) => (
                     <span
@@ -1725,10 +1753,9 @@ function SupportTicketsAdmin() {
     loadList();
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Tickets de support ({tickets.length})
       </div>
@@ -1760,7 +1787,6 @@ function SupportTicketsAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
-                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 {!detail && <div className="center-msg">Chargement...</div>}
                 {detail && (
                   <>
@@ -1940,10 +1966,9 @@ function MessagingAdmin() {
     load();
   }
 
-  if (error) return <div className="error-banner">{error}</div>;
-
   return (
     <div>
+      {error && <div className="error-banner" style={{ marginBottom: 16 }}>{error}</div>}
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Messages signalés ({flagged.length})
       </div>
