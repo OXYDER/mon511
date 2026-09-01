@@ -152,6 +152,63 @@ export class MunicipalPortalController {
     return this.service.rejectReportInMyRegion(user.userId, id, reason);
   }
 
+  // ---------- Statistiques du rapport périodique ----------
+
+  @Get('my-region/report/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  async myRegionReportStats(@CurrentUser() user: CurrentUserPayload, @Query('days') days?: string) {
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - (Number(days) || 30));
+    return this.service.computeMyRegionReportStats(user.userId, periodStart, periodEnd);
+  }
+
+  @Get('admin/regions/:regionId/report/stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  async regionReportStats(@Param('regionId') regionId: string, @Query('days') days?: string) {
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - (Number(days) || 30));
+    return this.service.computeReportStats(regionId, periodStart, periodEnd);
+  }
+
+  @Get('my-region/report/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionReportSettings(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionReportSettings(user.userId);
+  }
+
+  @Patch('my-region/report/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  updateMyRegionReportSettings(@CurrentUser() user: CurrentUserPayload, @Body() body: { frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
+    return this.service.updateMyRegionReportSettings(user.userId, body.frequency, body.enabledStats);
+  }
+
+  @Get('admin/regions/:regionId/report/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  getRegionReportSettings(@Param('regionId') regionId: string) {
+    return this.service.getReportSettingsForRegion(regionId);
+  }
+
+  @Patch('admin/regions/:regionId/report/settings')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  updateRegionReportSettings(@Param('regionId') regionId: string, @Body() body: { frequency: 'weekly' | 'monthly'; enabledStats: string[] }) {
+    return this.service.updateReportSettingsForRegion(regionId, body.frequency, body.enabledStats);
+  }
+
+  @Post('admin/regions/:regionId/report/test-send')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  sendTestReport(@Param('regionId') regionId: string, @Body('email') email: string) {
+    return this.service.sendTestReportEmail(regionId, email);
+  }
+
   @Get('my-region/posts/queue')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

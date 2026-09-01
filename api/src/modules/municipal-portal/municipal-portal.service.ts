@@ -449,6 +449,11 @@ export class MunicipalPortalService {
     return this.getReportSettingsForRegion(regionId);
   }
 
+  async computeMyRegionReportStats(userId: string, periodStart: Date, periodEnd: Date) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.computeReportStats(regionId, periodStart, periodEnd);
+  }
+
   async getReportSettingsForRegion(regionId: string) {
     const existing = await this.db.selectFrom('municipality_report_settings').selectAll().where('region_id', '=', regionId).executeTakeFirst();
     if (existing) return existing;
@@ -715,5 +720,114 @@ export class MunicipalPortalService {
       )
       .join('\n');
     return header + rows;
+  }
+
+  // ---------- Rapport périodique par courriel ----------
+
+  /** Construit le HTML du rapport à partir des statistiques déjà
+   * calculées, en ne montrant que celles activées pour cette
+   * municipalité (enabledStats) — même fonction utilisée pour le vrai
+   * envoi périodique et pour le test manuel, garantit que le test
+   * reflète fidèlement ce qui sera vraiment envoyé. */
+  private renderReportStatsHtml(stats: Awaited<ReturnType<MunicipalPortalService['computeReportStats']>>, enabledStats: string[]): string {
+    const section = (title: string, content: string) =>
+      `<div style="margin:20px 0;"><h3 style="font-size:15px;margin:0 0 8px;">${title}</h3>${content}</div>`;
+
+    let html = '';
+
+    if (enabledStats.includes('active_by_type')) {
+      const rows = stats.activeByType.map((s) => `<tr><td style="padding:4px 8px;">${s.icon ?? '📍'} ${s.typeName}</td><td style="padding:4px 8px;text-align:right;">${s.count}</td></tr>`).join('');
+      html += section('Signalements actifs par type', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucun</td></tr>'}</table>`);
+    }
+    if (enabledStats.includes('resolved_period') || enabledStats.includes('new_period') || enabledStats.includes('removed_period')) {
+      const cells: string[] = [];
+      if (enabledStats.includes('new_period')) cells.push(`<td style="padding:8px;text-align:center;"><div style="font-size:20px;font-weight:700;">${stats.newPeriod}</div><div style="font-size:11px;color:#777;">Nouveaux</div></td>`);
+      if (enabledStats.includes('resolved_period')) cells.push(`<td style="padding:8px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#3BD16F;">${stats.resolvedPeriod}</div><div style="font-size:11px;color:#777;">Résolus</div></td>`);
+      if (enabledStats.includes('removed_period')) cells.push(`<td style="padding:8px;text-align:center;"><div style="font-size:20px;font-weight:700;color:#999;">${stats.removedPeriod}</div><div style="font-size:11px;color:#777;">Retirés</div></td>`);
+      html += section('Activité de la période', `<table style="width:100%;"><tr>${cells.join('')}</tr></table>`);
+    }
+    if (enabledStats.includes('ranking')) {
+      html += section(
+        'Classement (TOP 100 municipalités)',
+        stats.ranking.myRank
+          ? `<p style="font-size:13px;margin:0;">Rang <strong>${stats.ranking.myRank}</strong> sur ${stats.ranking.totalRanked} — plus de signalements actifs signifie un rang moins bon.</p>`
+          : `<p style="font-size:13px;margin:0;color:#777;">Pas assez de signalements actifs pour figurer dans le classement.</p>`,
+      );
+    }
+    if (enabledStats.includes('resolution_performance')) {
+      html += section(
+        'Performance de résolution',
+        `<p style="font-size:13px;margin:0;">Taux de résolution : <strong>${stats.resolutionPerformance.rate !== null ? stats.resolutionPerformance.rate + ' %' : 'N/D'}</strong><br />Temps moyen de résolution : <strong>${stats.resolutionPerformance.avgResolutionDays !== null ? stats.resolutionPerformance.avgResolutionDays + ' jours' : 'N/D'}</strong></p>`,
+      );
+    }
+    if (enabledStats.includes('top_streets')) {
+      const rows = stats.topStreets.slice(0, 10).map((s) => `<tr><td style="padding:4px 8px;">${s.street}</td><td style="padding:4px 8px;text-align:right;">${s.count}</td></tr>`).join('');
+      html += section('Rues les plus problématiques', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucune</td></tr>'}</table>`);
+    }
+    if (enabledStats.includes('most_confirmed')) {
+      const rows = stats.mostConfirmed.map((r) => `<tr><td style="padding:4px 8px;">${r.icon ?? '📍'} ${r.typeName} — ${r.addressText ?? 'Adresse inconnue'}</td><td style="padding:4px 8px;text-align:right;">👍 ${r.confirmationsCount}</td></tr>`).join('');
+      html += section('Signalements les plus confirmés ("Présent")', `<table style="width:100%;border-collapse:collapse;font-size:13px;">${rows || '<tr><td style="padding:4px 8px;">Aucun</td></tr>'}</table>`);
+    }
+
+    return html;
+  }
+
+  /** Envoie le rapport périodique réel à tous les employés (municipal_staff
+   * + municipal_admin) de la municipalité — la période est calculée selon
+   * la fréquence configurée (semaine ou mois précédent). */
+  async sendPeriodicReportEmail(regionId: string) {
+    const settings = await this.getReportSettingsForRegion(regionId);
+    const now = new Date();
+    const periodEnd = now;
+    const periodStart = new Date(now);
+    if (settings.frequency === 'weekly') periodStart.setDate(periodStart.getDate() - 7);
+    else periodStart.setMonth(periodStart.getMonth() - 1);
+
+    const stats = await this.computeReportStats(regionId, periodStart, periodEnd);
+    const html = this.renderReportStatsHtml(stats, settings.enabled_stats as string[]);
+
+    const recipients = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select('users.email')
+      .where('users.region_id', '=', regionId)
+      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+      .execute();
+
+    for (const r of recipients) {
+      this.email
+        .send(
+          r.email,
+          `Rapport ${settings.frequency === 'weekly' ? 'hebdomadaire' : 'mensuel'} — ${stats.regionName} — mon511.ca`,
+          `Voici le rapport ${settings.frequency === 'weekly' ? 'hebdomadaire' : 'mensuel'} des signalements pour ${stats.regionName}.`,
+          { extraHtml: html },
+        )
+        .catch(() => {});
+    }
+
+    await this.db.updateTable('municipality_report_settings').set({ last_report_sent_at: new Date() as any }).where('region_id', '=', regionId).execute();
+    return { sent: true, recipientCount: recipients.length };
+  }
+
+  /** Envoi de TEST — même contenu que le vrai rapport (période des 30
+   * derniers jours, statistiques activées actuelles), mais envoyé
+   * seulement à l'adresse fournie, jamais aux vrais employés
+   * municipaux, et ne met jamais à jour last_report_sent_at. */
+  async sendTestReportEmail(regionId: string, testEmail: string) {
+    const settings = await this.getReportSettingsForRegion(regionId);
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - 30);
+
+    const stats = await this.computeReportStats(regionId, periodStart, periodEnd);
+    const html = this.renderReportStatsHtml(stats, settings.enabled_stats as string[]);
+
+    await this.email.send(
+      testEmail,
+      `[TEST] Rapport municipal — ${stats.regionName} — mon511.ca`,
+      `Ceci est un envoi de test du rapport municipal pour ${stats.regionName} (période des 30 derniers jours, à titre d'exemple).`,
+      { extraHtml: html },
+    );
+    return { sent: true };
   }
 }
