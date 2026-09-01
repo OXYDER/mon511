@@ -383,14 +383,16 @@ export class MunicipalPortalService {
       // l'adresse. Le nom de rue seul (numéro civique retiré) sert de
       // partition — le regroupement par distance ne se fait donc jamais
       // entre deux rues différentes — puis les signalements à moins de
-      // 150 mètres les uns des autres sur cette même rue sont regroupés
-      // en une seule « zone ». STANDARD ÉTABLI : 150 mètres correspond
-      // approximativement à un pâté de maisons typique au Québec — assez
-      // pour regrouper des signalements clairement dans le même secteur
-      // problématique, sans fusionner des extrémités éloignées d'une
-      // longue route. minpoints=2 exclut les signalements isolés (pas
-      // vraiment une « zone » à eux seuls) — voir WHERE cluster_id IS
-      // NOT NULL plus bas.
+      // 250 mètres les uns des autres sur cette même rue sont regroupés
+      // en une seule « zone ». STANDARD ÉTABLI : 150 mètres (un pâté de
+      // maisons urbain) s'est avéré trop serré en pratique pour les
+      // routes rurales (ex. « Chemin Craig ») où les numéros civiques
+      // sont naturellement plus espacés — mesures réelles jusqu'à ~190m
+      // entre deux adresses clairement dans le même secteur. 250 mètres
+      // laisse une marge réaliste sans fusionner des extrémités
+      // éloignées d'une longue route. minpoints=2 exclut les
+      // signalements isolés (pas vraiment une « zone » à eux seuls) —
+      // voir WHERE cluster_id IS NOT NULL plus bas.
       sql<{ streetName: string; minCivic: number | null; maxCivic: number | null; count: number; centerLat: number; centerLng: number }>`
         SELECT street_name AS "streetName", min(civic_number) AS "minCivic", max(civic_number) AS "maxCivic",
                count(*) AS count, avg(ST_Y(location::geometry)) AS "centerLat", avg(ST_X(location::geometry)) AS "centerLng"
@@ -401,10 +403,10 @@ export class MunicipalPortalService {
             location,
             -- ST_Transform vers EPSG:32198 (NAD83 / Québec Lambert, en
             -- MÈTRES) est essentiel ici — location est en SRID 4326
-            -- (degrés). Sans cette transformation, eps := 150 serait
-            -- interprété comme 150 DEGRÉS (une distance absurde, plus
-            -- grande que tout le Québec), pas 150 mètres.
-            ST_ClusterDBSCAN(ST_Transform(location, 32198), eps := 150, minpoints := 2) OVER (
+            -- (degrés). Sans cette transformation, eps := 250 serait
+            -- interprété comme 250 DEGRÉS (une distance absurde, plus
+            -- grande que tout le Québec), pas 250 mètres.
+            ST_ClusterDBSCAN(ST_Transform(location, 32198), eps := 250, minpoints := 2) OVER (
               PARTITION BY regexp_replace(split_part(address_text, ',', 1), '^\s*\d+[A-Za-z]?\s*', '')
             ) AS cluster_id
           FROM reports
