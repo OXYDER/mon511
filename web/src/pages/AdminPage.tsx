@@ -1358,6 +1358,21 @@ function AllReportsAdmin() {
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmingDeleteIds, setConfirmingDeleteIds] = useState<string[] | null>(null);
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
+
+  async function runIncidentsBackfill() {
+    setBackfillRunning(true);
+    setBackfillResult(null);
+    try {
+      const r = await api.post<{ processed: number; incidentsCreated: number; attachedToExisting: number }>('/reports/admin/backfill-incidents', {});
+      setBackfillResult(`${r.processed} signalement(s) traité(s) — ${r.incidentsCreated} nouvel/nouveaux incident(s), ${r.attachedToExisting} rattaché(s) à un incident existant.`);
+    } catch (err) {
+      setBackfillResult(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setBackfillRunning(false);
+    }
+  }
   const [deleting, setDeleting] = useState(false);
   const LIMIT = 30;
 
@@ -1490,6 +1505,20 @@ function AllReportsAdmin() {
         pour la file d'approbation active, voir l'onglet « File de modération ». Cliquer sur un
         signalement pour l'éditer ou le supprimer.
       </p>
+
+      <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Regroupement en incidents</div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+          Regroupe automatiquement les signalements dupliqués (même type, même municipalité, moins
+          de 40 mètres d'écart) en un seul incident pour le portail municipal. Les nouveaux
+          signalements sont regroupés automatiquement — ce bouton ne sert qu'à rattraper ceux créés
+          avant la mise en place du système.
+        </p>
+        <button className="btn-ghost" onClick={runIncidentsBackfill} disabled={backfillRunning}>
+          {backfillRunning ? 'Traitement...' : '🔗 Rattraper les incidents existants'}
+        </button>
+        {backfillResult && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8 }}>{backfillResult}</div>}
+      </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <input
