@@ -234,6 +234,7 @@ function ModerationQueue() {
                 directement sous la carte cliquée. */}
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(r.id)}>← Retour à la liste</button>
                 {!detail && <div className="center-msg">Chargement...</div>}
                 {detail && (
                   <>
@@ -630,6 +631,7 @@ function ProblemTypesAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 <div style={{ display: 'flex', gap: 10 }}>
                   <div className="field-group" style={{ flex: 1 }}>
                     <label className="field-label">Nom (français)</label>
@@ -792,6 +794,7 @@ function UsersAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(u)}>← Retour à la liste</button>
                 {saveError && <div className="error-banner">{saveError}</div>}
                 <div style={{ display: 'flex', gap: 10 }}>
                   <div className="field-group" style={{ flex: 1 }}>
@@ -1408,6 +1411,7 @@ function AllReportsAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }} onClick={(e) => e.stopPropagation()}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(r)}>← Retour à la liste</button>
                 <div className="field-group">
                   <label className="field-label">Photos</label>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -1591,6 +1595,7 @@ function EmailTemplatesAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
                   {t.available_variables.map((v: string) => (
                     <span
@@ -1755,6 +1760,7 @@ function SupportTicketsAdmin() {
 
             {isExpanded && (
               <div style={{ background: 'var(--panel)', border: '1px solid var(--accent-signal)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: 20, marginTop: -1 }}>
+                <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={() => toggleExpand(t)}>← Retour à la liste</button>
                 {!detail && <div className="center-msg">Chargement...</div>}
                 {detail && (
                   <>
