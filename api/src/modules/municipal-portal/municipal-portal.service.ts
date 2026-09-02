@@ -569,11 +569,12 @@ export class MunicipalPortalService {
       groupKey: string; incidentId: string | null; representativeReportId: string;
       problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null;
       reportCount: number; firstReportedAt: Date; lastReportedAt: Date; thumbnailUrl: string | null;
+      lat: number; lng: number;
     }>`
       WITH grouped AS (
         SELECT
           COALESCE(incident_id::text, id::text) AS group_key,
-          incident_id, id, problem_type_id, address_text, created_at,
+          incident_id, id, problem_type_id, address_text, created_at, location,
           ROW_NUMBER() OVER (PARTITION BY COALESCE(incident_id::text, id::text) ORDER BY created_at ASC) AS rn
         FROM reports
         WHERE region_id = ${regionId} AND status IN ('pending_moderation', 'published_unresolved')
@@ -584,7 +585,8 @@ export class MunicipalPortalService {
         (SELECT count(*) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key AND r2.status != 'rejected') AS "reportCount",
         (SELECT min(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "firstReportedAt",
         (SELECT max(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "lastReportedAt",
-        (SELECT url FROM report_photos WHERE report_photos.report_id = g.id ORDER BY uploaded_at ASC LIMIT 1) AS "thumbnailUrl"
+        (SELECT url FROM report_photos WHERE report_photos.report_id = g.id ORDER BY uploaded_at ASC LIMIT 1) AS "thumbnailUrl",
+        ST_Y(g.location::geometry) AS "lat", ST_X(g.location::geometry) AS "lng"
       FROM grouped g
       INNER JOIN problem_types pt ON pt.id = g.problem_type_id
       WHERE g.rn = 1

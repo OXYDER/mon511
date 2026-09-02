@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, getToken, clearToken } from '../api';
 import AuthModal from './AuthModal';
+import MapView, { MapPin } from './MapView';
 
 interface Props {
   lang: 'fr' | 'en';
@@ -189,7 +190,6 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
   {
     group: 'OPÉRATIONS',
     items: [
-      { key: 'map', icon: '⌖', label: { fr: 'Carte', en: 'Map' }, ready: false },
       { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: false },
     ],
   },
@@ -246,7 +246,7 @@ function ApprovedScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: 
         {tab === 'dashboard' && <DashboardView lang={lang} regionName={regionName} />}
         {tab === 'reports' && <ReportsListView lang={lang} />}
         {tab === 'settings' && <ReportSettingsView lang={lang} />}
-        {['map', 'interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
+        {['interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
             {fr ? 'Bientôt disponible.' : 'Coming soon.'}
           </div>
@@ -325,6 +325,8 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
   const [groups, setGroups] = useState<any[]>([]);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [expandedReports, setExpandedReports] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map'>('list');
+  const [sortBy, setSortBy] = useState<'lastReportedAt' | 'reportCount' | 'problemTypeNameFr'>('lastReportedAt');
   const fr = lang === 'fr';
 
   useEffect(() => {
@@ -338,40 +340,144 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
     setExpandedReports(reports);
   }
 
+  const sorted = [...groups].sort((a, b) => {
+    if (sortBy === 'reportCount') return b.reportCount - a.reportCount;
+    if (sortBy === 'problemTypeNameFr') return a.problemTypeNameFr.localeCompare(b.problemTypeNameFr);
+    return new Date(b.lastReportedAt).getTime() - new Date(a.lastReportedAt).getTime();
+  });
+
+  const mapPins: MapPin[] = groups
+    .filter((g) => g.lat && g.lng)
+    .map((g) => ({
+      id: g.groupKey,
+      latitude: g.lat,
+      longitude: g.lng,
+      icon: g.problemTypeIcon ?? '📍',
+      colorVar: 'unresolved',
+      selected: expandedKey === g.groupKey,
+      onClick: () => toggleExpand(g.groupKey),
+    }));
+  const mapCenter = mapPins.length > 0 ? { lat: mapPins[0].latitude, lng: mapPins[0].longitude, zoom: 12 } : null;
+
+  const VIEW_MODES: { key: typeof viewMode; icon: string; label: { fr: string; en: string } }[] = [
+    { key: 'list', icon: '☰', label: { fr: 'Liste', en: 'List' } },
+    { key: 'table', icon: '▤', label: { fr: 'Tableau', en: 'Table' } },
+    { key: 'grid', icon: '▦', label: { fr: 'Grille', en: 'Grid' } },
+    { key: 'map', icon: '⌖', label: { fr: 'Carte', en: 'Map' } },
+  ];
+
   return (
     <div>
-      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Tous les signalements' : 'All reports'} ({groups.length} {fr ? 'incidents' : 'incidents'})</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Tous les signalements' : 'All reports'} ({groups.length} {fr ? 'incidents' : 'incidents'})</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {VIEW_MODES.map((v) => (
+            <button
+              key={v.key}
+              className="btn-ghost"
+              style={{ fontSize: 11.5, padding: '5px 10px', border: viewMode === v.key ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+              onClick={() => setViewMode(v.key)}
+              title={fr ? v.label.fr : v.label.en}
+            >
+              {v.icon} {fr ? v.label.fr : v.label.en}
+            </button>
+          ))}
+        </div>
+      </div>
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
         {fr
           ? "Les signalements du même problème, proches les uns des autres, sont regroupés — clique pour voir les déclarations individuelles."
           : 'Reports of the same problem, close to each other, are grouped — click to see individual declarations.'}
       </p>
-      {groups.map((g) => (
-        <div key={g.groupKey}>
-          <div
-            onClick={() => toggleExpand(g.groupKey)}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5, cursor: 'pointer' }}
-          >
-            {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600 }}>{g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                {g.reportCount > 1
-                  ? (fr ? `${g.reportCount} signalements citoyens` : `${g.reportCount} citizen reports`)
-                  : (fr ? '1 signalement' : '1 report')}
-                {' · '}
-                {fr ? 'Premier' : 'First'} {new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}
-                {g.reportCount > 1 && <> · {fr ? 'Dernier' : 'Last'} {new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</>}
+
+      {viewMode === 'list' && (
+        <div>
+          {sorted.map((g) => (
+            <div key={g.groupKey}>
+              <div
+                onClick={() => toggleExpand(g.groupKey)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5, cursor: 'pointer' }}
+              >
+                {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600 }}>{g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                    {g.reportCount > 1
+                      ? (fr ? `${g.reportCount} signalements citoyens` : `${g.reportCount} citizen reports`)
+                      : (fr ? '1 signalement' : '1 report')}
+                    {' · '}
+                    {fr ? 'Premier' : 'First'} {new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}
+                    {g.reportCount > 1 && <> · {fr ? 'Dernier' : 'Last'} {new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</>}
+                  </div>
+                </div>
+                {g.reportCount > 1 && (
+                  <div style={{ background: 'var(--accent-signal)', color: '#14161B', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    {g.reportCount}
+                  </div>
+                )}
+              </div>
+              {expandedKey === g.groupKey && (
+                <div style={{ padding: '4px 0 10px 54px' }}>
+                  {expandedReports.map((r) => (
+                    <div key={r.id} style={{ fontSize: 11.5, color: 'var(--text-muted)', padding: '4px 0' }}>
+                      {new Date(r.created_at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {r.description && <> — {r.description}</>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {viewMode === 'table' && (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--panel-border)', textAlign: 'left' }}>
+              <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('problemTypeNameFr')}>{fr ? 'Type' : 'Type'}</th>
+              <th style={{ padding: '6px 8px' }}>{fr ? 'Adresse' : 'Address'}</th>
+              <th style={{ padding: '6px 8px', cursor: 'pointer', textAlign: 'right' }} onClick={() => setSortBy('reportCount')}>{fr ? 'Signalements' : 'Reports'}</th>
+              <th style={{ padding: '6px 8px' }}>{fr ? 'Premier' : 'First'}</th>
+              <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('lastReportedAt')}>{fr ? 'Dernier' : 'Last'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((g) => (
+              <tr key={g.groupKey} onClick={() => toggleExpand(g.groupKey)} style={{ cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
+                <td style={{ padding: '7px 8px' }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr}</td>
+                <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{g.addressText ?? '—'}</td>
+                <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: g.reportCount > 1 ? 700 : 400 }}>{g.reportCount}</td>
+                <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
+                <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {viewMode === 'grid' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+          {sorted.map((g) => (
+            <div key={g.groupKey} onClick={() => toggleExpand(g.groupKey)} style={{ background: 'var(--panel-hover)', borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: expandedKey === g.groupKey ? '1.5px solid var(--accent-signal)' : '1px solid transparent' }}>
+              {g.thumbnailUrl
+                ? <img src={g.thumbnailUrl} alt="" style={{ width: '100%', height: 90, objectFit: 'cover' }} />
+                : <div style={{ width: '100%', height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, background: 'var(--panel)' }}>{g.problemTypeIcon ?? '📍'}</div>}
+              <div style={{ padding: 8 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.problemTypeNameFr}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.addressText ?? '—'}</div>
+                {g.reportCount > 1 && <div style={{ fontSize: 10.5, color: 'var(--accent-signal)', fontWeight: 700, marginTop: 2 }}>{g.reportCount} {fr ? 'signalements' : 'reports'}</div>}
               </div>
             </div>
-            {g.reportCount > 1 && (
-              <div style={{ background: 'var(--accent-signal)', color: '#14161B', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                {g.reportCount}
-              </div>
-            )}
-          </div>
-          {expandedKey === g.groupKey && (
-            <div style={{ padding: '4px 0 10px 54px' }}>
+          ))}
+        </div>
+      )}
+
+      {viewMode === 'map' && (
+        <div style={{ borderRadius: 10, overflow: 'hidden' }}>
+          <MapView center={mapCenter} pins={mapPins} height={480} theme="dark" />
+          {expandedKey && (
+            <div style={{ marginTop: 10, background: 'var(--panel-hover)', borderRadius: 10, padding: 10 }}>
               {expandedReports.map((r) => (
                 <div key={r.id} style={{ fontSize: 11.5, color: 'var(--text-muted)', padding: '4px 0' }}>
                   {new Date(r.created_at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -381,7 +487,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
             </div>
           )}
         </div>
-      ))}
+      )}
     </div>
   );
 }
