@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
-import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken, setToken } from '../api';
+import { api, getUserRole, getToken, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken, setToken } from '../api';
 import { getSocket } from '../socket';
 import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
@@ -8,6 +8,7 @@ import MessageToast from '../components/MessageToast';
 import { searchCities, reverseGeocode, GeocodingResult, getSearchHistory, addToSearchHistory, removeFromSearchHistory, clearSearchHistory } from '../geocoding';
 import MapView, { MapPin, RoadLineFeature, MapType } from '../components/MapView';
 import ToggleSwitch from '../components/ToggleSwitch';
+import Tooltip from '../components/Tooltip';
 
 // Chargés seulement au moment où on en a vraiment besoin (après une action
 // de l'usager) — pas nécessaires au tout premier affichage de la carte,
@@ -297,7 +298,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
       setLang(next);
       setStoredLang(next);
     } else {
-      window.location.href = `${window.location.protocol}//${targetHost}${window.location.pathname}${window.location.search}`;
+      // mon511.ca et my511.ca sont deux origines différentes pour le
+      // navigateur — chacune a donc son propre stockage local
+      // (localStorage), et la session ne « traverserait » jamais
+      // naturellement de l'une à l'autre. Transmet le jeton actuel via
+      // un paramètre d'URL temporaire — le domaine cible le récupère à
+      // son chargement (voir App.tsx) et le retire immédiatement de
+      // l'URL, pour rester connecté sans avoir à se reconnecter
+      // manuellement à chaque changement de langue.
+      const token = getToken();
+      const url = new URL(`${window.location.protocol}//${targetHost}${window.location.pathname}${window.location.search}`);
+      if (token) url.searchParams.set('authTransfer', token);
+      window.location.href = url.toString();
     }
   }
 
@@ -993,21 +1005,25 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           {authenticated ? (
             <>
               {isModerator && (
-                <button className="icon-btn" title={t('administration', lang)} onClick={() => setShowAdmin(true)}>🛡️</button>
+                <Tooltip text={t('administration', lang)}><button className="icon-btn" onClick={() => setShowAdmin(true)}>🛡️</button></Tooltip>
               )}
-              <button className="icon-btn" title={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'} onClick={() => setShowMunicipalPortal(true)}>🏛️</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Mes signalements' : 'My reports'} onClick={() => setShowMyReports(true)}>📋</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Messages' : 'Messages'} onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); }}>
-                💬
-                {unreadMessagesCount > 0 && <span className="badge-dot">{unreadMessagesCount}</span>}
-              </button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Amis' : 'Friends'} onClick={() => setShowFriends(true)}>👥</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Communauté' : 'Community'} onClick={() => setShowCommunityFeed(true)}>📰</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
-                🔔
-                {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
-              </button>
-              <button className="icon-btn" title={t('monProfil', lang)} onClick={() => setShowProfileModal(true)}>👤</button>
+              <Tooltip text={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'}><button className="icon-btn" onClick={() => setShowMunicipalPortal(true)}>🏛️</button></Tooltip>
+              <Tooltip text={lang === 'fr' ? 'Mes signalements' : 'My reports'}><button className="icon-btn" onClick={() => setShowMyReports(true)}>📋</button></Tooltip>
+              <Tooltip text={lang === 'fr' ? 'Messages' : 'Messages'}>
+                <button className="icon-btn" onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); }}>
+                  💬
+                  {unreadMessagesCount > 0 && <span className="badge-dot">{unreadMessagesCount}</span>}
+                </button>
+              </Tooltip>
+              <Tooltip text={lang === 'fr' ? 'Amis' : 'Friends'}><button className="icon-btn" onClick={() => setShowFriends(true)}>👥</button></Tooltip>
+              <Tooltip text={lang === 'fr' ? 'Communauté' : 'Community'}><button className="icon-btn" onClick={() => setShowCommunityFeed(true)}>📰</button></Tooltip>
+              <Tooltip text={lang === 'fr' ? 'Notifications' : 'Notifications'}>
+                <button className="icon-btn" onClick={() => setShowNotifications(true)}>
+                  🔔
+                  {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
+                </button>
+              </Tooltip>
+              <Tooltip text={t('monProfil', lang)}><button className="icon-btn" onClick={() => setShowProfileModal(true)}>👤</button></Tooltip>
             </>
           ) : (
             <>
@@ -1017,15 +1033,21 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               </button>
             </>
           )}
-          <button className="icon-btn" title="FR / EN" onClick={toggleLang} style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
-            {lang === 'fr' ? 'EN' : 'FR'}
-          </button>
-          <button className="icon-btn" title={t('changerTheme', lang)} onClick={onToggleTheme}>
-            {theme === 'dark' ? '🌙' : '☀️'}
-          </button>
-          <button className="icon-btn" title={lang === 'fr' ? 'À propos' : 'About'} onClick={() => setShowAbout(true)}>
-            ℹ️
-          </button>
+          <Tooltip text="FR / EN">
+            <button className="icon-btn" onClick={toggleLang} style={{ fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+              {lang === 'fr' ? 'EN' : 'FR'}
+            </button>
+          </Tooltip>
+          <Tooltip text={t('changerTheme', lang)}>
+            <button className="icon-btn" onClick={onToggleTheme}>
+              {theme === 'dark' ? '🌙' : '☀️'}
+            </button>
+          </Tooltip>
+          <Tooltip text={lang === 'fr' ? 'À propos' : 'About'}>
+            <button className="icon-btn" onClick={() => setShowAbout(true)}>
+              ℹ️
+            </button>
+          </Tooltip>
         </div>
 
         {/* Menu ☰ — seul visible en très petite résolution (media query),

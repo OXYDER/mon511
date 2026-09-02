@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, getToken, clearToken } from './api';
+import { api, getToken, setToken, clearToken } from './api';
 import { closeSocket } from './socket';
 import { getStoredLang } from './i18n';
 import MapPage from './pages/MapPage';
@@ -7,6 +7,26 @@ import AuthModal from './components/AuthModal';
 import CookieConsentBanner from './components/CookieConsentBanner';
 
 const COOKIE_CONSENT_KEY = 'mon511_cookie_consent';
+
+// Récupère le jeton transféré depuis l'autre domaine (mon511.ca <->
+// my511.ca) lors d'un changement de langue — voir toggleLang() dans
+// MapPage.tsx. Exécuté une seule fois, avant même le premier rendu du
+// composant (pas dans un effet), pour que l'état `authenticated`
+// initial (useState(!!getToken())) reflète déjà la bonne valeur sans
+// clignotement (courte apparition de l'état déconnecté avant d'être
+// corrigée). Retire immédiatement le paramètre de l'URL — un jeton ne
+// devrait jamais rester visible dans la barre d'adresse plus
+// longtemps que nécessaire.
+(function receiveAuthTransfer() {
+  const params = new URLSearchParams(window.location.search);
+  const transferredToken = params.get('authTransfer');
+  if (transferredToken) {
+    setToken(transferredToken);
+    params.delete('authTransfer');
+    const newSearch = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+  }
+})();
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
