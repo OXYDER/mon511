@@ -7,14 +7,19 @@ interface Props {
   onAuthenticated: () => void;
   initialMode?: 'login' | 'register';
   lang?: 'fr' | 'en';
+  /** Pré-remplit ET verrouille le champ courriel — utilisé pour
+   * l'inscription depuis un lien d'invitation municipale ciblant une
+   * adresse précise (empêche de s'inscrire avec une autre adresse que
+   * celle invitée, ce qui ferait échouer la rédemption plus tard). */
+  lockedEmail?: string;
 }
 
 type View = 'login' | 'register' | 'verify' | 'forgot-email' | 'forgot-reset';
 
-export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login', lang = 'fr' }: Props) {
+export default function AuthModal({ onClose, onAuthenticated, initialMode = 'login', lang = 'fr', lockedEmail }: Props) {
   const fr = lang === 'fr';
   const [view, setView] = useState<View>(initialMode);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(lockedEmail ?? '');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -225,10 +230,17 @@ export default function AuthModal({ onClose, onAuthenticated, initialMode = 'log
                     className="text-input"
                     type="email"
                     required
+                    readOnly={!!lockedEmail}
                     placeholder={fr ? 'prenom.nom@courriel.com' : 'name@email.com'}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    style={lockedEmail ? { opacity: 0.7, cursor: 'not-allowed' } : undefined}
                   />
+                  {lockedEmail && (
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                      {fr ? 'Adresse fixée par ton invitation — ne peut être modifiée.' : 'Address set by your invitation — cannot be changed.'}
+                    </div>
+                  )}
                 </div>
                 <div className="field-group">
                   <label className="field-label">{fr ? 'Mot de passe' : 'Password'}</label>

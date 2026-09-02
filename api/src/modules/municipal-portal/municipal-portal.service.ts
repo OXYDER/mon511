@@ -597,6 +597,28 @@ export class MunicipalPortalService {
     });
 
     const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', invite.region_id).executeTakeFirst();
+
+    // Confirmation à l'inviteur — demandé explicitement, pour qu'il
+    // sache que l'invitation a bien été acceptée sans avoir à revenir
+    // vérifier la liste des invitations en attente.
+    const [inviter, newMember] = await Promise.all([
+      this.db.selectFrom('users').select('email').where('id', '=', invite.created_by).executeTakeFirst(),
+      this.db.selectFrom('users').select(['first_name', 'last_name', 'email']).where('id', '=', userId).executeTakeFirst(),
+    ]);
+    if (inviter) {
+      const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
+      const memberName = newMember?.first_name || newMember?.last_name
+        ? `${newMember.first_name ?? ''} ${newMember.last_name ?? ''}`.trim()
+        : (newMember?.email ?? 'Un nouveau membre');
+      this.email
+        .send(
+          inviter.email,
+          `${memberName} a rejoint ton équipe municipale — mon511.ca`,
+          `${memberName} (${newMember?.email ?? ''}) vient d'accepter ton invitation et fait maintenant partie de l'équipe de ${region?.name_fr ?? 'ta municipalité'} en tant que ${RANK_LABELS[invite.rank] ?? invite.rank}.`,
+        )
+        .catch(() => {});
+    }
+
     return { regionName: region?.name_fr, rank: invite.rank };
   }
 

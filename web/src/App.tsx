@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getToken, clearToken } from './api';
+import { api, getToken, clearToken } from './api';
 import { closeSocket } from './socket';
 import { getStoredLang } from './i18n';
 import MapPage from './pages/MapPage';
@@ -12,6 +12,7 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
+  const [lockedEmail, setLockedEmail] = useState<string | undefined>(undefined);
   const [showCookieBanner, setShowCookieBanner] = useState(() => !localStorage.getItem(COOKIE_CONSENT_KEY));
 
   function toggleTheme() {
@@ -49,6 +50,29 @@ export default function App() {
     return () => window.removeEventListener('mon511:session-expired', handleSessionExpired);
   }, []);
 
+  // Lien d'invitation municipale ciblant une adresse précise, cliqué
+  // par un usager PAS ENCORE connecté — ouvre directement le
+  // formulaire d'inscription avec ce courriel pré-rempli et verrouillé
+  // (la vraie rédemption du lien, une fois connecté, se fait dans
+  // MapPage.tsx, cet effet-ci ne fait que préparer le bon écran
+  // d'inscription si nécessaire). Ne touche jamais à l'URL — le lien
+  // reste présent pour que MapPage.tsx puisse ensuite le lire et
+  // compléter la rédemption une fois l'inscription terminée.
+  useEffect(() => {
+    if (authenticated) return;
+    const token = new URLSearchParams(window.location.search).get('municipalInvite');
+    if (!token) return;
+    api.get<{ valid: boolean; email?: string }>(`/municipal-portal/invites/${token}/preview`)
+      .then((preview) => {
+        if (preview.valid && preview.email) {
+          setLockedEmail(preview.email);
+          setAuthModalMode('register');
+        }
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
+
   return (
     <>
       <MapPage
@@ -62,10 +86,12 @@ export default function App() {
         <AuthModal
           initialMode={authModalMode}
           lang={getStoredLang()}
-          onClose={() => setAuthModalMode(null)}
+          lockedEmail={lockedEmail}
+          onClose={() => { setAuthModalMode(null); setLockedEmail(undefined); }}
           onAuthenticated={() => {
             setAuthenticated(true);
             setAuthModalMode(null);
+            setLockedEmail(undefined);
           }}
         />
       )}
