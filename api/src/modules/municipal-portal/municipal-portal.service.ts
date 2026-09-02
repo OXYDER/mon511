@@ -209,20 +209,6 @@ export class MunicipalPortalService {
 
   /** Statut de la propre demande de l'usager courant — pour afficher où il
    * en est (aucune demande, en attente, approuvé, refusé). */
-  async findMyAccessStatus(userId: string) {
-    const user = await this.db.selectFrom('users').innerJoin('roles', 'roles.id', 'users.role_id').select(['roles.name as roleName', 'users.region_id']).where('users.id', '=', userId).executeTakeFirst();
-    if (user?.roleName === 'municipal_staff' || user?.roleName === 'municipal_admin') {
-      return { status: 'approved' as const, regionId: user.region_id };
-    }
-    const request = await this.db
-      .selectFrom('municipality_access_requests')
-      .selectAll()
-      .where('user_id', '=', userId)
-      .orderBy('requested_at', 'desc')
-      .executeTakeFirst();
-    return { status: request?.status ?? 'none', regionId: request?.region_id ?? null };
-  }
-
   // ---------- Admin (approbation) ----------
 
   async findPendingAccessRequests(reviewerRegionId: string | null) {
@@ -325,6 +311,61 @@ export class MunicipalPortalService {
     return { regionId: user.region_id, tier: sub?.tier ?? 'free' };
   }
 
+  /** Vérifie qu'un employé a bien la permission demandée avant de
+   * lui laisser exécuter une action du portail — l'application RÉELLE
+   * (pas seulement l'interface de configuration) des permissions
+   * configurables par rang construites plus tôt. Un municipal_admin
+   * passe toujours (accès complet garanti, peu importe la
+   * configuration des rangs). Vérifié CÔTÉ SERVEUR sur chaque route
+   * concernée, pas seulement en cachant des boutons côté client — une
+   * simple dissimulation visuelle ne serait pas une vraie sécurité. */
+  private async checkPermission(userId: string, permissionKey: string): Promise<{ regionId: string; tier: 'free' | 'premium' }> {
+    const scope = await this.getScopeOrThrow(userId);
+    const user = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select(['roles.name as roleName', 'users.municipal_rank as rank'])
+      .where('users.id', '=', userId)
+      .executeTakeFirst();
+
+    if (user?.roleName === 'municipal_admin') return scope; // toujours accès complet
+
+    if (user?.roleName === 'municipal_staff' && user.rank) {
+      const perms = await this.getRankPermissionsForRegion(scope.regionId);
+      const rankPerms = perms.find((p: any) => p.rank === user.rank);
+      if (rankPerms && (rankPerms as any)[permissionKey]) return scope;
+    }
+
+    throw new ForbiddenException("Ton rang n'a pas accès à cette section — un gestionnaire principal peut ajuster les permissions dans Équipe.");
+  }
+
+  /** Permissions effectives de l'usager courant — pour que le frontend
+   * sache quoi afficher/cacher dans la navigation latérale. Un
+   * municipal_admin a toujours tout à true. */
+  async getMyEffectivePermissions(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    const user = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select(['roles.name as roleName', 'users.municipal_rank as rank'])
+      .where('users.id', '=', userId)
+      .executeTakeFirst();
+
+    const ALL_TRUE = {
+      can_view_dashboard: true, can_view_reports: true, can_edit_reports: true,
+      can_view_stats: true, can_view_comparatives: true, can_manage_team: true, can_manage_settings: true,
+    };
+    if (user?.roleName === 'municipal_admin') return ALL_TRUE;
+
+    if (user?.roleName === 'municipal_staff' && user.rank) {
+      const perms = await this.getRankPermissionsForRegion(regionId);
+      const rankPerms = perms.find((p: any) => p.rank === user.rank);
+      if (rankPerms) return rankPerms;
+    }
+
+    return { can_view_dashboard: true, can_view_reports: false, can_edit_reports: false, can_view_stats: false, can_view_comparatives: false, can_manage_team: false, can_manage_settings: false };
+  }
+
   /** Téléverse le logo de SA PROPRE municipalité — municipal_admin
    * seulement, scopé automatiquement via getScopeOrThrow. */
   async uploadMyRegionLogo(userId: string, file: Express.Multer.File) {
@@ -349,7 +390,7 @@ export class MunicipalPortalService {
    * de la même municipalité que l'appelant — pour l'onglet "Équipe" du
    * portail. */
   async findMyRegionTeam(userId: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_manage_team');
     return this.db
       .selectFrom('users')
       .innerJoin('roles', 'roles.id', 'users.role_id')
@@ -904,17 +945,17 @@ export class MunicipalPortalService {
   }
 
   async getMyRegionReportSettings(userId: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
     return this.getReportSettingsForRegion(regionId);
   }
 
   async computeMyRegionReportStats(userId: string, periodStart: Date, periodEnd: Date) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_stats');
     return this.computeReportStats(regionId, periodStart, periodEnd);
   }
 
   async computeMyRegionComparatives(userId: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_comparatives');
     return this.computeComparatives(regionId);
   }
 
@@ -935,7 +976,7 @@ export class MunicipalPortalService {
   }
 
   async updateMyRegionReportSettings(userId: string, enabled: boolean, frequency: 'weekly' | 'monthly', enabledStats: string[]) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
     return this.updateReportSettingsForRegion(regionId, enabled, frequency, enabledStats);
   }
 
@@ -958,7 +999,7 @@ export class MunicipalPortalService {
    * d'autres. Le signalement le plus ancien de chaque groupe sert de
    * représentant (adresse, type, photo). */
   async findMyRegionReportsQueue(userId: string, search?: string, statusFilter?: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
     const searchPattern = search ? `%${search}%` : null;
 
     return sql<{
@@ -998,7 +1039,7 @@ export class MunicipalPortalService {
    * d'un seul, si jamais rattaché) — pour voir "8 signalements" en
    * cliquant sur la carte groupée du portail. */
   async findIncidentReports(userId: string, groupKey: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
     // groupKey est soit un vrai incident_id, soit l'id d'un signalement
     // seul (jamais rattaché à un incident) — les deux cas sont couverts
     // par la même comparaison COALESCE que la requête groupée ci-dessus.
@@ -1024,7 +1065,7 @@ export class MunicipalPortalService {
    * (basé sur le signalement le plus ancien du groupe, tenu synchronisé
    * avec les autres par updateIncidentTracking ci-dessous). */
   async findIncidentDetail(userId: string, groupKey: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
 
     const reports = await this.db
       .selectFrom('reports')
@@ -1101,7 +1142,7 @@ export class MunicipalPortalService {
   /** Modifie la description/adresse du signalement représentatif d'un
    * incident — "pouvoir les modifier" demandé explicitement. */
   async updateIncidentReport(userId: string, groupKey: string, changes: { description?: string; addressText?: string }) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
     const representative = await this.db
       .selectFrom('reports')
       .select('id')
@@ -1128,7 +1169,7 @@ export class MunicipalPortalService {
    * la carte, pas seulement le statut interne de suivi) — marque TOUS
    * les signalements du groupe à la fois, pour rester cohérent. */
   async setIncidentPublicStatus(userId: string, groupKey: string, status: 'published_unresolved' | 'published_resolved') {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
     const reports = await this.db
       .selectFrom('reports')
       .select('id')
@@ -1160,7 +1201,7 @@ export class MunicipalPortalService {
     groupKey: string,
     changes: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string; publicNote?: string; publicNoteVisible?: boolean },
   ) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
 
     const reports = await this.db
       .selectFrom('reports')
@@ -1225,7 +1266,7 @@ export class MunicipalPortalService {
    * récente (tirée des vrais changements de suivi interne déjà
    * enregistrés, pas un nouveau journal séparé). */
   async getMyRegionDashboard(userId: string) {
-    const { regionId } = await this.getScopeOrThrow(userId);
+    const { regionId } = await this.checkPermission(userId, 'can_view_dashboard');
 
     const [byStatus, resolvedTotal, lateCount, resolutionPerf, priority, activity] = await Promise.all([
       // Cartes par statut interne — 'new' par défaut si aucune ligne de

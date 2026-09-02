@@ -33,11 +33,20 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('dashboard');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any>('/municipal-portal/my-access-status')
-      .then(setStatus)
+      .then((s) => {
+        setStatus(s);
+        if (s.status === 'approved') {
+          // Vraie vérification serveur des permissions par rang —
+          // détermine quelles sections apparaissent réellement dans la
+          // navigation, pas seulement une liste figée pour tous.
+          api.get<Record<string, boolean>>('/municipal-portal/my-effective-permissions').then(setPermissions).catch(() => {});
+        }
+      })
       .catch(() => setStatus({ status: 'none' }))
       .finally(() => setLoading(false));
   }, []);
@@ -75,27 +84,36 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
           {mobileNavOpen && <div className="admin-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
           <div className={`admin-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: 210, flexShrink: 0, position: 'sticky', top: 90 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 10px 10px', fontWeight: 600 }}>{status.regionName}</div>
-            {SIDEBAR_SECTIONS.map((section, i) => (
-              <div key={i} style={{ marginBottom: 16 }}>
-                {section.group && <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 10px', letterSpacing: 0.5, fontWeight: 600 }}>{section.group}</div>}
-                {section.items.map((item) => (
-                  <div
-                    key={item.key}
-                    onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 13,
-                      background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
-                      color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
-                      fontWeight: tab === item.key ? 600 : 400,
-                      opacity: item.ready ? 1 : 0.6,
-                    }}
-                  >
-                    <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
-                    {fr ? item.label.fr : item.label.en}
-                  </div>
-                ))}
-              </div>
-            ))}
+            {SIDEBAR_SECTIONS.map((section, i) => {
+              // Filtre selon les permissions réelles du rang — un item
+              // reste visible tant que les permissions ne sont pas
+              // encore chargées (évite un flash vide au chargement), le
+              // vrai contrôle d'accès se fait de toute façon côté
+              // serveur sur chaque route, pas seulement ici.
+              const visibleItems = section.items.filter((item) => !permissions || permissions[item.permissionKey]);
+              if (visibleItems.length === 0) return null;
+              return (
+                <div key={i} style={{ marginBottom: 16 }}>
+                  {section.group && <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 10px', letterSpacing: 0.5, fontWeight: 600 }}>{section.group}</div>}
+                  {visibleItems.map((item) => (
+                    <div
+                      key={item.key}
+                      onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 13,
+                        background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
+                        color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
+                        fontWeight: tab === item.key ? 600 : 400,
+                        opacity: item.ready ? 1 : 0.6,
+                      }}
+                    >
+                      <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                      {fr ? item.label.fr : item.label.en}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
           <div style={{ flex: 1, minWidth: 0, maxWidth: 1100 }}>
@@ -215,30 +233,30 @@ function PendingScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
   );
 }
 
-const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; label: { fr: string; en: string }; ready: boolean }[] }[] = [
-  { group: '', items: [{ key: 'dashboard', icon: '▦', label: { fr: 'Tableau de bord', en: 'Dashboard' }, ready: true }] },
+const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; label: { fr: string; en: string }; ready: boolean; permissionKey: string }[] }[] = [
+  { group: '', items: [{ key: 'dashboard', icon: '▦', label: { fr: 'Tableau de bord', en: 'Dashboard' }, ready: true, permissionKey: 'can_view_dashboard' }] },
   {
     group: 'SIGNALEMENTS',
-    items: [{ key: 'reports', icon: '◉', label: { fr: 'Tous les signalements', en: 'All reports' }, ready: true }],
+    items: [{ key: 'reports', icon: '◉', label: { fr: 'Tous les signalements', en: 'All reports' }, ready: true, permissionKey: 'can_view_reports' }],
   },
   {
     group: 'OPÉRATIONS',
     items: [
-      { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: false },
+      { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: false, permissionKey: 'can_view_reports' },
     ],
   },
   {
     group: 'ANALYSE',
     items: [
-      { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: true },
-      { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: true },
+      { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: true, permissionKey: 'can_view_stats' },
+      { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: true, permissionKey: 'can_view_comparatives' },
     ],
   },
   {
     group: 'ADMINISTRATION',
     items: [
-      { key: 'team', icon: '♟', label: { fr: 'Équipe', en: 'Team' }, ready: true },
-      { key: 'settings', icon: '⚙', label: { fr: 'Paramètres', en: 'Settings' }, ready: true },
+      { key: 'team', icon: '♟', label: { fr: 'Équipe', en: 'Team' }, ready: true, permissionKey: 'can_manage_team' },
+      { key: 'settings', icon: '⚙', label: { fr: 'Paramètres', en: 'Settings' }, ready: true, permissionKey: 'can_manage_settings' },
     ],
   },
 ];

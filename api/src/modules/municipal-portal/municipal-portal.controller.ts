@@ -28,6 +28,13 @@ export class MunicipalPortalController {
     return this.service.getMyAccessStatus(user.userId);
   }
 
+  @Get('my-effective-permissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyEffectivePermissions(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyEffectivePermissions(user.userId);
+  }
+
   @Get('public/:regionId')
   @UseGuards(JwtAuthGuard)
   findPublicMunicipalityPage(@Param('regionId') regionId: string) {
@@ -41,12 +48,6 @@ export class MunicipalPortalController {
     @Body() dto: { regionId: string; jobTitle: string; message?: string },
   ) {
     return this.service.requestAccess(user.userId, dto.regionId, dto.jobTitle, dto.message);
-  }
-
-  @Get('my-access-status')
-  @UseGuards(JwtAuthGuard)
-  findMyAccessStatus(@CurrentUser() user: CurrentUserPayload) {
-    return this.service.findMyAccessStatus(user.userId);
   }
 
   // ---------- Admin mon511 (approbation des demandes) ----------
