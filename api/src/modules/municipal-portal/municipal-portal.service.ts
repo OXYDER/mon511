@@ -480,25 +480,59 @@ export class MunicipalPortalService {
 
     await this.db
       .insertInto('municipal_invites')
-      .values({ region_id: regionId, rank: rank as any, token, email: cleanEmail, created_by: userId, expires_at: expiresAt as any })
+      .values({
+        region_id: regionId, rank: rank as any, token, email: cleanEmail, created_by: userId, expires_at: expiresAt as any,
+        last_sent_at: cleanEmail ? (new Date() as any) : null,
+      })
       .execute();
 
     if (cleanEmail) {
-      const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', regionId).executeTakeFirst();
-      const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
-      const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
-      const inviteUrl = `${frontendUrl}/?municipalInvite=${token}`;
-      this.email
-        .send(
-          cleanEmail,
-          `Invitation à rejoindre l'équipe municipale de ${region?.name_fr ?? 'ta municipalité'} — mon511.ca`,
-          `Tu as été invité(e) à rejoindre l'équipe municipale de ${region?.name_fr ?? ''} en tant que ${RANK_LABELS[rank] ?? rank}. Si tu n'as pas encore de compte mon511, tu peux en créer un avec cette même adresse courriel en cliquant le lien — ton compte sera automatiquement rattaché à l'équipe. Ce lien expire dans 48 heures et ne peut être utilisé qu'une seule fois.`,
-          { ctaLabel: "Rejoindre l'équipe", ctaUrl: inviteUrl },
-        )
-        .catch(() => {});
+      await this.sendInviteEmail(cleanEmail, token, regionId, rank);
     }
 
     return { token, expiresAt, email: cleanEmail };
+  }
+
+  /** Envoi effectif du courriel d'invitation — factorisé pour être
+   * réutilisé par la génération initiale ET le renvoi. */
+  private async sendInviteEmail(email: string, token: string, regionId: string, rank: string) {
+    const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', regionId).executeTakeFirst();
+    const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
+    const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+    const inviteUrl = `${frontendUrl}/?municipalInvite=${token}`;
+    await this.email
+      .send(
+        email,
+        `Invitation à rejoindre l'équipe municipale de ${region?.name_fr ?? 'ta municipalité'} — mon511.ca`,
+        `Tu as été invité(e) à rejoindre l'équipe municipale de ${region?.name_fr ?? ''} en tant que ${RANK_LABELS[rank] ?? rank}. Si tu n'as pas encore de compte mon511, tu peux en créer un avec cette même adresse courriel en cliquant le lien — ton compte sera automatiquement rattaché à l'équipe. Ce lien expire dans 48 heures et ne peut être utilisé qu'une seule fois.`,
+        { ctaLabel: "Rejoindre l'équipe", ctaUrl: inviteUrl },
+      )
+      .catch(() => {});
+  }
+
+  /** Renvoie le courriel d'une invitation déjà existante — protection
+   * anti-spam : au moins 2 minutes entre deux envois de la MÊME
+   * invitation, seuil de départ raisonnable pour empêcher un clic
+   * répété accidentel ou un usage abusif, ajustable si besoin. */
+  async resendMyRegionInvite(userId: string, inviteId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    const invite = await this.db.selectFrom('municipal_invites').selectAll().where('id', '=', inviteId).executeTakeFirst();
+    if (!invite || invite.region_id !== regionId) throw new NotFoundException('Invitation introuvable.');
+    if (invite.used_at) throw new BadRequestException('Cette invitation a déjà été utilisée.');
+    if (!invite.email) throw new BadRequestException("Cette invitation n'a pas de courriel associé — copie plutôt le lien directement.");
+
+    const COOLDOWN_MS = 2 * 60 * 1000;
+    if (invite.last_sent_at) {
+      const elapsed = Date.now() - new Date(invite.last_sent_at).getTime();
+      if (elapsed < COOLDOWN_MS) {
+        const waitSeconds = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
+        throw new BadRequestException(`Pour éviter le spam, attends encore ${waitSeconds} secondes avant de renvoyer ce courriel.`);
+      }
+    }
+
+    await this.sendInviteEmail(invite.email, invite.token, regionId, invite.rank);
+    await this.db.updateTable('municipal_invites').set({ last_sent_at: new Date() as any }).where('id', '=', inviteId).execute();
+    return { sent: true };
   }
 
   /** Invitations en attente (ni utilisées, ni expirées) pour la
@@ -508,7 +542,7 @@ export class MunicipalPortalService {
     const { regionId } = await this.getScopeOrThrow(userId);
     return this.db
       .selectFrom('municipal_invites')
-      .select(['id', 'rank', 'email', 'expires_at as expiresAt', 'created_at as createdAt'])
+      .select(['id', 'token', 'rank', 'email', 'expires_at as expiresAt', 'created_at as createdAt'])
       .where('region_id', '=', regionId)
       .where('used_at', 'is', null)
       .where('expires_at', '>', new Date() as any)

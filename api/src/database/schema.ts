@@ -98,6 +98,7 @@ export interface MunicipalInvitesTable {
   rank: 'director' | 'foreman' | 'employee';
   token: string;
   email: string | null;
+  last_sent_at: Timestamp | null;
   created_by: string;
   expires_at: Timestamp;
   used_at: Timestamp | null;

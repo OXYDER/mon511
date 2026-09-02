@@ -701,7 +701,6 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [inviteRank, setInviteRank] = useState('employee');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [permSaving, setPermSaving] = useState<string | null>(null);
@@ -739,16 +738,31 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
 
   async function generateInvite() {
     setGenerating(true);
-    setInviteLink(null);
+    setFeedback(null);
     try {
-      const r = await api.post<{ token: string }>('/municipal-portal/my-region/invites', { rank: inviteRank, email: inviteEmail.trim() || undefined });
-      setInviteLink(`${window.location.origin}/?municipalInvite=${r.token}`);
+      await api.post('/municipal-portal/my-region/invites', { rank: inviteRank, email: inviteEmail.trim() || undefined });
       setInviteEmail('');
       load();
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : 'Erreur.');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  function copyInviteLink(token: string) {
+    navigator.clipboard.writeText(`${window.location.origin}/?municipalInvite=${token}`);
+    setFeedback(fr ? 'Lien copié.' : 'Link copied.');
+  }
+
+  async function resendInvite(inviteId: string) {
+    setFeedback(null);
+    try {
+      await api.post(`/municipal-portal/my-region/invites/${inviteId}/resend`, {});
+      setFeedback(fr ? 'Courriel renvoyé.' : 'Email resent.');
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
     }
   }
 
@@ -852,22 +866,9 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
               onChange={(e) => setInviteEmail(e.target.value)}
             />
             <button className="btn-primary" onClick={generateInvite} disabled={generating}>
-              {generating ? (fr ? 'Génération...' : 'Generating...') : inviteEmail.trim() ? (fr ? 'Envoyer' : 'Send') : (fr ? "Générer un lien" : 'Generate link')}
+              {generating ? (fr ? 'Envoi...' : 'Sending...') : (fr ? 'Inviter le membre' : 'Invite member')}
             </button>
           </div>
-          {inviteLink && (
-            <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 20, fontSize: 12 }}>
-              <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{inviteLink}</div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => navigator.clipboard.writeText(inviteLink)}>
-                  {fr ? '📋 Copier' : '📋 Copy'}
-                </button>
-                <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>
-                  {fr ? '⏱️ Valide 48h, usage unique' : '⏱️ Valid 48h, single use'}
-                </span>
-              </div>
-            </div>
-          )}
 
           {pendingInvites.length > 0 && (
             <>
@@ -881,7 +882,13 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
                       {fr ? 'Expire le' : 'Expires'} {new Date(inv.expiresAt).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
-                  <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => cancelInvite(inv.id)}>{fr ? 'Annuler' : 'Cancel'}</button>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => copyInviteLink(inv.token)}>{fr ? '📋 Copier le lien' : '📋 Copy link'}</button>
+                    {inv.email && (
+                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => resendInvite(inv.id)}>{fr ? '✉️ Renvoyer' : '✉️ Resend'}</button>
+                    )}
+                    <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => cancelInvite(inv.id)}>{fr ? 'Annuler' : 'Cancel'}</button>
+                  </div>
                 </div>
               ))}
             </>

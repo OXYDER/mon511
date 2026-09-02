@@ -179,6 +179,13 @@ export class MunicipalPortalController {
     return this.service.cancelMyRegionInvite(user.userId, inviteId);
   }
 
+  @Post('my-region/invites/:inviteId/resend')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  resendMyRegionInvite(@Param('inviteId') inviteId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.resendMyRegionInvite(user.userId, inviteId);
+  }
+
   @Get('invites/:token/preview')
   previewInvite(@Param('token') token: string) {
     return this.service.previewInvite(token);
