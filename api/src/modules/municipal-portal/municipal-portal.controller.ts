@@ -137,6 +137,33 @@ export class MunicipalPortalController {
     return this.service.removeMyRegionTeamMember(user.userId, targetUserId);
   }
 
+  @Get('my-region/rank-permissions')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionRankPermissions(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionRankPermissions(user.userId);
+  }
+
+  @Patch('my-region/rank-permissions/:rank')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  updateMyRegionRankPermissions(@Param('rank') rank: string, @CurrentUser() user: CurrentUserPayload, @Body() permissions: Record<string, boolean>) {
+    return this.service.updateMyRegionRankPermissions(user.userId, rank, permissions);
+  }
+
+  @Post('my-region/invites')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  createMyRegionInvite(@CurrentUser() user: CurrentUserPayload, @Body('rank') rank: string) {
+    return this.service.createMyRegionInvite(user.userId, rank);
+  }
+
+  @Post('invites/:token/redeem')
+  @UseGuards(JwtAuthGuard)
+  redeemInvite(@Param('token') token: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.redeemInvite(user.userId, token);
+  }
+
   @Post('my-region/access-requests/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_admin')

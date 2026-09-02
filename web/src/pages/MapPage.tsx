@@ -962,6 +962,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               {isModerator && (
                 <button className="icon-btn" title={t('administration', lang)} onClick={() => setShowAdmin(true)}>🛡️</button>
               )}
+              <button className="icon-btn" title={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'} onClick={() => setShowMunicipalPortal(true)}>🏛️</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Mes signalements' : 'My reports'} onClick={() => setShowMyReports(true)}>📋</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Messages' : 'Messages'} onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); }}>
                 💬
@@ -969,7 +970,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               </button>
               <button className="icon-btn" title={lang === 'fr' ? 'Amis' : 'Friends'} onClick={() => setShowFriends(true)}>👥</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Communauté' : 'Community'} onClick={() => setShowCommunityFeed(true)}>📰</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'} onClick={() => setShowMunicipalPortal(true)}>🏛️</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
                 🔔
                 {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
@@ -1008,6 +1008,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
                 {isModerator && (
                   <div className="search-dropdown-item" onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }}>🛡️ {t('administration', lang)}</div>
                 )}
+                <div className="search-dropdown-item" onClick={() => { setShowMunicipalPortal(true); setShowMobileMenu(false); }}>🏛️ {lang === 'fr' ? 'Portail municipal' : 'Municipal portal'}</div>
                 <div className="search-dropdown-item" onClick={() => { setShowMyReports(true); setShowMobileMenu(false); }}>📋 {lang === 'fr' ? 'Mes signalements' : 'My reports'}</div>
                 <div className="search-dropdown-item" onClick={() => { setMessagingStartUserId(null); setShowMessaging(true); setShowMobileMenu(false); }}>
                   💬 {lang === 'fr' ? 'Messages' : 'Messages'}{unreadMessagesCount > 0 ? ` (${unreadMessagesCount})` : ''}

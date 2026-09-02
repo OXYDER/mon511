@@ -35,6 +35,7 @@ export interface UsersTable {
   avatar_url: string | null;
   locale: Generated<'fr' | 'en'>;
   region_id: string | null;
+  municipal_rank: 'director' | 'foreman' | 'employee' | null;
   role_id: string;
   status: Generated<'active' | 'suspended' | 'banned'>;
   email_verified: Generated<boolean>;
@@ -76,6 +77,31 @@ export interface ProblemTypesTable {
   default_severity: 'low' | 'medium' | 'high' | null;
   sort_order: Generated<number>;
   active: Generated<boolean>;
+}
+
+export interface MunicipalRankPermissionsTable {
+  id: Generated<string>;
+  region_id: string;
+  rank: 'director' | 'foreman' | 'employee';
+  can_view_dashboard: Generated<boolean>;
+  can_view_reports: Generated<boolean>;
+  can_edit_reports: Generated<boolean>;
+  can_view_stats: Generated<boolean>;
+  can_view_comparatives: Generated<boolean>;
+  can_manage_team: Generated<boolean>;
+  can_manage_settings: Generated<boolean>;
+}
+
+export interface MunicipalInvitesTable {
+  id: Generated<string>;
+  region_id: string;
+  rank: 'director' | 'foreman' | 'employee';
+  token: string;
+  created_by: string;
+  expires_at: Timestamp;
+  used_at: Timestamp | null;
+  used_by: string | null;
+  created_at: Generated<Timestamp>;
 }
 
 export interface IncidentStatusHistoryTable {
@@ -516,6 +542,8 @@ export interface Database {
   problem_types: ProblemTypesTable;
   incidents: IncidentsTable;
   incident_status_history: IncidentStatusHistoryTable;
+  municipal_rank_permissions: MunicipalRankPermissionsTable;
+  municipal_invites: MunicipalInvitesTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

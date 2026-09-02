@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
 import { KYSELY_INSTANCE } from '../../database/database.module';
@@ -383,6 +384,126 @@ export class MunicipalPortalService {
     const userRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'user').executeTakeFirstOrThrow();
     await this.db.updateTable('users').set({ role_id: userRole.id, region_id: null }).where('id', '=', targetUserId).execute();
     return { removed: true };
+  }
+
+  static readonly RANKS = ['director', 'foreman', 'employee'] as const;
+
+  /** Permissions des trois rangs pour une municipalité — crée les
+   * lignes par défaut à la demande si elles n'existent pas encore
+   * (première consultation), jamais au moment de la migration (pas
+   * besoin de pré-remplir pour les milliers de municipalités qui
+   * n'ont pas encore d'équipe). */
+  async getMyRegionRankPermissions(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.getRankPermissionsForRegion(regionId);
+  }
+
+  async getRankPermissionsForRegion(regionId: string) {
+    const existing = await this.db
+      .selectFrom('municipal_rank_permissions')
+      .selectAll()
+      .where('region_id', '=', regionId)
+      .execute();
+
+    const byRank = new Map(existing.map((r) => [r.rank, r]));
+    const DEFAULTS: Record<string, Partial<Record<string, boolean>>> = {
+      director: { can_view_dashboard: true, can_view_reports: true, can_edit_reports: true, can_view_stats: true, can_view_comparatives: true, can_manage_team: true, can_manage_settings: true },
+      foreman: { can_view_dashboard: true, can_view_reports: true, can_edit_reports: true, can_view_stats: true, can_view_comparatives: true, can_manage_team: false, can_manage_settings: false },
+      employee: { can_view_dashboard: true, can_view_reports: true, can_edit_reports: false, can_view_stats: false, can_view_comparatives: false, can_manage_team: false, can_manage_settings: false },
+    };
+
+    return MunicipalPortalService.RANKS.map((rank) => byRank.get(rank) ?? { region_id: regionId, rank, ...DEFAULTS[rank] });
+  }
+
+  /** Seul un municipal_admin peut modifier les permissions — jamais un
+   * municipal_staff, peu importe son rang (même un "directeur" ne peut
+   * pas s'octroyer plus de droits lui-même). */
+  async updateMyRegionRankPermissions(userId: string, rank: string, permissions: Record<string, boolean>) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
+      throw new BadRequestException('Rang invalide.');
+    }
+
+    const ALLOWED_KEYS = ['can_view_dashboard', 'can_view_reports', 'can_edit_reports', 'can_view_stats', 'can_view_comparatives', 'can_manage_team', 'can_manage_settings'];
+    const values: Record<string, boolean> = {};
+    for (const key of ALLOWED_KEYS) {
+      if (typeof permissions[key] === 'boolean') values[key] = permissions[key];
+    }
+
+    await this.db
+      .insertInto('municipal_rank_permissions')
+      .values({ region_id: regionId, rank: rank as any, ...values })
+      .onConflict((oc) => oc.columns(['region_id', 'rank']).doUpdateSet(values))
+      .execute();
+
+    return this.getRankPermissionsForRegion(regionId);
+  }
+
+  /** Génère un lien d'invitation — jeton aléatoire cryptographique
+   * (randomBytes, même patron déjà utilisé ailleurs dans ce projet
+   * pour les jetons de vérification), usage unique, expire dans 48h.
+   * Seul un municipal_admin peut générer un lien — jamais un
+   * municipal_staff, même un "directeur". */
+  async createMyRegionInvite(userId: string, rank: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
+      throw new BadRequestException('Rang invalide.');
+    }
+
+    const token = randomBytes(24).toString('hex');
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
+
+    await this.db
+      .insertInto('municipal_invites')
+      .values({ region_id: regionId, rank: rank as any, token, created_by: userId, expires_at: expiresAt as any })
+      .execute();
+
+    return { token, expiresAt };
+  }
+
+  /** Utilise un lien d'invitation — l'usager DOIT déjà être connecté à
+   * son compte mon511 (le lien ne crée pas de nouveau compte, il
+   * rattache le compte courant à la municipalité). Vérifie : jeton
+   * existe, pas déjà utilisé, pas expiré — sinon message clair sans
+   * révéler pourquoi précisément (usage unique ou expiré donnent le
+   * même type d'erreur, pour ne pas faciliter le sondage de jetons
+   * valides). */
+  async redeemInvite(userId: string, token: string) {
+    const invite = await this.db.selectFrom('municipal_invites').selectAll().where('token', '=', token).executeTakeFirst();
+    if (!invite || invite.used_at || new Date(invite.expires_at) < new Date()) {
+      throw new BadRequestException("Ce lien d'invitation est invalide ou a expiré.");
+    }
+
+    // Même protection déjà en place pour l'approbation manuelle — ne
+    // jamais écraser silencieusement un compte déjà admin/super_admin
+    // du site.
+    const currentRole = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select('roles.name as roleName')
+      .where('users.id', '=', userId)
+      .executeTakeFirst();
+    if (currentRole && (currentRole.roleName === 'admin' || currentRole.roleName === 'super_admin')) {
+      throw new ForbiddenException("Ce compte est déjà administrateur du site — utilise un autre compte pour rejoindre une équipe municipale.");
+    }
+
+    const staffRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'municipal_staff').executeTakeFirstOrThrow();
+
+    await this.db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('users')
+        .set({ role_id: staffRole.id, region_id: invite.region_id, municipal_rank: invite.rank })
+        .where('id', '=', userId)
+        .execute();
+      await trx
+        .updateTable('municipal_invites')
+        .set({ used_at: new Date() as any, used_by: userId })
+        .where('id', '=', invite.id)
+        .execute();
+    });
+
+    const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', invite.region_id).executeTakeFirst();
+    return { regionName: region?.name_fr, rank: invite.rank };
   }
 
   /** File de modération des signalements — SEULEMENT ceux de la propre
