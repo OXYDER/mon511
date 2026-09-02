@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { getSocket } from '../socket';
 import ConfirmModal from './ConfirmModal';
+import Tooltip from './Tooltip';
 import { timeAgo } from '../i18n';
 
 interface Props {
@@ -332,29 +333,29 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
               {onlineFriends.length > 0 && (
                 <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 12, marginBottom: 12, borderBottom: '1px solid var(--panel-border)' }}>
                   {onlineFriends.map((f) => (
-                    <div
-                      key={f.friendUserId}
-                      onClick={() => startWithFriend(f.friendUserId)}
-                      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', flexShrink: 0, width: 52 }}
-                      title={f.friendDisplayName}
-                    >
-                      <div style={{ position: 'relative', width: 42, height: 42 }}>
-                        <div className="rc-icon-hex" style={{ width: 42, height: 42, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onViewProfile(f.friendUserId); }}>
-                          {f.friendAvatarUrl ? (
-                            <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                          ) : (
-                            (f.friendDisplayName?.[0] ?? '?').toUpperCase()
-                          )}
+                    <Tooltip key={f.friendUserId} text={f.friendDisplayName}>
+                      <div
+                        onClick={() => startWithFriend(f.friendUserId)}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer', flexShrink: 0, width: 52 }}
+                      >
+                        <div style={{ position: 'relative', width: 42, height: 42 }}>
+                          <div className="rc-icon-hex" style={{ width: 42, height: 42, cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); onViewProfile(f.friendUserId); }}>
+                            {f.friendAvatarUrl ? (
+                              <img src={f.friendAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                            ) : (
+                              (f.friendDisplayName?.[0] ?? '?').toUpperCase()
+                            )}
+                          </div>
+                          <span style={{
+                            position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderRadius: '50%',
+                            background: '#3BD16F', border: '2px solid var(--panel-solid)',
+                          }} />
                         </div>
-                        <span style={{
-                          position: 'absolute', bottom: -1, right: -1, width: 12, height: 12, borderRadius: '50%',
-                          background: '#3BD16F', border: '2px solid var(--panel-solid)',
-                        }} />
+                        <div style={{ fontSize: 9.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>
+                          {f.friendDisplayName?.split(' ')[0]}
+                        </div>
                       </div>
-                      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: 'center' }}>
-                        {f.friendDisplayName?.split(' ')[0]}
-                      </div>
-                    </div>
+                    </Tooltip>
                   ))}
                 </div>
               )}
@@ -495,13 +496,17 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
                           <span>{timeAgo(m.created_at, lang)}</span>
                           {isMine && (
-                            <span title={m.read_at ? (lang === 'fr' ? 'Lu' : 'Read') : (lang === 'fr' ? 'Envoyé' : 'Sent')} style={{ color: m.read_at ? 'var(--accent-signal)' : 'var(--text-muted)' }}>
-                              {m.read_at ? '✓✓' : '✓'}
-                            </span>
+                            <Tooltip text={m.read_at ? (lang === 'fr' ? 'Lu' : 'Read') : (lang === 'fr' ? 'Envoyé' : 'Sent')}>
+                              <span style={{ color: m.read_at ? 'var(--accent-signal)' : 'var(--text-muted)' }}>
+                                {m.read_at ? '✓✓' : '✓'}
+                              </span>
+                            </Tooltip>
                           )}
                           <span style={{ cursor: 'pointer' }} onClick={() => openReactionPicker(m.id, isNearBottomMessage)}>😊</span>
                           {!isMine && (
-                            <span style={{ cursor: 'pointer' }} title={lang === 'fr' ? 'Signaler' : 'Report'} onClick={() => setFlaggingMessageId(m.id)}>🚩</span>
+                            <Tooltip text={lang === 'fr' ? 'Signaler' : 'Report'}>
+                              <span style={{ cursor: 'pointer' }} onClick={() => setFlaggingMessageId(m.id)}>🚩</span>
+                            </Tooltip>
                           )}
                         </div>
 
@@ -528,18 +533,19 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
                 </div>
 
                 {hasNewMessageBelow && (
-                  <button
-                    onClick={() => scrollToBottom()}
-                    style={{
-                      position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
-                      width: 38, height: 38, borderRadius: '50%', background: 'var(--accent-signal)', color: '#14161B',
-                      border: 'none', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 4px 14px rgba(0,0,0,0.35)', animation: 'new-message-bounce 1.1s ease-in-out infinite',
-                    }}
-                    title={lang === 'fr' ? 'Nouveau message' : 'New message'}
-                  >
-                    ↓
-                  </button>
+                  <Tooltip text={lang === 'fr' ? 'Nouveau message' : 'New message'}>
+                    <button
+                      onClick={() => scrollToBottom()}
+                      style={{
+                        position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)',
+                        width: 38, height: 38, borderRadius: '50%', background: 'var(--accent-signal)', color: '#14161B',
+                        border: 'none', cursor: 'pointer', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 14px rgba(0,0,0,0.35)', animation: 'new-message-bounce 1.1s ease-in-out infinite',
+                      }}
+                    >
+                      ↓
+                    </button>
+                  </Tooltip>
                 )}
               </div>
 

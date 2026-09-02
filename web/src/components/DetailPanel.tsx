@@ -4,6 +4,7 @@ import Lightbox from './Lightbox';
 import PublicProfileModal from './PublicProfileModal';
 import { pickName, timeAgo, statusPillClass } from '../i18n';
 import TranslatableText from './TranslatableText';
+import Tooltip from './Tooltip';
 
 interface Props {
   reportId: string;
@@ -241,13 +242,14 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
             <span>📍 {report.addressText ?? (lang === 'fr' ? 'Position GPS' : 'GPS position')}</span>
             <span>🕓 {new Date(report.created_at).toLocaleString(lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} <span style={{ color: 'var(--text-muted)' }}>({timeAgo(report.created_at, lang)})</span></span>
           </div>
-          <div
-            style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
-            title={lang === 'fr' ? 'Cliquer pour copier' : 'Click to copy'}
-            onClick={() => navigator.clipboard.writeText(report.id)}
-          >
-            🔗 ID : <code>{report.id}</code>
-          </div>
+          <Tooltip text={lang === 'fr' ? 'Cliquer pour copier' : 'Click to copy'}>
+            <div
+              style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, cursor: 'pointer' }}
+              onClick={() => navigator.clipboard.writeText(report.id)}
+            >
+              🔗 ID : <code>{report.id}</code>
+            </div>
+          </Tooltip>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             👤 {lang === 'fr' ? 'Signalé par' : 'Reported by'}{' '}
             {report.authorId ? (

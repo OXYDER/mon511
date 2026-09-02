@@ -1,4 +1,4 @@
-import { useState, ReactNode } from 'react';
+import { useRef, useState, ReactNode } from 'react';
 
 interface Props {
   text: string;
@@ -10,36 +10,62 @@ interface Props {
 /** Info-bulle stylée aux couleurs du site — remplace l'attribut title=
  * natif du navigateur (rendu générique du système d'exploitation,
  * jamais aux couleurs du site, apparition lente et incohérente d'un
- * navigateur à l'autre). Enveloppe l'élément déclencheur sans changer
- * sa mise en page (display: inline-block, position: relative). */
+ * navigateur à l'autre).
+ *
+ * IMPORTANT : le conteneur utilise `display: contents` plutôt que
+ * `position: relative` — plusieurs éléments déclencheurs dans ce
+ * projet (ex. .locate-btn-float, .map-menu-btn) sont déjà positionnés
+ * en absolu par rapport à un ancêtre précis plus haut dans l'arbre ;
+ * un wrapper position:relative deviendrait leur nouveau contexte de
+ * positionnement et casserait leur emplacement voulu. La bulle
+ * elle-même se positionne en `position: fixed` à partir des vraies
+ * coordonnées de l'élément (getBoundingClientRect), jamais relative au
+ * wrapper — donc jamais de conflit, peu importe où ce composant est
+ * utilisé. */
 export default function Tooltip({ text, children, side = 'bottom' }: Props) {
   const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
 
-  const positionStyle: Record<string, React.CSSProperties> = {
-    top: { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 8 },
-    bottom: { top: '100%', left: '50%', transform: 'translateX(-50%)', marginTop: 8 },
-    left: { right: '100%', top: '50%', transform: 'translateY(-50%)', marginRight: 8 },
-    right: { left: '100%', top: '50%', transform: 'translateY(-50%)', marginLeft: 8 },
+  function show() {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    const positions: Record<string, { top: number; left: number }> = {
+      top: { top: rect.top - 8, left: rect.left + rect.width / 2 },
+      bottom: { top: rect.bottom + 8, left: rect.left + rect.width / 2 },
+      left: { top: rect.top + rect.height / 2, left: rect.left - 8 },
+      right: { top: rect.top + rect.height / 2, left: rect.right + 8 },
+    };
+    setCoords(positions[side]);
+    setVisible(true);
+  }
+
+  const translate: Record<string, string> = {
+    top: 'translate(-50%, -100%)',
+    bottom: 'translate(-50%, 0)',
+    left: 'translate(-100%, -50%)',
+    right: 'translate(0, -50%)',
   };
 
   return (
     <span
-      style={{ position: 'relative', display: 'inline-block' }}
-      onMouseEnter={() => setVisible(true)}
+      ref={ref}
+      style={{ display: 'contents' }}
+      onMouseEnter={show}
       onMouseLeave={() => setVisible(false)}
-      onFocus={() => setVisible(true)}
+      onFocus={show}
       onBlur={() => setVisible(false)}
     >
       {children}
-      {visible && text && (
+      {visible && text && coords && (
         <span
           role="tooltip"
           style={{
-            position: 'absolute', zIndex: 2000, whiteSpace: 'nowrap', pointerEvents: 'none',
+            position: 'fixed', top: coords.top, left: coords.left, transform: translate[side],
+            zIndex: 3000, whiteSpace: 'nowrap', pointerEvents: 'none',
             background: 'var(--panel-solid)', color: 'var(--text-body)', border: '1px solid var(--accent-signal)',
             borderRadius: 8, padding: '6px 10px', fontSize: 12, fontWeight: 500,
             boxShadow: 'var(--shadow-panel)', animation: 'tooltip-fade-in 0.12s ease-out',
-            ...positionStyle[side],
           }}
         >
           {text}

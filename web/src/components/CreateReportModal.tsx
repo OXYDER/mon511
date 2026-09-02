@@ -4,6 +4,7 @@ import { reverseGeocodeAddress, snapToRoad, searchCities, GeocodingResult } from
 import { pickName } from '../i18n';
 import { compressImage } from '../imageCompression';
 import CustomSelect from './CustomSelect';
+import Tooltip from './Tooltip';
 
 interface ProblemType {
   id: string;
@@ -452,16 +453,17 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
                   onFocus={() => setShowAddressDropdown(true)}
                   onBlur={() => setTimeout(() => setShowAddressDropdown(false), 150)}
                 />
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={locate}
-                  disabled={locating}
-                  style={{ flexShrink: 0, width: 44 }}
-                  title={lang === 'fr' ? 'Utiliser ma position actuelle' : 'Use my current position'}
-                >
-                  {locating ? '⏳' : '🎯'}
-                </button>
+                <Tooltip text={lang === 'fr' ? 'Utiliser ma position actuelle' : 'Use my current position'}>
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={locate}
+                    disabled={locating}
+                    style={{ flexShrink: 0, width: 44 }}
+                  >
+                    {locating ? '⏳' : '🎯'}
+                  </button>
+                </Tooltip>
               </div>
               {showAddressDropdown && addressSuggestions.length > 0 && (
                 <div className="search-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 44 + 8, zIndex: 10 }}>

@@ -1052,10 +1052,12 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
 
         {/* Menu ☰ — seul visible en très petite résolution (media query),
             regroupe exactement les mêmes actions avec leur libellé. */}
-        <button className="topbar-mobile-menu-btn" onClick={() => setShowMobileMenu((v) => !v)} title={lang === 'fr' ? 'Menu' : 'Menu'}>
-          ☰
-          {(unreadCount + unreadMessagesCount) > 0 && <span className="badge-dot">{unreadCount + unreadMessagesCount}</span>}
-        </button>
+        <Tooltip text={lang === 'fr' ? 'Menu' : 'Menu'}>
+          <button className="topbar-mobile-menu-btn" onClick={() => setShowMobileMenu((v) => !v)}>
+            ☰
+            {(unreadCount + unreadMessagesCount) > 0 && <span className="badge-dot">{unreadCount + unreadMessagesCount}</span>}
+          </button>
+        </Tooltip>
         {showMobileMenu && (
           <div className="topbar-mobile-menu">
             {authenticated ? (
@@ -1359,19 +1361,22 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         <ExternalIncidentPanel incidentId={selection.id} onClose={() => setSelection(null)} />
       )}
 
-      <button className="locate-btn-float" onClick={locateAndLoad} disabled={locating} title={t('localiser', lang)}>
-        {locating ? '⏳' : '🎯'}
-      </button>
+      <Tooltip text={t('localiser', lang)}>
+        <button className="locate-btn-float" onClick={locateAndLoad} disabled={locating}>
+          {locating ? '⏳' : '🎯'}
+        </button>
+      </Tooltip>
 
-      <button
-        className={`map-menu-btn ${showFiltersLegend ? 'active' : ''}`}
-        style={{ bottom: 264 }}
-        onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); setShowHelpMenu(false); }}
-        title={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}
-      >
-        🎚️
-        {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
-      </button>
+      <Tooltip text={lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}>
+        <button
+          className={`map-menu-btn ${showFiltersLegend ? 'active' : ''}`}
+          style={{ bottom: 264 }}
+          onClick={() => { setShowFiltersLegend((v) => !v); setShowMapDetailsMenu(false); setShowMapTypeMenu(false); setShowHelpMenu(false); }}
+        >
+          🎚️
+          {activeFilterCount > 0 && <span className="badge-dot">{activeFilterCount}</span>}
+        </button>
+      </Tooltip>
       {showFiltersLegend && (
         <div className="map-menu-panel" style={{ bottom: 264, width: 280, maxHeight: 'calc(100vh - 354px)' }}>
           <h3>{lang === 'fr' ? 'Filtres et légende' : 'Filters and legend'}</h3>
@@ -1460,17 +1465,18 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button
-        className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
-        style={{ bottom: 208 }}
-        onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
-        title={lang === 'fr' ? 'Détails de la carte' : 'Map details'}
-      >
-        🗂️
-        {Object.values(layerPrefs).filter(Boolean).length > 0 && (
-          <span className="badge-dot">{Object.values(layerPrefs).filter(Boolean).length}</span>
-        )}
-      </button>
+      <Tooltip text={lang === 'fr' ? 'Détails de la carte' : 'Map details'}>
+        <button
+          className={`map-menu-btn ${showMapDetailsMenu ? 'active' : ''}`}
+          style={{ bottom: 208 }}
+          onClick={() => { setShowMapDetailsMenu((v) => !v); setShowMapTypeMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
+        >
+          🗂️
+          {Object.values(layerPrefs).filter(Boolean).length > 0 && (
+            <span className="badge-dot">{Object.values(layerPrefs).filter(Boolean).length}</span>
+          )}
+        </button>
+      </Tooltip>
       {showMapDetailsMenu && (
         <div className="map-menu-panel" style={{ bottom: 208, width: 280, maxHeight: 'calc(100vh - 298px)' }}>
           <h3>{lang === 'fr' ? 'Détails de la carte' : 'Map details'}</h3>
@@ -1515,14 +1521,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button
-        className={`map-menu-btn ${showHelpMenu ? 'active' : ''} ${supportUnread ? 'help-btn-flash' : ''}`}
-        style={{ bottom: 320 }}
-        onClick={() => { setShowHelpMenu((v) => !v); setShowMapTypeMenu(false); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
-        title={lang === 'fr' ? 'Aide' : 'Help'}
-      >
-        {supportUnread ? '❗' : '❓'}
-      </button>
+      <Tooltip text={lang === 'fr' ? 'Aide' : 'Help'}>
+        <button
+          className={`map-menu-btn ${showHelpMenu ? 'active' : ''} ${supportUnread ? 'help-btn-flash' : ''}`}
+          style={{ bottom: 320 }}
+          onClick={() => { setShowHelpMenu((v) => !v); setShowMapTypeMenu(false); setShowMapDetailsMenu(false); setShowFiltersLegend(false); }}
+        >
+          {supportUnread ? '❗' : '❓'}
+        </button>
+      </Tooltip>
       {showHelpMenu && (
         <div className="map-menu-panel" style={{ bottom: 320, width: 280, maxHeight: 'calc(100vh - 410px)' }}>
           <h3>{lang === 'fr' ? 'Aide' : 'Help'}</h3>
@@ -1551,14 +1558,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
         </div>
       )}
 
-      <button
-        className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
-        style={{ bottom: 152 }}
-        onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
-        title={lang === 'fr' ? 'Type de carte' : 'Map type'}
-      >
-        🗺️
-      </button>
+      <Tooltip text={lang === 'fr' ? 'Type de carte' : 'Map type'}>
+        <button
+          className={`map-menu-btn ${showMapTypeMenu ? 'active' : ''}`}
+          style={{ bottom: 152 }}
+          onClick={() => { setShowMapTypeMenu((v) => !v); setShowMapDetailsMenu(false); setShowFiltersLegend(false); setShowHelpMenu(false); }}
+        >
+          🗺️
+        </button>
+      </Tooltip>
       {showMapTypeMenu && (
         <div className="map-menu-panel" style={{ bottom: 152, maxHeight: 'calc(100vh - 242px)' }}>
           <h3>{lang === 'fr' ? 'Type de carte' : 'Map type'}</h3>

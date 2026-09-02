@@ -1,3 +1,5 @@
+import Tooltip from './Tooltip';
+
 interface Props {
   on: boolean;
   onToggle: () => void;
@@ -5,15 +7,17 @@ interface Props {
 }
 
 export default function ToggleSwitch({ on, onToggle, title }: Props) {
-  return (
+  const switchEl = (
     <div
       className={`toggle-switch ${on ? 'on' : ''}`}
       onClick={onToggle}
       role="switch"
       aria-checked={on}
-      title={title}
     >
       <div className="knob" />
     </div>
   );
+
+  if (!title) return switchEl;
+  return <Tooltip text={title}>{switchEl}</Tooltip>;
 }

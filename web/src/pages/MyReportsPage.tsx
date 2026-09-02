@@ -5,6 +5,7 @@ import { compressImage } from '../imageCompression';
 import Lightbox from '../components/Lightbox';
 import CustomSelect from '../components/CustomSelect';
 import ConfirmModal from '../components/ConfirmModal';
+import Tooltip from '../components/Tooltip';
 
 interface Props {
   onClose: () => void;
@@ -262,23 +263,25 @@ export default function MyReportsPage({ onClose, lang }: Props) {
                       {lang === 'fr' ? STATUS_LABELS[r.status]?.[0] : STATUS_LABELS[r.status]?.[1]}
                     </span>
                     {r.pendingResolutionSuggestionsCount > 0 && (
-                      <span
-                        title={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}
-                        className="badge-dot"
-                        style={{ position: 'static', background: 'var(--status-resolved)', cursor: 'pointer' }}
-                        onClick={(e) => { e.stopPropagation(); quickConfirmResolved(r.id); }}
-                      >
-                        ✔{r.pendingResolutionSuggestionsCount}
-                      </span>
+                      <Tooltip text={lang === 'fr' ? `${r.pendingResolutionSuggestionsCount} personne(s) suggèrent que c'est résolu — clique pour confirmer` : `${r.pendingResolutionSuggestionsCount} people suggest this is resolved — click to confirm`}>
+                        <span
+                          className="badge-dot"
+                          style={{ position: 'static', background: 'var(--status-resolved)', cursor: 'pointer' }}
+                          onClick={(e) => { e.stopPropagation(); quickConfirmResolved(r.id); }}
+                        >
+                          ✔{r.pendingResolutionSuggestionsCount}
+                        </span>
+                      </Tooltip>
                     )}
                     {r.pendingFlagsCount > 0 && (
-                      <span
-                        title={lang === 'fr' ? `${r.pendingFlagsCount} signalement(s) d'abus reçu(s)` : `${r.pendingFlagsCount} abuse report(s) received`}
-                        className="badge-dot"
-                        style={{ position: 'static', background: 'var(--status-danger, #FF4D5E)' }}
-                      >
-                        🚩{r.pendingFlagsCount}
-                      </span>
+                      <Tooltip text={lang === 'fr' ? `${r.pendingFlagsCount} signalement(s) d'abus reçu(s)` : `${r.pendingFlagsCount} abuse report(s) received`}>
+                        <span
+                          className="badge-dot"
+                          style={{ position: 'static', background: 'var(--status-danger, #FF4D5E)' }}
+                        >
+                          🚩{r.pendingFlagsCount}
+                        </span>
+                      </Tooltip>
                     )}
                     <span style={{ color: 'var(--accent-signal)', fontWeight: 700, fontSize: 16 }}>
                       {isExpanded ? '−' : '+'}

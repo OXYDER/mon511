@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { timeAgo } from '../i18n';
 import ConfirmModal from './ConfirmModal';
+import Tooltip from './Tooltip';
 
 interface Props {
   lang: 'fr' | 'en';
@@ -193,7 +194,9 @@ export default function CommunityFeedPage({ lang, currentUserId, onClose, onView
                         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>·</span>
                         <CategoryBadge category={post.category} lang={lang} />
                         {post.visibility === 'friends' && (
-                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }} title={fr ? 'Amis seulement' : 'Friends only'}>· 🔒</span>
+                          <Tooltip text={fr ? 'Amis seulement' : 'Friends only'}>
+                            <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>· 🔒</span>
+                          </Tooltip>
                         )}
                       </div>
                     </div>

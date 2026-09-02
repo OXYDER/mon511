@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import Tooltip from './Tooltip';
 
 interface Props {
   onClose: () => void;
@@ -101,13 +102,14 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
           <div className="modal-title">💬 {lang === 'fr' ? 'Support mon511.ca' : 'mon511.ca support'}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {messages.length > 0 && (
-              <button
-                onClick={resetChat}
-                title={lang === 'fr' ? 'Réinitialiser le chat' : 'Reset chat'}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}
-              >
-                ↺ {lang === 'fr' ? 'Réinitialiser' : 'Reset'}
-              </button>
+              <Tooltip text={lang === 'fr' ? 'Réinitialiser le chat' : 'Reset chat'}>
+                <button
+                  onClick={resetChat}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 12 }}
+                >
+                  ↺ {lang === 'fr' ? 'Réinitialiser' : 'Reset'}
+                </button>
+              </Tooltip>
             )}
             <button className="modal-close" onClick={onClose}>✕</button>
           </div>

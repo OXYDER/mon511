@@ -419,7 +419,6 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
               className="btn-ghost"
               style={{ fontSize: 11.5, padding: '5px 10px', border: viewMode === v.key ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
               onClick={() => setViewMode(v.key)}
-              title={fr ? v.label.fr : v.label.en}
             >
               {v.icon} {fr ? v.label.fr : v.label.en}
             </button>
