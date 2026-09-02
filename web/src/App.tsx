@@ -5,10 +5,20 @@ import { getStoredLang } from './i18n';
 import MapPage from './pages/MapPage';
 import AuthModal from './components/AuthModal';
 import CookieConsentBanner from './components/CookieConsentBanner';
+import MunicipalPortalPage from './components/MunicipalPortalEntry';
 
 const COOKIE_CONSENT_KEY = 'mon511_cookie_consent';
 
 export default function App() {
+  // Domaine du portail municipal — complètement séparé du client mon511
+  // grand public (voir MunicipalPortalEntry.tsx pour le détail). Calculé
+  // ici (valeur simple, pas un hook), mais le RETOUR conditionnel se
+  // fait seulement après avoir appelé tous les hooks ci-dessous — les
+  // retourner plus tôt violerait les règles des hooks React (doivent
+  // toujours s'exécuter dans le même ordre à chaque rendu).
+  const hostname = window.location.hostname.replace(/^www\./, '');
+  const isPortalDomain = hostname === 'portail.mon511.ca' || hostname === 'portal.my511.ca';
+
   const [authenticated, setAuthenticated] = useState(!!getToken());
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | null>(null);
@@ -48,6 +58,10 @@ export default function App() {
     window.addEventListener('mon511:session-expired', handleSessionExpired);
     return () => window.removeEventListener('mon511:session-expired', handleSessionExpired);
   }, []);
+
+  if (isPortalDomain) {
+    return <MunicipalPortalPage lang={hostname === 'portal.my511.ca' ? 'en' : 'fr'} />;
+  }
 
   return (
     <>

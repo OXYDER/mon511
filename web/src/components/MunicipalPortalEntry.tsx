@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { api } from '../api';
+import { api, getToken, clearToken } from '../api';
+import AuthModal from './AuthModal';
 
 interface Props {
   lang: 'fr' | 'en';
-  onClose: () => void;
 }
 
-/** Point d'entrée unique du portail municipal — affiche l'un de trois
- * écrans selon le statut réel de l'usager, vérifié CÔTÉ SERVEUR à
- * chaque ouverture (jamais seulement le rôle stocké dans le jeton, qui
- * pourrait être périmé) :
+/** Page complète du portail municipal — servie sur son PROPRE domaine
+ * (portail.mon511.ca en français, portal.my511.ca en anglais), jamais
+ * en fenêtre superposée dans le client mon511 principal. Choix
+ * délibéré de l'usager : garder les deux sessions (client mon511 grand
+ * public vs portail municipal) complètement séparées, sans jamais
+ * partager de jeton/mémoire locale entre les deux (des origines
+ * différentes ont naturellement des localStorage distincts — aucun
+ * risque de partage accidentel, contrairement à l'ancienne version en
+ * fenêtre superposée qui vivait dans la même application).
+ *
+ * Affiche l'un de trois écrans selon le statut réel de l'usager,
+ * vérifié CÔTÉ SERVEUR à chaque ouverture (jamais seulement le rôle
+ * stocké dans le jeton, qui pourrait être périmé) :
  * - 'none' : formulaire de demande d'accès
  * - 'pending' : page d'attente, aucune interaction possible
  * - 'approved' : le vrai portail, avec navigation latérale
@@ -20,34 +28,59 @@ interface Props {
  * tente — il voit soit le formulaire de demande, soit la page
  * d'attente, jamais une erreur.
  */
-export default function MunicipalPortalEntry({ lang, onClose }: Props) {
+export default function MunicipalPortalPage({ lang }: Props) {
+  const [authenticated, setAuthenticated] = useState(!!getToken());
   const [status, setStatus] = useState<{ status: 'none' | 'pending' | 'approved'; role?: string; regionName?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const fr = lang === 'fr';
 
   useEffect(() => {
+    if (!authenticated) { setLoading(false); return; }
     api.get<any>('/municipal-portal/my-access-status')
       .then(setStatus)
       .catch(() => setStatus({ status: 'none' }))
       .finally(() => setLoading(false));
-  }, []);
+  }, [authenticated]);
 
-  return createPortal(
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-box" style={{ width: status?.status === 'approved' ? 780 : 440, maxWidth: '95vw' }}>
-        <div className="modal-head">
-          <div className="modal-title">{fr ? 'Portail municipal' : 'Municipal portal'}</div>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body" style={{ padding: status?.status === 'approved' ? 0 : undefined }}>
-          {loading && <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>}
-          {!loading && status?.status === 'none' && <RequestAccessForm lang={lang} onSubmitted={() => setStatus({ status: 'pending' })} />}
-          {!loading && status?.status === 'pending' && <PendingScreen lang={lang} regionName={status.regionName} />}
-          {!loading && status?.status === 'approved' && <ApprovedScreen lang={lang} regionName={status.regionName} />}
-        </div>
+  if (!authenticated) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-asphalt)' }}>
+        <AuthModal
+          initialMode="login"
+          lang={lang}
+          onClose={() => {}}
+          onAuthenticated={() => setAuthenticated(true)}
+        />
       </div>
-    </div>,
-    document.body,
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-asphalt)' }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 24px', borderBottom: '1px solid var(--panel-border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>🏛️</span>
+          <span style={{ fontWeight: 700, fontSize: 15 }}>{fr ? 'Portail municipal' : 'Municipal portal'}</span>
+        </div>
+        <button className="btn-ghost" onClick={() => { clearToken(); setAuthenticated(false); }}>
+          {fr ? 'Se déconnecter' : 'Log out'}
+        </button>
+      </header>
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
+        {loading && <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>}
+        {!loading && status?.status === 'none' && (
+          <div style={{ maxWidth: 440, margin: '0 auto' }}>
+            <RequestAccessForm lang={lang} onSubmitted={() => setStatus({ status: 'pending' })} />
+          </div>
+        )}
+        {!loading && status?.status === 'pending' && (
+          <div style={{ maxWidth: 440, margin: '0 auto' }}>
+            <PendingScreen lang={lang} regionName={status.regionName} />
+          </div>
+        )}
+        {!loading && status?.status === 'approved' && <ApprovedScreen lang={lang} regionName={status.regionName} />}
+      </div>
+    </div>
   );
 }
 

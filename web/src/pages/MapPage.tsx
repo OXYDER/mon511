@@ -24,7 +24,6 @@ const MessagingPanel = lazy(() => import('../components/MessagingPanel'));
 const OnboardingTutorial = lazy(() => import('../components/OnboardingTutorial'));
 const CommunityFeedPage = lazy(() => import('../components/CommunityFeedPage'));
 const MunicipalityPage = lazy(() => import('../components/MunicipalityPage'));
-const MunicipalPortalEntry = lazy(() => import('../components/MunicipalPortalEntry'));
 const FriendsPanel = lazy(() => import('../components/FriendsPanel'));
 const PublicProfileModal = lazy(() => import('../components/PublicProfileModal'));
 const FaqModal = lazy(() => import('../components/FaqModal'));
@@ -227,7 +226,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showTutorial, setShowTutorial] = useState(false);
   const [showCommunityFeed, setShowCommunityFeed] = useState(false);
   const [viewingMunicipalityId, setViewingMunicipalityId] = useState<string | null>(null);
-  const [showMunicipalPortal, setShowMunicipalPortal] = useState(false);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -969,7 +967,19 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
               </button>
               <button className="icon-btn" title={lang === 'fr' ? 'Amis' : 'Friends'} onClick={() => setShowFriends(true)}>👥</button>
               <button className="icon-btn" title={lang === 'fr' ? 'Communauté' : 'Community'} onClick={() => setShowCommunityFeed(true)}>📰</button>
-              <button className="icon-btn" title={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'} onClick={() => setShowMunicipalPortal(true)}>🏛️</button>
+              <button
+                className="icon-btn"
+                title={lang === 'fr' ? 'Portail municipal' : 'Municipal portal'}
+                onClick={() => {
+                  // Domaine complètement séparé du client mon511, jamais
+                  // en fenêtre superposée — choix délibéré pour garder
+                  // les deux sessions distinctes (voir
+                  // MunicipalPortalEntry.tsx pour le détail).
+                  window.location.href = lang === 'fr' ? 'https://portail.mon511.ca' : 'https://portal.my511.ca';
+                }}
+              >
+                🏛️
+              </button>
               <button className="icon-btn" title={lang === 'fr' ? 'Notifications' : 'Notifications'} onClick={() => setShowNotifications(true)}>
                 🔔
                 {unreadCount > 0 && <span className="badge-dot">{unreadCount}</span>}
@@ -1822,10 +1832,6 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onViewReport={(reportId) => { setShowCommunityFeed(false); openReportById(reportId); }}
           onOpenMunicipality={(regionId) => { setShowCommunityFeed(false); setViewingMunicipalityId(regionId); }}
         />
-      )}
-
-      {showMunicipalPortal && (
-        <MunicipalPortalEntry lang={lang} onClose={() => setShowMunicipalPortal(false)} />
       )}
 
       {viewingMunicipalityId && (
