@@ -8,13 +8,13 @@ interface Props {
   onClose: () => void;
 }
 
-/** Fenêtre quasi plein écran du portail municipal — même principe que
- * l'interface d'administration (.app-full, position fixed plein
- * écran), pas la petite modale centrée d'avant. Vit à l'intérieur du
- * client mon511 principal (pas de domaine séparé — après discussion,
- * ça compliquait le déploiement sans apporter de bénéfice net une
- * fois qu'on a un vrai plein écran ici), donc la session déjà active
- * de l'usager sert directement, pas de connexion séparée à gérer.
+/** Fenêtre quasi plein écran du portail municipal — structure
+ * VOLONTAIREMENT IDENTIQUE à l'interface d'administration (mêmes
+ * classes CSS .app-full/.admin-layout/.admin-sidebar/
+ * .admin-hamburger-btn, jamais une variante parallèle .portal-*) pour
+ * garantir un comportement identique, y compris sur mobile — demandé
+ * explicitement après un premier essai avec des classes séparées qui
+ * risquait de dériver subtilement de l'admin avec le temps.
  *
  * Affiche l'un de trois écrans selon le statut réel de l'usager,
  * vérifié CÔTÉ SERVEUR à chaque ouverture (jamais seulement le rôle
@@ -31,6 +31,8 @@ interface Props {
 export default function MunicipalPortalEntry({ lang, onClose }: Props) {
   const [status, setStatus] = useState<{ status: 'none' | 'pending' | 'approved'; role?: string; regionName?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState('dashboard');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const fr = lang === 'fr';
 
   useEffect(() => {
@@ -44,6 +46,9 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
     <div className="app-full" style={{ position: 'fixed', background: 'var(--bg-asphalt)', overflowY: 'auto', zIndex: 1000 }}>
       <header className="topbar-float" style={{ position: 'sticky', background: 'var(--bg-asphalt)' }}>
         <div className="brand-row" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {status?.status === 'approved' && (
+            <button className="admin-hamburger-btn" onClick={() => setMobileNavOpen((v) => !v)} aria-label="Menu" style={{ pointerEvents: 'auto' }}>☰</button>
+          )}
           <span style={{ fontSize: 20 }}>🏛️</span>
           <span className="brand-name">{fr ? 'Portail municipal' : 'Municipal portal'}</span>
         </div>
@@ -51,24 +56,65 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
           {fr ? '← Retour à la carte' : '← Back to map'}
         </button>
       </header>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: 24 }}>
-        {loading && <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>}
-        {!loading && status?.status === 'none' && (
-          <div style={{ maxWidth: 440, margin: '0 auto' }}>
-            <RequestAccessForm lang={lang} onSubmitted={() => setStatus({ status: 'pending' })} />
+
+      {loading && <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>}
+
+      {!loading && status?.status === 'none' && (
+        <div style={{ maxWidth: 440, margin: '40px auto', padding: '0 24px' }}>
+          <RequestAccessForm lang={lang} onSubmitted={() => setStatus({ status: 'pending' })} />
+        </div>
+      )}
+      {!loading && status?.status === 'pending' && (
+        <div style={{ maxWidth: 440, margin: '40px auto', padding: '0 24px' }}>
+          <PendingScreen lang={lang} regionName={status.regionName} />
+        </div>
+      )}
+
+      {!loading && status?.status === 'approved' && (
+        <div className="admin-layout" style={{ maxWidth: 1500, margin: '0 auto', padding: '20px 24px 60px' }}>
+          {mobileNavOpen && <div className="admin-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
+          <div className={`admin-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: 210, flexShrink: 0, position: 'sticky', top: 90 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 10px 10px', fontWeight: 600 }}>{status.regionName}</div>
+            {SIDEBAR_SECTIONS.map((section, i) => (
+              <div key={i} style={{ marginBottom: 16 }}>
+                {section.group && <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 10px', letterSpacing: 0.5, fontWeight: 600 }}>{section.group}</div>}
+                {section.items.map((item) => (
+                  <div
+                    key={item.key}
+                    onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', borderRadius: 9, cursor: 'pointer', fontSize: 13,
+                      background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
+                      color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
+                      fontWeight: tab === item.key ? 600 : 400,
+                      opacity: item.ready ? 1 : 0.6,
+                    }}
+                  >
+                    <span style={{ width: 16, textAlign: 'center', flexShrink: 0 }}>{item.icon}</span>
+                    {fr ? item.label.fr : item.label.en}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
-        )}
-        {!loading && status?.status === 'pending' && (
-          <div style={{ maxWidth: 440, margin: '0 auto' }}>
-            <PendingScreen lang={lang} regionName={status.regionName} />
+
+          <div style={{ flex: 1, minWidth: 0, maxWidth: 1100 }}>
+            {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} />}
+            {tab === 'reports' && <ReportsListView lang={lang} />}
+            {tab === 'settings' && <ReportSettingsView lang={lang} />}
+            {['interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
+              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                {fr ? 'Bientôt disponible.' : 'Coming soon.'}
+              </div>
+            )}
           </div>
-        )}
-        {!loading && status?.status === 'approved' && <ApprovedScreen lang={lang} regionName={status.regionName} />}
-      </div>
+        </div>
+      )}
     </div>,
     document.body,
   );
 }
+
 
 function RequestAccessForm({ lang, onSubmitted }: { lang: 'fr' | 'en'; onSubmitted: () => void }) {
   const [search, setSearch] = useState('');
@@ -194,52 +240,6 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
   },
 ];
 
-function ApprovedScreen({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
-  const [tab, setTab] = useState('dashboard');
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const fr = lang === 'fr';
-
-  return (
-    <div className="portal-layout" style={{ display: 'flex', minHeight: 420, position: 'relative' }}>
-      <button className="admin-hamburger-btn portal-hamburger-btn" onClick={() => setMobileNavOpen((v) => !v)} aria-label="Menu">☰</button>
-      {mobileNavOpen && <div className="admin-sidebar-backdrop portal-sidebar-backdrop" onClick={() => setMobileNavOpen(false)} />}
-      <div className={`portal-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} style={{ width: 190, flexShrink: 0, borderRight: '1px solid var(--panel-border)', padding: '16px 10px' }}>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '0 8px 10px', fontWeight: 600 }}>{regionName}</div>
-        {SIDEBAR_SECTIONS.map((section, i) => (
-          <div key={i} style={{ marginBottom: 12 }}>
-            {section.group && <div style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 8px', letterSpacing: 0.5 }}>{section.group}</div>}
-            {section.items.map((item) => (
-              <div
-                key={item.key}
-                onClick={() => { setTab(item.key); setMobileNavOpen(false); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5,
-                  background: tab === item.key ? 'var(--panel-hover)' : 'transparent',
-                  color: tab === item.key ? 'var(--text-body)' : 'var(--text-muted)',
-                  opacity: item.ready ? 1 : 0.6,
-                }}
-              >
-                <span style={{ width: 16, textAlign: 'center' }}>{item.icon}</span>
-                {fr ? item.label.fr : item.label.en}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, padding: 20, minWidth: 0 }}>
-        {tab === 'dashboard' && <DashboardView lang={lang} regionName={regionName} />}
-        {tab === 'reports' && <ReportsListView lang={lang} />}
-        {tab === 'settings' && <ReportSettingsView lang={lang} />}
-        {['interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-            {fr ? 'Bientôt disponible.' : 'Coming soon.'}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
   const [data, setData] = useState<any>(null);

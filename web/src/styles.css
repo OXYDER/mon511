@@ -629,18 +629,6 @@ select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmln
     background: rgba(0,0,0,0.5);
   }
 
-  /* Même patron que .admin-sidebar, mais positionné en absolu à
-     l'intérieur de la modale du portail municipal plutôt qu'en fixed
-     plein écran (celle-ci a déjà ses propres limites, .modal-box). */
-  .portal-hamburger-btn { position: absolute; top: 8px; left: 8px; z-index: 6; }
-  .portal-sidebar-backdrop { position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,0.5); }
-  .portal-sidebar { display: none; }
-  .portal-sidebar.mobile-open {
-    display: block; position: absolute; top: 0; left: 0; bottom: 0; z-index: 6;
-    width: 220px !important; max-width: 80vw; background: var(--panel-solid);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.4); padding-top: 44px;
-  }
-
   .filters-panel-float, .detail-panel-float {
     /* La pile d'icônes occupe l'espace de right:28px à right:72px environ
        (44px de large) — sans en tenir compte ici, les icônes se
