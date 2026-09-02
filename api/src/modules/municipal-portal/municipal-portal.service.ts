@@ -351,7 +351,7 @@ export class MunicipalPortalService {
     return this.db
       .selectFrom('users')
       .innerJoin('roles', 'roles.id', 'users.role_id')
-      .select(['users.id', 'users.email', 'users.first_name as firstName', 'users.last_name as lastName', 'roles.name as roleName', 'users.created_at as memberSince'])
+      .select(['users.id', 'users.email', 'users.first_name as firstName', 'users.last_name as lastName', 'roles.name as roleName', 'users.municipal_rank as rank', 'users.created_at as memberSince'])
       .where('users.region_id', '=', regionId)
       .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
       .orderBy('roles.name', 'desc') // municipal_admin avant municipal_staff (ordre alphabétique inversé, coïncidence pratique)
@@ -384,6 +384,28 @@ export class MunicipalPortalService {
     const userRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'user').executeTakeFirstOrThrow();
     await this.db.updateTable('users').set({ role_id: userRole.id, region_id: null }).where('id', '=', targetUserId).execute();
     return { removed: true };
+  }
+
+  /** Change le rang d'un membre déjà dans l'équipe — seul un
+   * municipal_admin peut le faire, jamais sur lui-même (il n'a pas de
+   * rang, c'est le gestionnaire principal), jamais sur un autre
+   * municipal_admin. */
+  async updateTeamMemberRank(userId: string, targetUserId: string, rank: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
+      throw new BadRequestException('Rang invalide.');
+    }
+    const target = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select(['users.id', 'users.region_id', 'roles.name as roleName'])
+      .where('users.id', '=', targetUserId)
+      .executeTakeFirst();
+    if (!target || target.region_id !== regionId || target.roleName !== 'municipal_staff') {
+      throw new NotFoundException("Ce compte ne fait pas partie de ton équipe en tant qu'employé.");
+    }
+    await this.db.updateTable('users').set({ municipal_rank: rank as any }).where('id', '=', targetUserId).execute();
+    return { updated: true };
   }
 
   static readonly RANKS = ['director', 'foreman', 'employee'] as const;

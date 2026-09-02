@@ -137,6 +137,13 @@ export class MunicipalPortalController {
     return this.service.removeMyRegionTeamMember(user.userId, targetUserId);
   }
 
+  @Patch('my-region/team/:userId/rank')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  updateTeamMemberRank(@Param('userId') targetUserId: string, @CurrentUser() user: CurrentUserPayload, @Body('rank') rank: string) {
+    return this.service.updateTeamMemberRank(user.userId, targetUserId, rank);
+  }
+
   @Get('my-region/rank-permissions')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

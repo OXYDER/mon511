@@ -228,6 +228,7 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
   const [showCommunityFeed, setShowCommunityFeed] = useState(false);
   const [viewingMunicipalityId, setViewingMunicipalityId] = useState<string | null>(null);
   const [showMunicipalPortal, setShowMunicipalPortal] = useState(false);
+  const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -734,6 +735,31 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Lien d'invitation municipale (?municipalInvite=TOKEN) — nécessite
+  // d'être connecté (le lien rattache le compte COURANT, n'en crée
+  // jamais un nouveau) ; réagit à `authenticated` plutôt que de ne
+  // s'exécuter qu'au montage, pour capter le cas où l'usager clique le
+  // lien alors qu'il n'était pas encore connecté (se connecte ensuite,
+  // la rédemption se déclenche automatiquement une fois authentifié).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const inviteToken = params.get('municipalInvite');
+    if (!inviteToken || !authenticated) return;
+
+    api.post<{ regionName: string; rank: string }>(`/municipal-portal/invites/${inviteToken}/redeem`, {})
+      .then((r) => {
+        const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
+        setInviteFeedback(
+          lang === 'fr'
+            ? `Tu fais maintenant partie de l'équipe de ${r.regionName} (${RANK_LABELS[r.rank] ?? r.rank}) !`
+            : `You're now part of the ${r.regionName} team (${r.rank})!`,
+        );
+      })
+      .catch((err) => setInviteFeedback(err instanceof Error ? err.message : (lang === 'fr' ? "Ce lien d'invitation est invalide ou a expiré." : 'This invitation link is invalid or has expired.')))
+      .finally(() => window.history.replaceState({}, '', window.location.pathname));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
 
   // Sonde périodiquement s'il y a une réponse non lue de l'équipe (billet
   // ou chat) — fait flasher l'icône Aide. Le sessionId anonyme (même clé
@@ -1823,6 +1849,19 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
           onViewReport={(reportId) => { setShowCommunityFeed(false); openReportById(reportId); }}
           onOpenMunicipality={(regionId) => { setShowCommunityFeed(false); setViewingMunicipalityId(regionId); }}
         />
+      )}
+
+      {inviteFeedback && (
+        <div
+          style={{
+            position: 'fixed', top: 'calc(var(--banner-h, 0px) + 70px)', left: '50%', transform: 'translateX(-50%)', zIndex: 400,
+            background: 'var(--panel-solid)', border: '1px solid var(--accent-signal)', borderRadius: 12, padding: '12px 18px',
+            fontSize: 13, boxShadow: 'var(--shadow-panel)', display: 'flex', alignItems: 'center', gap: 12, maxWidth: '90vw',
+          }}
+        >
+          <span>🏛️ {inviteFeedback}</span>
+          <button className="modal-close" onClick={() => setInviteFeedback(null)}>✕</button>
+        </div>
       )}
 
       {showMunicipalPortal && (

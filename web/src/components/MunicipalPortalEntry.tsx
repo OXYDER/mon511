@@ -688,15 +688,28 @@ function ComparativesView({ lang }: { lang: 'fr' | 'en' }) {
   );
 }
 
+const RANK_LABELS: Record<string, { fr: string; en: string; icon: string }> = {
+  director: { fr: 'Directeur', en: 'Director', icon: '⭐' },
+  foreman: { fr: 'Contremaître', en: 'Foreman', icon: '🔶' },
+  employee: { fr: 'Employé', en: 'Employee', icon: '🔹' },
+};
+const RANKS = ['director', 'foreman', 'employee'];
+
 function TeamView({ lang }: { lang: 'fr' | 'en' }) {
   const [team, setTeam] = useState<any[]>([]);
   const [role, setRole] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [inviteRank, setInviteRank] = useState('employee');
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [permissions, setPermissions] = useState<any[]>([]);
+  const [permSaving, setPermSaving] = useState<string | null>(null);
   const fr = lang === 'fr';
 
   function load() {
     api.get<any>('/municipal-portal/my-access-status').then((s) => setRole(s.role ?? null)).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/team').then(setTeam).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/rank-permissions').then(setPermissions).catch(() => {});
   }
 
   useEffect(load, []);
@@ -711,36 +724,149 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
     }
   }
 
+  async function changeRank(userId: string, rank: string) {
+    setFeedback(null);
+    try {
+      await api.patch(`/municipal-portal/my-region/team/${userId}/rank`, { rank });
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    }
+  }
+
+  async function generateInvite() {
+    setGenerating(true);
+    setInviteLink(null);
+    try {
+      const r = await api.post<{ token: string }>('/municipal-portal/my-region/invites', { rank: inviteRank });
+      setInviteLink(`${window.location.origin}/?municipalInvite=${r.token}`);
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function togglePermission(rank: string, key: string) {
+    setPermissions((prev) => prev.map((p) => (p.rank === rank ? { ...p, [key]: !p[key] } : p)));
+  }
+
+  async function savePermissions(rank: string) {
+    setPermSaving(rank);
+    try {
+      const p = permissions.find((x) => x.rank === rank);
+      await api.patch(`/municipal-portal/my-region/rank-permissions/${rank}`, {
+        can_view_dashboard: p.can_view_dashboard, can_view_reports: p.can_view_reports, can_edit_reports: p.can_edit_reports,
+        can_view_stats: p.can_view_stats, can_view_comparatives: p.can_view_comparatives, can_manage_team: p.can_manage_team, can_manage_settings: p.can_manage_settings,
+      });
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setPermSaving(null);
+    }
+  }
+
   const ROLE_LABELS: Record<string, { fr: string; en: string }> = {
     municipal_admin: { fr: 'Gestionnaire principal', en: 'Principal manager' },
     municipal_staff: { fr: 'Employé', en: 'Staff' },
   };
+  const PERMISSION_LABELS: { key: string; fr: string; en: string }[] = [
+    { key: 'can_view_dashboard', fr: 'Voir le tableau de bord', en: 'View dashboard' },
+    { key: 'can_view_reports', fr: 'Voir les signalements', en: 'View reports' },
+    { key: 'can_edit_reports', fr: 'Modifier les signalements et leur statut', en: 'Edit reports and their status' },
+    { key: 'can_view_stats', fr: 'Voir les statistiques', en: 'View statistics' },
+    { key: 'can_view_comparatives', fr: 'Voir les comparatifs', en: 'View comparatives' },
+    { key: 'can_manage_team', fr: "Gérer l'équipe", en: 'Manage team' },
+    { key: 'can_manage_settings', fr: 'Gérer les paramètres', en: 'Manage settings' },
+  ];
 
   return (
     <div>
       <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Équipe' : 'Team'} ({team.length})</div>
       <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
         {fr
-          ? "Un nouveau membre doit soumettre une demande d'accès (bouton 🏛️ dans le client mon511) — un gestionnaire principal l'approuve ensuite ici même, dans la file de demandes en attente."
-          : 'A new member must submit an access request (🏛️ button in the mon511 client) — a principal manager then approves it here, in the pending requests queue.'}
+          ? "Un nouveau membre peut rejoindre via un lien d'invitation (ci-dessous) ou en soumettant une demande d'accès (bouton 🏛️ dans le client mon511, à approuver dans la file de demandes en attente)."
+          : 'A new member can join via an invitation link (below) or by submitting an access request (🏛️ button in the mon511 client, to be approved in the pending requests queue).'}
       </p>
       {feedback && <div className="error-banner">{feedback}</div>}
+
       {team.map((m) => (
         <div key={m.id} className="report-card" style={{ cursor: 'default' }}>
-          <div className="rc-icon-hex">{m.roleName === 'municipal_admin' ? '👑' : '👤'}</div>
+          <div className="rc-icon-hex">{m.roleName === 'municipal_admin' ? '👑' : (RANK_LABELS[m.rank]?.icon ?? '👤')}</div>
           <div className="rc-body">
             <div className="rc-title">{m.firstName} {m.lastName}</div>
             <div className="rc-meta">
-              {ROLE_LABELS[m.roleName] ? (fr ? ROLE_LABELS[m.roleName].fr : ROLE_LABELS[m.roleName].en) : m.roleName} · {m.email}
+              {ROLE_LABELS[m.roleName] ? (fr ? ROLE_LABELS[m.roleName].fr : ROLE_LABELS[m.roleName].en) : m.roleName}
+              {m.roleName === 'municipal_staff' && m.rank && <> — {fr ? RANK_LABELS[m.rank]?.fr : RANK_LABELS[m.rank]?.en}</>}
+              {' · '}{m.email}
             </div>
           </div>
-          {role === 'municipal_admin' && (
-            <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => remove(m.id)}>
-              {fr ? 'Retirer' : 'Remove'}
-            </button>
+          {role === 'municipal_admin' && m.roleName === 'municipal_staff' && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select value={m.rank ?? 'employee'} onChange={(e) => changeRank(m.id, e.target.value)} style={{ fontSize: 11 }}>
+                {RANKS.map((r) => (
+                  <option key={r} value={r}>{fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en}</option>
+                ))}
+              </select>
+              <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => remove(m.id)}>{fr ? 'Retirer' : 'Remove'}</button>
+            </div>
           )}
         </div>
       ))}
+
+      {role === 'municipal_admin' && (
+        <>
+          <div className="section-label">{fr ? "Inviter un nouveau membre" : 'Invite a new member'}</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <select value={inviteRank} onChange={(e) => setInviteRank(e.target.value)}>
+              {RANKS.map((r) => (
+                <option key={r} value={r}>{fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en}</option>
+              ))}
+            </select>
+            <button className="btn-primary" onClick={generateInvite} disabled={generating}>
+              {generating ? (fr ? 'Génération...' : 'Generating...') : (fr ? "Générer un lien" : 'Generate link')}
+            </button>
+          </div>
+          {inviteLink && (
+            <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 20, fontSize: 12 }}>
+              <div style={{ wordBreak: 'break-all', marginBottom: 8 }}>{inviteLink}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => navigator.clipboard.writeText(inviteLink)}>
+                  {fr ? '📋 Copier' : '📋 Copy'}
+                </button>
+                <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>
+                  {fr ? '⏱️ Valide 48h, usage unique' : '⏱️ Valid 48h, single use'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="section-label">{fr ? 'Permissions par rang' : 'Permissions by rank'}</div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+            {fr ? 'Le gestionnaire principal garde toujours un accès complet, peu importe ces réglages.' : 'The principal manager always keeps full access, regardless of these settings.'}
+          </p>
+          {RANKS.map((rank) => {
+            const p = permissions.find((x) => x.rank === rank);
+            if (!p) return null;
+            return (
+              <div key={rank} style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 8 }}>{RANK_LABELS[rank].icon} {fr ? RANK_LABELS[rank].fr : RANK_LABELS[rank].en}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 4, marginBottom: 8 }}>
+                  {PERMISSION_LABELS.map((pl) => (
+                    <label key={pl.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!p[pl.key]} onChange={() => togglePermission(rank, pl.key)} />
+                      {fr ? pl.fr : pl.en}
+                    </label>
+                  ))}
+                </div>
+                <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => savePermissions(rank)} disabled={permSaving === rank}>
+                  {permSaving === rank ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
+                </button>
+              </div>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
