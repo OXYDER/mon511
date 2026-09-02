@@ -148,6 +148,19 @@ export class ReportsService {
       .where('status', '=', 'pending')
       .executeTakeFirst();
 
+    // Progrès municipal visible publiquement — seulement les entrées
+    // explicitement marquées visible_to_public par l'employé municipal
+    // (voir municipal-portal.service.ts → updateIncidentTracking), pour
+    // que les citoyens voient l'évolution même avant la résolution
+    // officielle. Jamais les notes purement internes.
+    const municipalProgress = await this.db
+      .selectFrom('incident_status_history')
+      .select(['internal_status as internalStatus', 'note', 'changed_at as changedAt'])
+      .where(sql<boolean>`group_key = (SELECT COALESCE(incident_id::text, id::text) FROM reports WHERE id = ${id})`)
+      .where('visible_to_public', '=', true)
+      .orderBy('changed_at', 'asc')
+      .execute();
+
     const authorSettings = report.authorPrivacySettings as any;
     const authorDisplayName = report.authorId
       ? formatDisplayName(report.authorFirstName, report.authorLastName, authorSettings?.last_name_display, report.authorEmail ?? '')
@@ -159,6 +172,7 @@ export class ReportsService {
       confirmationsCount: confirmationsCount?.count ?? 0,
       pendingResolutionSuggestionsCount: pendingResolutionSuggestions?.count ?? 0,
       authorDisplayName,
+      municipalProgress,
     };
   }
 

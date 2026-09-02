@@ -78,6 +78,17 @@ export interface ProblemTypesTable {
   active: Generated<boolean>;
 }
 
+export interface IncidentStatusHistoryTable {
+  id: Generated<string>;
+  group_key: string;
+  region_id: string;
+  internal_status: 'new' | 'acknowledged' | 'in_progress' | 'done';
+  note: string | null;
+  visible_to_public: Generated<boolean>;
+  changed_by: string | null;
+  changed_at: Generated<Timestamp>;
+}
+
 export interface IncidentsTable {
   id: Generated<string>;
   region_id: string | null;
@@ -504,6 +515,7 @@ export interface Database {
   problem_categories: ProblemCategoriesTable;
   problem_types: ProblemTypesTable;
   incidents: IncidentsTable;
+  incident_status_history: IncidentStatusHistoryTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

@@ -147,8 +147,30 @@ export class MunicipalPortalController {
   @Get('my-region/reports/queue')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')
-  findMyRegionReportsQueue(@CurrentUser() user: CurrentUserPayload) {
-    return this.service.findMyRegionReportsQueue(user.userId);
+  findMyRegionReportsQueue(@CurrentUser() user: CurrentUserPayload, @Query('search') search?: string, @Query('status') status?: string) {
+    return this.service.findMyRegionReportsQueue(user.userId, search, status);
+  }
+
+  @Patch('my-region/incidents/:groupKey/report')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  updateIncidentReport(
+    @Param('groupKey') groupKey: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { description?: string; addressText?: string },
+  ) {
+    return this.service.updateIncidentReport(user.userId, groupKey, dto);
+  }
+
+  @Patch('my-region/incidents/:groupKey/public-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  setIncidentPublicStatus(
+    @Param('groupKey') groupKey: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('status') status: 'published_unresolved' | 'published_resolved',
+  ) {
+    return this.service.setIncidentPublicStatus(user.userId, groupKey, status);
   }
 
   @Get('my-region/incidents/:groupKey/reports')
@@ -171,7 +193,7 @@ export class MunicipalPortalController {
   updateIncidentTracking(
     @Param('groupKey') groupKey: string,
     @CurrentUser() user: CurrentUserPayload,
-    @Body() dto: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string },
+    @Body() dto: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string; publicNote?: string; publicNoteVisible?: boolean },
   ) {
     return this.service.updateIncidentTracking(user.userId, groupKey, dto);
   }

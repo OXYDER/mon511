@@ -264,14 +264,6 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
           {showAuthorProfile && report.authorId && (
             <PublicProfileModal userId={report.authorId} onClose={() => setShowAuthorProfile(false)} lang={lang} currentUserId={currentUserId} onStartConversation={onStartConversation} />
           )}
-          {report.municipality_notified === 'yes' && (
-            <div style={{ fontSize: 12, color: 'var(--status-resolved)', marginBottom: 4 }}>
-              🏛️ {lang === 'fr' ? 'Municipalité avisée' : 'Municipality notified'}{report.municipality_name ? ` — ${report.municipality_name}` : ''}
-            </div>
-          )}
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
-            👍 {report.confirmationsCount} {lang === 'fr' ? 'confirmations' : 'confirmations'}
-          </div>
 
           {feedback && <div className="success-banner">{feedback}</div>}
 

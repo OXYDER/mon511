@@ -581,26 +581,30 @@ export class MunicipalPortalService {
    * signalement — jamais perdus, juste pas encore fusionnés avec
    * d'autres. Le signalement le plus ancien de chaque groupe sert de
    * représentant (adresse, type, photo). */
-  async findMyRegionReportsQueue(userId: string) {
+  async findMyRegionReportsQueue(userId: string, search?: string, statusFilter?: string) {
     const { regionId } = await this.getScopeOrThrow(userId);
+    const searchPattern = search ? `%${search}%` : null;
 
     return sql<{
       groupKey: string; incidentId: string | null; representativeReportId: string;
-      problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null;
+      problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null; description: string | null;
       reportCount: number; firstReportedAt: Date; lastReportedAt: Date; thumbnailUrl: string | null;
-      lat: number; lng: number;
+      lat: number; lng: number; status: string; internalStatus: string;
     }>`
       WITH grouped AS (
         SELECT
           COALESCE(incident_id::text, id::text) AS group_key,
-          incident_id, id, problem_type_id, address_text, created_at, location,
+          incident_id, id, problem_type_id, address_text, description, created_at, location, status,
           ROW_NUMBER() OVER (PARTITION BY COALESCE(incident_id::text, id::text) ORDER BY created_at ASC) AS rn
         FROM reports
-        WHERE region_id = ${regionId} AND status IN ('pending_moderation', 'published_unresolved')
+        WHERE region_id = ${regionId}
+          ${statusFilter && statusFilter !== 'all' ? sql`AND status = ${statusFilter}` : sql``}
+          ${searchPattern ? sql`AND (address_text ILIKE ${searchPattern} OR description ILIKE ${searchPattern})` : sql``}
       )
       SELECT
         g.group_key AS "groupKey", g.incident_id AS "incidentId", g.id AS "representativeReportId",
-        pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon", g.address_text AS "addressText",
+        pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon", g.address_text AS "addressText", g.description AS "description",
+        g.status AS "status", COALESCE(rmt.internal_status, 'new') AS "internalStatus",
         (SELECT count(*) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key AND r2.status != 'rejected') AS "reportCount",
         (SELECT min(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "firstReportedAt",
         (SELECT max(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "lastReportedAt",
@@ -608,6 +612,7 @@ export class MunicipalPortalService {
         ST_Y(g.location::geometry) AS "lat", ST_X(g.location::geometry) AS "lng"
       FROM grouped g
       INNER JOIN problem_types pt ON pt.id = g.problem_type_id
+      LEFT JOIN report_municipal_tracking rmt ON rmt.report_id = g.id
       WHERE g.rn = 1
       ORDER BY "lastReportedAt" DESC
     `.execute(this.db).then((r) => r.rows);
@@ -678,12 +683,26 @@ export class MunicipalPortalService {
       .where('report_municipal_tracking.report_id', '=', reports[0].id)
       .executeTakeFirst();
 
-    // Ligne du temps — chaque soumission citoyenne individuelle, plus la
-    // dernière mise à jour de suivi s'il y en a une. Trié du plus récent
-    // au plus ancien pour l'affichage.
+    // Vrai historique — chaque soumission citoyenne individuelle, plus
+    // TOUS les changements de statut réellement enregistrés (voir
+    // incident_status_history) — remplace l'ancienne ligne du temps
+    // synthétique qui ne montrait que le dernier changement, jamais
+    // l'historique complet.
+    const statusEvents = await this.db
+      .selectFrom('incident_status_history')
+      .leftJoin('users', 'users.id', 'incident_status_history.changed_by')
+      .select([
+        'incident_status_history.internal_status as internalStatus', 'incident_status_history.note as note',
+        'incident_status_history.visible_to_public as visibleToPublic', 'incident_status_history.changed_at as changedAt',
+        'users.first_name as changedByFirstName',
+      ])
+      .where('incident_status_history.group_key', '=', groupKey)
+      .orderBy('incident_status_history.changed_at', 'asc')
+      .execute();
+
     const timeline = [
       ...reports.map((r) => ({ type: 'submission' as const, at: r.created_at, reportId: r.id, description: r.description })),
-      ...(tracking?.updatedAt ? [{ type: 'tracking_update' as const, at: tracking.updatedAt, status: tracking.internalStatus, by: tracking.updatedByFirstName }] : []),
+      ...statusEvents.map((e) => ({ type: 'status_change' as const, at: e.changedAt, status: e.internalStatus, note: e.note, visibleToPublic: e.visibleToPublic, by: e.changedByFirstName })),
     ].sort((a, b) => new Date(b.at as any).getTime() - new Date(a.at as any).getTime());
 
     return {
@@ -691,6 +710,8 @@ export class MunicipalPortalService {
       problemTypeNameFr: reports[0].problemTypeNameFr,
       problemTypeIcon: reports[0].problemTypeIcon,
       addressText: reports[0].address_text,
+      description: reports[0].description,
+      status: reports[0].status,
       reportCount: reports.filter((r) => r.status !== 'rejected').length,
       reports,
       photos,
@@ -699,6 +720,57 @@ export class MunicipalPortalService {
       internalNotes: tracking?.internalNotes ?? null,
       timeline,
     };
+  }
+
+  /** Modifie la description/adresse du signalement représentatif d'un
+   * incident — "pouvoir les modifier" demandé explicitement. */
+  async updateIncidentReport(userId: string, groupKey: string, changes: { description?: string; addressText?: string }) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    const representative = await this.db
+      .selectFrom('reports')
+      .select('id')
+      .where('region_id', '=', regionId)
+      .where(sql<boolean>`COALESCE(incident_id::text, id::text) = ${groupKey}`)
+      .orderBy('created_at', 'asc')
+      .limit(1)
+      .executeTakeFirst();
+    if (!representative) throw new NotFoundException('Incident introuvable.');
+
+    await this.db
+      .updateTable('reports')
+      .set({
+        ...(changes.description !== undefined && { description: changes.description }),
+        ...(changes.addressText !== undefined && { address_text: changes.addressText }),
+      })
+      .where('id', '=', representative.id)
+      .execute();
+
+    return { updated: true };
+  }
+
+  /** Change le statut PUBLIC d'un incident (visible par les citoyens sur
+   * la carte, pas seulement le statut interne de suivi) — marque TOUS
+   * les signalements du groupe à la fois, pour rester cohérent. */
+  async setIncidentPublicStatus(userId: string, groupKey: string, status: 'published_unresolved' | 'published_resolved') {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    const reports = await this.db
+      .selectFrom('reports')
+      .select('id')
+      .where('region_id', '=', regionId)
+      .where(sql<boolean>`COALESCE(incident_id::text, id::text) = ${groupKey}`)
+      .execute();
+    if (reports.length === 0) throw new NotFoundException('Incident introuvable.');
+
+    await this.db
+      .updateTable('reports')
+      .set({
+        status,
+        ...(status === 'published_resolved' && { resolved_at: new Date() as any }),
+      })
+      .where('id', 'in', reports.map((r) => r.id))
+      .execute();
+
+    return { updated: reports.length };
   }
 
   /** Applique un changement de suivi (statut/assignation/notes) à TOUS
@@ -710,7 +782,7 @@ export class MunicipalPortalService {
   async updateIncidentTracking(
     userId: string,
     groupKey: string,
-    changes: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string },
+    changes: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string; publicNote?: string; publicNoteVisible?: boolean },
   ) {
     const { regionId } = await this.getScopeOrThrow(userId);
 
@@ -742,6 +814,27 @@ export class MunicipalPortalService {
             updated_by: userId,
           }),
         )
+        .execute();
+    }
+
+    // Un vrai événement d'historique, conservé pour toujours — seulement
+    // quand il y a réellement un changement de statut ou une note à
+    // consigner (pas pour une simple modification d'assignation seule,
+    // qui n'a pas sa place dans une ligne du temps de statut). La note
+    // devient visible aux citoyens sur la fiche du signalement si
+    // publicNoteVisible est vrai — c'est ce qui répond au besoin
+    // "leurs statuts se verront par les utilisateurs".
+    if (changes.internalStatus !== undefined || changes.publicNote) {
+      await this.db
+        .insertInto('incident_status_history')
+        .values({
+          group_key: groupKey,
+          region_id: regionId,
+          internal_status: changes.internalStatus ?? 'new',
+          note: changes.publicNote ?? null,
+          visible_to_public: changes.publicNoteVisible ?? false,
+          changed_by: userId,
+        })
         .execute();
     }
 
