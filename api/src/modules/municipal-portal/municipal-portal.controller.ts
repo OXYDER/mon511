@@ -238,6 +238,13 @@ export class MunicipalPortalController {
     return this.service.computeMyRegionReportStats(user.userId, periodStart, periodEnd);
   }
 
+  @Get('my-region/comparatives')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  myRegionComparatives(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.computeMyRegionComparatives(user.userId);
+  }
+
   @Get('admin/regions/:regionId/report/stats')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'super_admin')

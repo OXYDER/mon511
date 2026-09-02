@@ -403,6 +403,50 @@ export class MunicipalPortalService {
    * PAR L'APPELANT, pas ici — cette méthode calcule toujours tout,
    * plus simple et pas assez coûteux pour justifier un calcul
    * conditionnel. */
+  /** Comparatifs normalisés — signalements actifs par 1000 habitants,
+   * PAS un classement brut par compte (voir computeReportStats →
+   * ranking, qui pénalise injustement les grandes villes ayant
+   * naturellement plus de signalements que les petits villages).
+   * Population tirée de municipality_integrations, remplie
+   * manuellement par l'admin du site — pas garantie pour toutes les
+   * municipalités, celles sans population connue sont exclues du
+   * classement (mais toujours comptées si l'appelant lui-même n'a pas
+   * de population connue, avec un message clair l'expliquant). */
+  async computeComparatives(regionId: string) {
+    const rows = await this.db
+      .selectFrom('regions')
+      .leftJoin('municipality_integrations', 'municipality_integrations.region_id', 'regions.id')
+      .select([
+        'regions.id as regionId', 'regions.name_fr as regionName', 'municipality_integrations.population as population',
+        sql<number>`(SELECT count(*) FROM reports WHERE reports.region_id = regions.id AND reports.status IN ('published_unresolved', 'published_resolved'))`.as('reportCount'),
+      ])
+      .where('regions.type', '=', 'municipality')
+      .execute();
+
+    const withPopulation = rows
+      .filter((r) => r.population && r.population > 0)
+      .map((r) => ({
+        regionId: r.regionId,
+        regionName: r.regionName,
+        population: Number(r.population),
+        reportCount: Number(r.reportCount),
+        ratePer1000: Math.round((Number(r.reportCount) / Number(r.population)) * 1000 * 100) / 100,
+      }))
+      .sort((a, b) => a.ratePer1000 - b.ratePer1000); // meilleur (moins de signalements/habitant) en premier
+
+    const myEntry = withPopulation.find((r) => r.regionId === regionId);
+    const myRank = myEntry ? withPopulation.indexOf(myEntry) + 1 : null;
+
+    return {
+      hasPopulation: !!myEntry,
+      myRank,
+      totalRanked: withPopulation.length,
+      myEntry: myEntry ?? null,
+      best10: withPopulation.slice(0, 10),
+      worst10: [...withPopulation].reverse().slice(0, 10),
+    };
+  }
+
   async computeReportStats(regionId: string, periodStart: Date, periodEnd: Date) {
     const region = await this.db.selectFrom('regions').select(['id', 'name_fr as nameFr']).where('id', '=', regionId).executeTakeFirst();
     if (!region) throw new NotFoundException('Municipalité introuvable.');
@@ -583,6 +627,11 @@ export class MunicipalPortalService {
   async computeMyRegionReportStats(userId: string, periodStart: Date, periodEnd: Date) {
     const { regionId } = await this.getScopeOrThrow(userId);
     return this.computeReportStats(regionId, periodStart, periodEnd);
+  }
+
+  async computeMyRegionComparatives(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.computeComparatives(regionId);
   }
 
   async getReportSettingsForRegion(regionId: string) {

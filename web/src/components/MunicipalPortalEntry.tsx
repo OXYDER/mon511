@@ -104,7 +104,8 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
             {tab === 'settings' && <ReportSettingsView lang={lang} />}
             {tab === 'stats' && <StatsView lang={lang} />}
             {tab === 'team' && <TeamView lang={lang} />}
-            {['interventions', 'comparatives'].includes(tab) && (
+            {tab === 'comparatives' && <ComparativesView lang={lang} />}
+            {['interventions'].includes(tab) && (
               <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 {fr ? 'Bientôt disponible.' : 'Coming soon.'}
               </div>
@@ -230,7 +231,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
     group: 'ANALYSE',
     items: [
       { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: true },
-      { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: false },
+      { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: true },
     ],
   },
   {
@@ -619,6 +620,66 @@ function StatsView({ lang }: { lang: 'fr' | 'en' }) {
             <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--panel-border)' }}>
               <span>{r.icon ?? '📍'} {r.addressText ?? '—'}</span>
               <strong>👍 {r.confirmationsCount}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ComparativesView({ lang }: { lang: 'fr' | 'en' }) {
+  const [data, setData] = useState<any>(null);
+  const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<any>('/municipal-portal/my-region/comparatives').then(setData).catch(() => {});
+  }, []);
+
+  if (!data) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Comparatifs' : 'Comparatives'}</div>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 16, lineHeight: 1.5 }}>
+        {fr
+          ? "Signalements actifs par 1000 habitants — pas un simple compte brut, qui pénaliserait injustement les grandes villes ayant naturellement plus de signalements que les petits villages."
+          : 'Active reports per 1,000 residents — not a raw count, which would unfairly penalize big cities that naturally have more reports than small villages.'}
+      </p>
+
+      {!data.hasPopulation ? (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 14, fontSize: 12.5, marginBottom: 20, lineHeight: 1.5 }}>
+          {fr
+            ? "La population de ta municipalité n'est pas encore connue — impossible de calculer ton taux normalisé. Demande à un admin du site de la renseigner (section Municipalités de l'administration)."
+            : "Your municipality's population isn't known yet — can't compute your normalized rate. Ask a site admin to fill it in (Municipalities section of the admin)."}
+        </div>
+      ) : (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{data.myEntry.ratePer1000}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{fr ? 'signalements actifs / 1000 habitants' : 'active reports / 1,000 residents'}</div>
+          <div style={{ fontSize: 12.5 }}>
+            {fr ? 'Rang ' : 'Rank '}<strong>{data.myRank}</strong>{fr ? ' sur ' : ' of '}{data.totalRanked}
+            <span style={{ color: 'var(--text-muted)' }}> ({fr ? 'meilleur = moins de signalements par habitant' : 'better = fewer reports per resident'})</span>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? '🟢 Meilleurs taux' : '🟢 Best rates'}</div>
+          {data.best10.map((r: any, i: number) => (
+            <div key={r.regionId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--panel-border)', fontWeight: r.regionId === data.myEntry?.regionId ? 700 : 400 }}>
+              <span>{i + 1}. {r.regionName}</span>
+              <strong>{r.ratePer1000}</strong>
+            </div>
+          ))}
+        </div>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? '🔴 Taux les plus élevés' : '🔴 Highest rates'}</div>
+          {data.worst10.map((r: any, i: number) => (
+            <div key={r.regionId} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--panel-border)', fontWeight: r.regionId === data.myEntry?.regionId ? 700 : 400 }}>
+              <span>{i + 1}. {r.regionName}</span>
+              <strong>{r.ratePer1000}</strong>
             </div>
           ))}
         </div>
