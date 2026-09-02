@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
 import { Kysely, sql } from 'kysely';
 import { Database } from '../../database/schema';
@@ -13,6 +14,7 @@ export class MunicipalPortalService {
     @Inject(KYSELY_INSTANCE) private readonly db: Kysely<Database>,
     private readonly email: EmailService,
     private readonly uploads: UploadsService,
+    private readonly jwt: JwtService,
   ) {}
 
   // ---------- Demande d'accès ----------
@@ -619,7 +621,18 @@ export class MunicipalPortalService {
         .catch(() => {});
     }
 
-    return { regionName: region?.name_fr, rank: invite.rank };
+    // Émet un NOUVEAU jeton avec le rôle à jour — sans ça, l'usager
+    // reste bloqué avec son ancien jeton (encore 'user', signé avant la
+    // rédemption) jusqu'à sa prochaine connexion manuelle. Le rôle dans
+    // le jeton JWT est figé au moment de sa signature, jamais revérifié
+    // en base de données à chaque requête (voir RolesGuard) — sans ce
+    // nouveau jeton, toutes les routes du portail retournaient 403
+    // malgré le compte correctement mis à jour en base, exactement
+    // rapporté par l'usager.
+    const currentUser = await this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirstOrThrow();
+    const accessToken = this.jwt.sign({ sub: userId, email: currentUser.email, role: 'municipal_staff' });
+
+    return { regionName: region?.name_fr, rank: invite.rank, accessToken };
   }
 
   /** File de modération des signalements — SEULEMENT ceux de la propre

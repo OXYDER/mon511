@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, Suspense, lazy } from 'react';
-import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken } from '../api';
+import { api, getUserRole, getLocalLayerPrefs, setLocalLayerPrefs, LayerPrefs, DEFAULT_LAYER_PREFS, clearToken, setToken } from '../api';
 import { getSocket } from '../socket';
 import { t, Lang, getStoredLang, setStoredLang, pickName, statusPillClass, timeAgo } from '../i18n';
 import LoadingScreen from '../components/LoadingScreen';
@@ -747,8 +747,15 @@ export default function MapPage({ theme, onToggleTheme, onLogout, authenticated,
     const inviteToken = params.get('municipalInvite');
     if (!inviteToken || !authenticated) return;
 
-    api.post<{ regionName: string; rank: string }>(`/municipal-portal/invites/${inviteToken}/redeem`, {})
+    api.post<{ regionName: string; rank: string; accessToken: string }>(`/municipal-portal/invites/${inviteToken}/redeem`, {})
       .then((r) => {
+        // Le rôle dans le jeton JWT est figé au moment de sa signature,
+        // jamais revérifié en base de données à chaque requête — sans
+        // remplacer le jeton ici par le nouveau (avec le rôle à jour,
+        // émis par le serveur), l'usager restait bloqué avec son ancien
+        // jeton encore 'user' et toutes les routes du portail
+        // retournaient 403 malgré son compte correctement mis à jour.
+        setToken(r.accessToken);
         const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
         setInviteFeedback(
           lang === 'fr'
