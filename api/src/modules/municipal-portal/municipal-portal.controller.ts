@@ -158,6 +158,24 @@ export class MunicipalPortalController {
     return this.service.findIncidentReports(user.userId, groupKey);
   }
 
+  @Get('my-region/incidents/:groupKey/detail')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findIncidentDetail(@Param('groupKey') groupKey: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findIncidentDetail(user.userId, groupKey);
+  }
+
+  @Patch('my-region/incidents/:groupKey/tracking')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  updateIncidentTracking(
+    @Param('groupKey') groupKey: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body() dto: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string },
+  ) {
+    return this.service.updateIncidentTracking(user.userId, groupKey, dto);
+  }
+
   @Post('my-region/reports/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

@@ -323,8 +323,7 @@ function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
 
 function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
   const [groups, setGroups] = useState<any[]>([]);
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [expandedReports, setExpandedReports] = useState<any[]>([]);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map'>('list');
   const [sortBy, setSortBy] = useState<'lastReportedAt' | 'reportCount' | 'problemTypeNameFr'>('lastReportedAt');
   const fr = lang === 'fr';
@@ -333,11 +332,8 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
     api.get<any[]>('/municipal-portal/my-region/reports/queue').then(setGroups).catch(() => {});
   }, []);
 
-  async function toggleExpand(groupKey: string) {
-    if (expandedKey === groupKey) { setExpandedKey(null); return; }
-    setExpandedKey(groupKey);
-    const reports = await api.get<any[]>(`/municipal-portal/my-region/incidents/${groupKey}/reports`).catch(() => []);
-    setExpandedReports(reports);
+  if (detailKey) {
+    return <IncidentDetailScreen lang={lang} groupKey={detailKey} onBack={() => setDetailKey(null)} />;
   }
 
   const sorted = [...groups].sort((a, b) => {
@@ -354,8 +350,8 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
       longitude: g.lng,
       icon: g.problemTypeIcon ?? '📍',
       colorVar: 'unresolved',
-      selected: expandedKey === g.groupKey,
-      onClick: () => toggleExpand(g.groupKey),
+      selected: detailKey === g.groupKey,
+      onClick: () => setDetailKey(g.groupKey),
     }));
   const mapCenter = mapPins.length > 0 ? { lat: mapPins[0].latitude, lng: mapPins[0].longitude, zoom: 12 } : null;
 
@@ -395,7 +391,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
           {sorted.map((g) => (
             <div key={g.groupKey}>
               <div
-                onClick={() => toggleExpand(g.groupKey)}
+                onClick={() => setDetailKey(g.groupKey)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5, cursor: 'pointer' }}
               >
                 {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
@@ -416,16 +412,6 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
                   </div>
                 )}
               </div>
-              {expandedKey === g.groupKey && (
-                <div style={{ padding: '4px 0 10px 54px' }}>
-                  {expandedReports.map((r) => (
-                    <div key={r.id} style={{ fontSize: 11.5, color: 'var(--text-muted)', padding: '4px 0' }}>
-                      {new Date(r.created_at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      {r.description && <> — {r.description}</>}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -444,7 +430,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
           </thead>
           <tbody>
             {sorted.map((g) => (
-              <tr key={g.groupKey} onClick={() => toggleExpand(g.groupKey)} style={{ cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
+              <tr key={g.groupKey} onClick={() => setDetailKey(g.groupKey)} style={{ cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
                 <td style={{ padding: '7px 8px' }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{g.addressText ?? '—'}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: g.reportCount > 1 ? 700 : 400 }}>{g.reportCount}</td>
@@ -459,7 +445,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
       {viewMode === 'grid' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
           {sorted.map((g) => (
-            <div key={g.groupKey} onClick={() => toggleExpand(g.groupKey)} style={{ background: 'var(--panel-hover)', borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: expandedKey === g.groupKey ? '1.5px solid var(--accent-signal)' : '1px solid transparent' }}>
+            <div key={g.groupKey} onClick={() => setDetailKey(g.groupKey)} style={{ background: 'var(--panel-hover)', borderRadius: 10, overflow: 'hidden', cursor: 'pointer', border: detailKey === g.groupKey ? '1.5px solid var(--accent-signal)' : '1px solid transparent' }}>
               {g.thumbnailUrl
                 ? <img src={g.thumbnailUrl} alt="" style={{ width: '100%', height: 90, objectFit: 'cover' }} />
                 : <div style={{ width: '100%', height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, background: 'var(--panel)' }}>{g.problemTypeIcon ?? '📍'}</div>}
@@ -476,16 +462,6 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
       {viewMode === 'map' && (
         <div style={{ borderRadius: 10, overflow: 'hidden' }}>
           <MapView center={mapCenter} pins={mapPins} height={480} theme="dark" />
-          {expandedKey && (
-            <div style={{ marginTop: 10, background: 'var(--panel-hover)', borderRadius: 10, padding: 10 }}>
-              {expandedReports.map((r) => (
-                <div key={r.id} style={{ fontSize: 11.5, color: 'var(--text-muted)', padding: '4px 0' }}>
-                  {new Date(r.created_at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  {r.description && <> — {r.description}</>}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -572,6 +548,134 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
         {saving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
       </button>
       {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{feedback}</div>}
+    </div>
+  );
+}
+
+const INTERNAL_STATUS_OPTIONS: { key: 'new' | 'acknowledged' | 'in_progress' | 'done'; icon: string; label: { fr: string; en: string } }[] = [
+  { key: 'new', icon: '🔴', label: { fr: 'Nouveau', en: 'New' } },
+  { key: 'acknowledged', icon: '🟠', label: { fr: 'Reconnu', en: 'Acknowledged' } },
+  { key: 'in_progress', icon: '🟣', label: { fr: 'En cours', en: 'In progress' } },
+  { key: 'done', icon: '🔵', label: { fr: 'Complété', en: 'Done' } },
+];
+
+/** Fiche détaillée d'un incident — galerie photo, statut interne,
+ * assignation, notes, et ligne du temps. Remplace le petit dépliage
+ * précédent, devenu insuffisant une fois qu'on veut vraiment gérer un
+ * incident (pas juste voir la liste des signalements qui le
+ * composent). */
+function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; groupKey: string; onBack: () => void }) {
+  const [detail, setDetail] = useState<any>(null);
+  const [notes, setNotes] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const fr = lang === 'fr';
+
+  function load() {
+    api.get<any>(`/municipal-portal/my-region/incidents/${groupKey}/detail`).then((d) => {
+      setDetail(d);
+      setNotes(d.internalNotes ?? '');
+      setAssignedTo(d.assignedTo ?? '');
+    }).catch(() => {});
+  }
+
+  useEffect(load, [groupKey]);
+
+  async function setStatus(status: string) {
+    await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/tracking`, { internalStatus: status }).catch(() => {});
+    load();
+  }
+
+  async function saveAssignmentAndNotes() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/tracking`, { assignedTo: assignedTo || undefined, internalNotes: notes || undefined });
+      setFeedback(fr ? 'Enregistré.' : 'Saved.');
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!detail) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  return (
+    <div>
+      <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onBack}>← {fr ? 'Retour à la liste' : 'Back to list'}</button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+        <span style={{ fontSize: 24 }}>{detail.problemTypeIcon ?? '📍'}</span>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{detail.problemTypeNameFr}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{detail.addressText ?? '—'}</div>
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 20 }}>
+        {detail.reportCount > 1
+          ? (fr ? `${detail.reportCount} signalements citoyens regroupés` : `${detail.reportCount} grouped citizen reports`)
+          : (fr ? '1 signalement' : '1 report')}
+      </div>
+
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut interne' : 'Internal status'}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+        {INTERNAL_STATUS_OPTIONS.map((s) => (
+          <button
+            key={s.key}
+            className="btn-ghost"
+            style={{ fontSize: 12, border: detail.internalStatus === s.key ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+            onClick={() => setStatus(s.key)}
+          >
+            {s.icon} {fr ? s.label.fr : s.label.en}
+          </button>
+        ))}
+      </div>
+
+      {detail.photos.length > 0 && (
+        <>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Photos' : 'Photos'} ({detail.photos.length})</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+            {detail.photos.map((p: any) => (
+              <img key={p.id} src={p.url} alt="" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
+        <input className="text-input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder={fr ? 'Nom de la personne ou de l\'équipe' : 'Name of person or team'} />
+      </div>
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Notes internes' : 'Internal notes'}</label>
+        <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </div>
+      <button className="btn-primary" onClick={saveAssignmentAndNotes} disabled={saving}>
+        {saving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
+      </button>
+      {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{feedback}</div>}
+
+      <div className="section-label">{fr ? 'Ligne du temps' : 'Timeline'}</div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {fr
+          ? "Chaque soumission citoyenne et la dernière mise à jour de suivi — pas encore un historique complet de chaque changement de statut."
+          : 'Each citizen submission and the last tracking update — not yet a full history of every status change.'}
+      </p>
+      {detail.timeline.map((event: any, i: number) => (
+        <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', borderLeft: '2px solid var(--panel-border)', paddingLeft: 12, marginLeft: 4 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0, width: 90 }}>
+            {new Date(event.at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          </div>
+          <div style={{ fontSize: 12 }}>
+            {event.type === 'submission'
+              ? (fr ? <>📩 Signalement reçu{event.description ? ` — ${event.description}` : ''}</> : <>📩 Report received{event.description ? ` — ${event.description}` : ''}</>)
+              : (fr ? <>🔧 Statut mis à jour{event.by ? ` par ${event.by}` : ''}</> : <>🔧 Status updated{event.by ? ` by ${event.by}` : ''}</>)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

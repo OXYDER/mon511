@@ -616,6 +616,119 @@ export class MunicipalPortalService {
       .execute();
   }
 
+  /** Fiche détaillée d'un incident — toutes les photos de tous les
+   * signalements rattachés, ligne du temps (soumissions individuelles +
+   * dernière mise à jour de suivi — PAS un historique complet de chaque
+   * changement de statut, cette table ne conserve que l'état actuel,
+   * voir report_municipal_tracking), et l'état de suivi interne actuel
+   * (basé sur le signalement le plus ancien du groupe, tenu synchronisé
+   * avec les autres par updateIncidentTracking ci-dessous). */
+  async findIncidentDetail(userId: string, groupKey: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    const reports = await this.db
+      .selectFrom('reports')
+      .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+      .select([
+        'reports.id', 'reports.description', 'reports.address_text', 'reports.status', 'reports.created_at',
+        'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
+      ])
+      .where('reports.region_id', '=', regionId)
+      .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${groupKey}`)
+      .orderBy('reports.created_at', 'asc')
+      .execute();
+
+    if (reports.length === 0) throw new NotFoundException('Incident introuvable.');
+
+    const reportIds = reports.map((r) => r.id);
+    const photos = await this.db
+      .selectFrom('report_photos')
+      .select(['id', 'url', 'report_id as reportId', 'uploaded_at as uploadedAt'])
+      .where('report_id', 'in', reportIds)
+      .orderBy('uploaded_at', 'asc')
+      .execute();
+
+    const tracking = await this.db
+      .selectFrom('report_municipal_tracking')
+      .leftJoin('users', 'users.id', 'report_municipal_tracking.updated_by')
+      .select([
+        'report_municipal_tracking.internal_status as internalStatus', 'report_municipal_tracking.assigned_to as assignedTo',
+        'report_municipal_tracking.internal_notes as internalNotes', 'report_municipal_tracking.updated_at as updatedAt',
+        'users.first_name as updatedByFirstName',
+      ])
+      .where('report_municipal_tracking.report_id', '=', reports[0].id)
+      .executeTakeFirst();
+
+    // Ligne du temps — chaque soumission citoyenne individuelle, plus la
+    // dernière mise à jour de suivi s'il y en a une. Trié du plus récent
+    // au plus ancien pour l'affichage.
+    const timeline = [
+      ...reports.map((r) => ({ type: 'submission' as const, at: r.created_at, reportId: r.id, description: r.description })),
+      ...(tracking?.updatedAt ? [{ type: 'tracking_update' as const, at: tracking.updatedAt, status: tracking.internalStatus, by: tracking.updatedByFirstName }] : []),
+    ].sort((a, b) => new Date(b.at as any).getTime() - new Date(a.at as any).getTime());
+
+    return {
+      groupKey,
+      problemTypeNameFr: reports[0].problemTypeNameFr,
+      problemTypeIcon: reports[0].problemTypeIcon,
+      addressText: reports[0].address_text,
+      reportCount: reports.filter((r) => r.status !== 'rejected').length,
+      reports,
+      photos,
+      internalStatus: tracking?.internalStatus ?? 'new',
+      assignedTo: tracking?.assignedTo ?? null,
+      internalNotes: tracking?.internalNotes ?? null,
+      timeline,
+    };
+  }
+
+  /** Applique un changement de suivi (statut/assignation/notes) à TOUS
+   * les signalements d'un incident d'un coup — plutôt qu'à un seul,
+   * pour que le tableau de bord (qui compte par internal_status de
+   * CHAQUE signalement individuel) reste cohérent : sans ça, les
+   * signalements non explicitement mis à jour resteraient comptés
+   * comme "Nouveaux" indéfiniment. */
+  async updateIncidentTracking(
+    userId: string,
+    groupKey: string,
+    changes: { internalStatus?: 'new' | 'acknowledged' | 'in_progress' | 'done'; assignedTo?: string; internalNotes?: string },
+  ) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+
+    const reports = await this.db
+      .selectFrom('reports')
+      .select('id')
+      .where('region_id', '=', regionId)
+      .where(sql<boolean>`COALESCE(incident_id::text, id::text) = ${groupKey}`)
+      .execute();
+    if (reports.length === 0) throw new NotFoundException('Incident introuvable.');
+
+    for (const r of reports) {
+      await this.db
+        .insertInto('report_municipal_tracking')
+        .values({
+          report_id: r.id,
+          region_id: regionId,
+          internal_status: changes.internalStatus ?? 'new',
+          assigned_to: changes.assignedTo ?? null,
+          internal_notes: changes.internalNotes ?? null,
+          updated_by: userId,
+        })
+        .onConflict((oc) =>
+          oc.column('report_id').doUpdateSet({
+            ...(changes.internalStatus !== undefined && { internal_status: changes.internalStatus }),
+            ...(changes.assignedTo !== undefined && { assigned_to: changes.assignedTo }),
+            ...(changes.internalNotes !== undefined && { internal_notes: changes.internalNotes }),
+            updated_at: new Date() as any,
+            updated_by: userId,
+          }),
+        )
+        .execute();
+    }
+
+    return { updated: reports.length };
+  }
+
   /** Tableau de bord du portail municipal — cartes de statut (basées sur
    * internal_status déjà existant, voir report_municipal_tracking),
    * résumé, signalements prioritaires (les plus confirmés par les
