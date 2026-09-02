@@ -123,6 +123,20 @@ export class MunicipalPortalController {
     return this.service.findPendingAccessRequestsForReviewer(user.userId);
   }
 
+  @Get('my-region/team')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionTeam(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionTeam(user.userId);
+  }
+
+  @Post('my-region/team/:userId/remove')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  removeMyRegionTeamMember(@Param('userId') targetUserId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.removeMyRegionTeamMember(user.userId, targetUserId);
+  }
+
   @Post('my-region/access-requests/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_admin')

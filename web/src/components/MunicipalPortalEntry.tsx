@@ -103,7 +103,8 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
             {tab === 'reports' && <ReportsListView lang={lang} />}
             {tab === 'settings' && <ReportSettingsView lang={lang} />}
             {tab === 'stats' && <StatsView lang={lang} />}
-            {['interventions', 'comparatives', 'team'].includes(tab) && (
+            {tab === 'team' && <TeamView lang={lang} />}
+            {['interventions', 'comparatives'].includes(tab) && (
               <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 {fr ? 'Bientôt disponible.' : 'Coming soon.'}
               </div>
@@ -235,7 +236,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
   {
     group: 'ADMINISTRATION',
     items: [
-      { key: 'team', icon: '♟', label: { fr: 'Équipe', en: 'Team' }, ready: false },
+      { key: 'team', icon: '♟', label: { fr: 'Équipe', en: 'Team' }, ready: true },
       { key: 'settings', icon: '⚙', label: { fr: 'Paramètres', en: 'Settings' }, ready: true },
     ],
   },
@@ -622,6 +623,63 @@ function StatsView({ lang }: { lang: 'fr' | 'en' }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function TeamView({ lang }: { lang: 'fr' | 'en' }) {
+  const [team, setTeam] = useState<any[]>([]);
+  const [role, setRole] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const fr = lang === 'fr';
+
+  function load() {
+    api.get<any>('/municipal-portal/my-access-status').then((s) => setRole(s.role ?? null)).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/team').then(setTeam).catch(() => {});
+  }
+
+  useEffect(load, []);
+
+  async function remove(userId: string) {
+    setFeedback(null);
+    try {
+      await api.post(`/municipal-portal/my-region/team/${userId}/remove`, {});
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    }
+  }
+
+  const ROLE_LABELS: Record<string, { fr: string; en: string }> = {
+    municipal_admin: { fr: 'Gestionnaire principal', en: 'Principal manager' },
+    municipal_staff: { fr: 'Employé', en: 'Staff' },
+  };
+
+  return (
+    <div>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Équipe' : 'Team'} ({team.length})</div>
+      <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+        {fr
+          ? "Un nouveau membre doit soumettre une demande d'accès (bouton 🏛️ dans le client mon511) — un gestionnaire principal l'approuve ensuite ici même, dans la file de demandes en attente."
+          : 'A new member must submit an access request (🏛️ button in the mon511 client) — a principal manager then approves it here, in the pending requests queue.'}
+      </p>
+      {feedback && <div className="error-banner">{feedback}</div>}
+      {team.map((m) => (
+        <div key={m.id} className="report-card" style={{ cursor: 'default' }}>
+          <div className="rc-icon-hex">{m.roleName === 'municipal_admin' ? '👑' : '👤'}</div>
+          <div className="rc-body">
+            <div className="rc-title">{m.firstName} {m.lastName}</div>
+            <div className="rc-meta">
+              {ROLE_LABELS[m.roleName] ? (fr ? ROLE_LABELS[m.roleName].fr : ROLE_LABELS[m.roleName].en) : m.roleName} · {m.email}
+            </div>
+          </div>
+          {role === 'municipal_admin' && (
+            <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => remove(m.id)}>
+              {fr ? 'Retirer' : 'Remove'}
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

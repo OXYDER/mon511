@@ -342,6 +342,49 @@ export class MunicipalPortalService {
     return this.findPendingAccessRequests(regionId);
   }
 
+  /** Liste des employés municipaux (municipal_staff + municipal_admin)
+   * de la même municipalité que l'appelant — pour l'onglet "Équipe" du
+   * portail. */
+  async findMyRegionTeam(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select(['users.id', 'users.email', 'users.first_name as firstName', 'users.last_name as lastName', 'roles.name as roleName', 'users.created_at as memberSince'])
+      .where('users.region_id', '=', regionId)
+      .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+      .orderBy('roles.name', 'desc') // municipal_admin avant municipal_staff (ordre alphabétique inversé, coïncidence pratique)
+      .orderBy('users.created_at', 'asc')
+      .execute();
+  }
+
+  /** Retire un employé de l'équipe municipale — ramène son compte au
+   * rôle 'user' de base plutôt que de le supprimer, il garde son accès
+   * normal au client mon511 public. Seul un municipal_admin peut
+   * retirer quelqu'un, jamais un municipal_staff, et jamais soi-même
+   * (éviter qu'une équipe se retrouve accidentellement sans aucun
+   * admin). */
+  async removeMyRegionTeamMember(userId: string, targetUserId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if (targetUserId === userId) {
+      throw new ForbiddenException('Impossible de te retirer toi-même de ton équipe — demande à un autre gestionnaire municipal de le faire.');
+    }
+
+    const target = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select(['users.id', 'users.region_id', 'roles.name as roleName'])
+      .where('users.id', '=', targetUserId)
+      .executeTakeFirst();
+    if (!target || target.region_id !== regionId || !['municipal_staff', 'municipal_admin'].includes(target.roleName)) {
+      throw new NotFoundException("Ce compte ne fait pas partie de ton équipe.");
+    }
+
+    const userRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'user').executeTakeFirstOrThrow();
+    await this.db.updateTable('users').set({ role_id: userRole.id, region_id: null }).where('id', '=', targetUserId).execute();
+    return { removed: true };
+  }
+
   /** File de modération des signalements — SEULEMENT ceux de la propre
    * municipalité de l'appelant, contrairement à la file générale des
    * modérateurs du site qui voit tout. */
