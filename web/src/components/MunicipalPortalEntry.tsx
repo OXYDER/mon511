@@ -311,14 +311,40 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map'>('list');
   const [sortBy, setSortBy] = useState<'lastReportedAt' | 'reportCount' | 'problemTypeNameFr'>('lastReportedAt');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const fr = lang === 'fr';
 
+  const STATUS_FILTER_OPTIONS: { key: string; label: { fr: string; en: string } }[] = [
+    { key: 'all', label: { fr: 'Tous les statuts', en: 'All statuses' } },
+    { key: 'pending_moderation', label: { fr: 'En attente de modération', en: 'Pending moderation' } },
+    { key: 'published_unresolved', label: { fr: 'Non résolu', en: 'Unresolved' } },
+    { key: 'published_resolved', label: { fr: 'Résolu', en: 'Resolved' } },
+    { key: 'rejected', label: { fr: 'Refusé', en: 'Rejected' } },
+    { key: 'withdrawn', label: { fr: 'Retiré', en: 'Withdrawn' } },
+    { key: 'archived', label: { fr: 'Archivé', en: 'Archived' } },
+  ];
+
+  function load() {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set('search', search.trim());
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    api.get<any[]>(`/municipal-portal/my-region/reports/queue?${params.toString()}`).then(setGroups).catch(() => {});
+  }
+
+  // Recherche/filtre appliqués CÔTÉ SERVEUR (voir findMyRegionReportsQueue)
+  // — affecte directement quels signalements entrent dans le
+  // regroupement en incidents, pas un simple masquage visuel après
+  // coup qui laisserait les compteurs incohérents.
+  useEffect(load, [statusFilter]);
   useEffect(() => {
-    api.get<any[]>('/municipal-portal/my-region/reports/queue').then(setGroups).catch(() => {});
-  }, []);
+    const timeout = setTimeout(load, 350);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   if (detailKey) {
-    return <IncidentDetailScreen lang={lang} groupKey={detailKey} onBack={() => setDetailKey(null)} />;
+    return <IncidentDetailScreen lang={lang} groupKey={detailKey} onBack={() => { setDetailKey(null); load(); }} />;
   }
 
   const sorted = [...groups].sort((a, b) => {
@@ -339,6 +365,19 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
       onClick: () => setDetailKey(g.groupKey),
     }));
   const mapCenter = mapPins.length > 0 ? { lat: mapPins[0].latitude, lng: mapPins[0].longitude, zoom: 12 } : null;
+
+  function statusBadge(status: string) {
+    const map: Record<string, { icon: string; color: string; fr: string; en: string }> = {
+      pending_moderation: { icon: '⏳', color: 'var(--official-blue)', fr: 'En attente', en: 'Pending' },
+      published_unresolved: { icon: '🔴', color: 'var(--accent-signal)', fr: 'Non résolu', en: 'Unresolved' },
+      published_resolved: { icon: '🟢', color: 'var(--status-resolved)', fr: 'Résolu', en: 'Resolved' },
+      rejected: { icon: '✕', color: 'var(--text-muted)', fr: 'Refusé', en: 'Rejected' },
+      withdrawn: { icon: '↩', color: 'var(--text-muted)', fr: 'Retiré', en: 'Withdrawn' },
+      archived: { icon: '📦', color: 'var(--text-muted)', fr: 'Archivé', en: 'Archived' },
+    };
+    const s = map[status] ?? { icon: '•', color: 'var(--text-muted)', fr: status, en: status };
+    return <span style={{ color: s.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{s.icon} {fr ? s.fr : s.en}</span>;
+  }
 
   const VIEW_MODES: { key: typeof viewMode; icon: string; label: { fr: string; en: string } }[] = [
     { key: 'list', icon: '☰', label: { fr: 'Liste', en: 'List' } },
@@ -371,6 +410,26 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
           : 'Reports of the same problem, close to each other, are grouped — click to see individual declarations.'}
       </p>
 
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <input
+          className="text-input"
+          style={{ flex: '2 1 200px' }}
+          placeholder={fr ? 'Rechercher par adresse ou description...' : 'Search by address or description...'}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ flex: '1 1 160px' }}>
+          {STATUS_FILTER_OPTIONS.map((o) => (
+            <option key={o.key} value={o.key}>{fr ? o.label.fr : o.label.en}</option>
+          ))}
+        </select>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ flex: '1 1 160px' }}>
+          <option value="lastReportedAt">{fr ? 'Trier : plus récent' : 'Sort: most recent'}</option>
+          <option value="reportCount">{fr ? 'Trier : nombre de signalements' : 'Sort: report count'}</option>
+          <option value="problemTypeNameFr">{fr ? 'Trier : type' : 'Sort: type'}</option>
+        </select>
+      </div>
+
       {viewMode === 'list' && (
         <div>
           {sorted.map((g) => (
@@ -381,8 +440,10 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
               >
                 {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  <div style={{ fontWeight: 600 }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {statusBadge(g.status)}
+                    {' · '}
                     {g.reportCount > 1
                       ? (fr ? `${g.reportCount} signalements citoyens` : `${g.reportCount} citizen reports`)
                       : (fr ? '1 signalement' : '1 report')}
@@ -408,6 +469,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
             <tr style={{ borderBottom: '1px solid var(--panel-border)', textAlign: 'left' }}>
               <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('problemTypeNameFr')}>{fr ? 'Type' : 'Type'}</th>
               <th style={{ padding: '6px 8px' }}>{fr ? 'Adresse' : 'Address'}</th>
+              <th style={{ padding: '6px 8px' }}>{fr ? 'Statut' : 'Status'}</th>
               <th style={{ padding: '6px 8px', cursor: 'pointer', textAlign: 'right' }} onClick={() => setSortBy('reportCount')}>{fr ? 'Signalements' : 'Reports'}</th>
               <th style={{ padding: '6px 8px' }}>{fr ? 'Premier' : 'First'}</th>
               <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('lastReportedAt')}>{fr ? 'Dernier' : 'Last'}</th>
@@ -418,6 +480,7 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
               <tr key={g.groupKey} onClick={() => setDetailKey(g.groupKey)} style={{ cursor: 'pointer', borderBottom: '1px solid var(--panel-border)' }}>
                 <td style={{ padding: '7px 8px' }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{g.addressText ?? '—'}</td>
+                <td style={{ padding: '7px 8px' }}>{statusBadge(g.status)}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: g.reportCount > 1 ? 700 : 400 }}>{g.reportCount}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
@@ -555,6 +618,13 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
   const [assignedTo, setAssignedTo] = useState('');
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editDescription, setEditDescription] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [publicNote, setPublicNote] = useState('');
+  const [publicNoteVisible, setPublicNoteVisible] = useState(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [publicStatusSaving, setPublicStatusSaving] = useState(false);
   const fr = lang === 'fr';
 
   function load() {
@@ -562,14 +632,61 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
       setDetail(d);
       setNotes(d.internalNotes ?? '');
       setAssignedTo(d.assignedTo ?? '');
+      setEditDescription(d.description ?? '');
+      setEditAddress(d.addressText ?? '');
     }).catch(() => {});
   }
 
   useEffect(load, [groupKey]);
 
-  async function setStatus(status: string) {
-    await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/tracking`, { internalStatus: status }).catch(() => {});
-    load();
+  function selectStatus(status: string) {
+    setPendingStatus(status);
+    setPublicNote('');
+    setPublicNoteVisible(false);
+  }
+
+  async function confirmStatusChange() {
+    if (!pendingStatus) return;
+    setPublicStatusSaving(true);
+    try {
+      await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/tracking`, {
+        internalStatus: pendingStatus,
+        ...(publicNote.trim() && { publicNote: publicNote.trim(), publicNoteVisible }),
+      });
+      setPendingStatus(null);
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setPublicStatusSaving(false);
+    }
+  }
+
+  async function saveEdit() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/report`, { description: editDescription, addressText: editAddress });
+      setEditing(false);
+      setFeedback(fr ? 'Enregistré.' : 'Saved.');
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setPublicStatus(status: 'published_unresolved' | 'published_resolved') {
+    setSaving(true);
+    try {
+      await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/public-status`, { status });
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveAssignmentAndNotes() {
@@ -592,32 +709,82 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
     <div>
       <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onBack}>← {fr ? 'Retour à la liste' : 'Back to list'}</button>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-        <span style={{ fontSize: 24 }}>{detail.problemTypeIcon ?? '📍'}</span>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>{detail.problemTypeNameFr}</div>
-          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{detail.addressText ?? '—'}</div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 24 }}>{detail.problemTypeIcon ?? '📍'}</span>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 700 }}>{detail.problemTypeNameFr}</div>
+            {!editing && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{detail.addressText ?? '—'}</div>}
+          </div>
         </div>
+        {!editing && <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setEditing(true)}>✏️ {fr ? 'Modifier' : 'Edit'}</button>}
       </div>
+
+      {editing && (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 14, marginTop: 10, marginBottom: 16 }}>
+          <div className="field-group">
+            <label className="field-label">{fr ? 'Adresse' : 'Address'}</label>
+            <input className="text-input" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+          </div>
+          <div className="field-group">
+            <label className="field-label">{fr ? 'Description' : 'Description'}</label>
+            <textarea rows={3} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
+          </div>
+          <div className="action-row">
+            <button className="btn-primary" onClick={saveEdit} disabled={saving}>{saving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}</button>
+            <button className="btn-ghost" onClick={() => { setEditing(false); setEditDescription(detail.description ?? ''); setEditAddress(detail.addressText ?? ''); }}>{fr ? 'Annuler' : 'Cancel'}</button>
+          </div>
+        </div>
+      )}
+
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 20 }}>
         {detail.reportCount > 1
           ? (fr ? `${detail.reportCount} signalements citoyens regroupés` : `${detail.reportCount} grouped citizen reports`)
           : (fr ? '1 signalement' : '1 report')}
       </div>
 
-      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut interne' : 'Internal status'}</div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut public (visible sur la carte)' : 'Public status (visible on the map)'}</div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        <button className="btn-ghost" style={{ fontSize: 12, border: detail.status === 'published_unresolved' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => setPublicStatus('published_unresolved')} disabled={saving}>
+          🔴 {fr ? 'Non résolu' : 'Unresolved'}
+        </button>
+        <button className="btn-ghost" style={{ fontSize: 12, border: detail.status === 'published_resolved' ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => setPublicStatus('published_resolved')} disabled={saving}>
+          🟢 {fr ? 'Résolu' : 'Resolved'}
+        </button>
+      </div>
+
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut interne (suivi de l\'équipe)' : 'Internal status (team tracking)'}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
         {INTERNAL_STATUS_OPTIONS.map((s) => (
           <button
             key={s.key}
             className="btn-ghost"
-            style={{ fontSize: 12, border: detail.internalStatus === s.key ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
-            onClick={() => setStatus(s.key)}
+            style={{ fontSize: 12, border: (pendingStatus ?? detail.internalStatus) === s.key ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+            onClick={() => selectStatus(s.key)}
           >
             {s.icon} {fr ? s.label.fr : s.label.en}
           </button>
         ))}
       </div>
+      {pendingStatus && (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          <div className="field-group" style={{ marginBottom: 8 }}>
+            <label className="field-label">{fr ? 'Note sur ce changement (optionnel)' : 'Note about this change (optional)'}</label>
+            <textarea rows={2} value={publicNote} onChange={(e) => setPublicNote(e.target.value)} placeholder={fr ? 'Ex. Réparation prévue mardi prochain' : 'E.g. Repair scheduled for next Tuesday'} />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={publicNoteVisible} onChange={(e) => setPublicNoteVisible(e.target.checked)} disabled={!publicNote.trim()} />
+            👁️ {fr ? 'Rendre cette note visible aux citoyens sur la fiche du signalement' : 'Make this note visible to citizens on the report page'}
+          </label>
+          <div className="action-row">
+            <button className="btn-primary" onClick={confirmStatusChange} disabled={publicStatusSaving}>
+              {publicStatusSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Confirmer le changement' : 'Confirm change')}
+            </button>
+            <button className="btn-ghost" onClick={() => setPendingStatus(null)}>{fr ? 'Annuler' : 'Cancel'}</button>
+          </div>
+        </div>
+      )}
+      {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>{feedback}</div>}
 
       {detail.photos.length > 0 && (
         <>
@@ -646,8 +813,8 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
       <div className="section-label">{fr ? 'Ligne du temps' : 'Timeline'}</div>
       <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
         {fr
-          ? "Chaque soumission citoyenne et la dernière mise à jour de suivi — pas encore un historique complet de chaque changement de statut."
-          : 'Each citizen submission and the last tracking update — not yet a full history of every status change.'}
+          ? "Chaque soumission citoyenne et chaque changement de statut, conservés pour toujours."
+          : 'Every citizen submission and every status change, kept forever.'}
       </p>
       {detail.timeline.map((event: any, i: number) => (
         <div key={i} style={{ display: 'flex', gap: 10, padding: '6px 0', borderLeft: '2px solid var(--panel-border)', paddingLeft: 12, marginLeft: 4 }}>
@@ -655,9 +822,21 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
             {new Date(event.at).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
           </div>
           <div style={{ fontSize: 12 }}>
-            {event.type === 'submission'
-              ? (fr ? <>📩 Signalement reçu{event.description ? ` — ${event.description}` : ''}</> : <>📩 Report received{event.description ? ` — ${event.description}` : ''}</>)
-              : (fr ? <>🔧 Statut mis à jour{event.by ? ` par ${event.by}` : ''}</> : <>🔧 Status updated{event.by ? ` by ${event.by}` : ''}</>)}
+            {event.type === 'submission' ? (
+              fr ? <>📩 Signalement reçu{event.description ? ` — ${event.description}` : ''}</> : <>📩 Report received{event.description ? ` — ${event.description}` : ''}</>
+            ) : (
+              <>
+                {fr
+                  ? <>🔧 Statut : <strong>{INTERNAL_STATUS_OPTIONS.find((s) => s.key === event.status)?.label.fr ?? event.status}</strong>{event.by ? ` (par ${event.by})` : ''}</>
+                  : <>🔧 Status: <strong>{INTERNAL_STATUS_OPTIONS.find((s) => s.key === event.status)?.label.en ?? event.status}</strong>{event.by ? ` (by ${event.by})` : ''}</>}
+                {event.note && (
+                  <div style={{ marginTop: 2, color: 'var(--text-muted)' }}>
+                    {event.visibleToPublic ? '👁️ ' : '🔒 '}{event.note}
+                    <span style={{ fontSize: 10 }}> — {event.visibleToPublic ? (fr ? 'visible aux citoyens' : 'visible to citizens') : (fr ? 'note interne' : 'internal note')}</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       ))}
