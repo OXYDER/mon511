@@ -102,7 +102,8 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
             {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} />}
             {tab === 'reports' && <ReportsListView lang={lang} />}
             {tab === 'settings' && <ReportSettingsView lang={lang} />}
-            {['interventions', 'stats', 'comparatives', 'team'].includes(tab) && (
+            {tab === 'stats' && <StatsView lang={lang} />}
+            {['interventions', 'comparatives', 'team'].includes(tab) && (
               <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 {fr ? 'Bientôt disponible.' : 'Coming soon.'}
               </div>
@@ -227,7 +228,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
   {
     group: 'ANALYSE',
     items: [
-      { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: false },
+      { key: 'stats', icon: '▥', label: { fr: 'Statistiques', en: 'Statistics' }, ready: true },
       { key: 'comparatives', icon: '↗', label: { fr: 'Comparatifs', en: 'Comparatives' }, ready: false },
     ],
   },
@@ -512,6 +513,115 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
           <MapView center={mapCenter} pins={mapPins} height={480} theme="dark" />
         </div>
       )}
+    </div>
+  );
+}
+
+function StatsView({ lang }: { lang: 'fr' | 'en' }) {
+  const [stats, setStats] = useState<any>(null);
+  const [days, setDays] = useState(30);
+  const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<any>(`/municipal-portal/my-region/report/stats?days=${days}`).then(setStats).catch(() => {});
+  }, [days]);
+
+  if (!stats) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  const DAY_OPTIONS = [7, 30, 90, 365];
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statistiques' : 'Statistics'}</div>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {DAY_OPTIONS.map((d) => (
+            <button
+              key={d}
+              className="btn-ghost"
+              style={{ fontSize: 11.5, padding: '5px 10px', border: days === d ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }}
+              onClick={() => setDays(d)}
+            >
+              {d === 7 ? (fr ? '7 jours' : '7 days') : d === 30 ? (fr ? '30 jours' : '30 days') : d === 90 ? (fr ? '90 jours' : '90 days') : (fr ? '1 an' : '1 year')}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Activité de la période */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 24 }}>
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: '14px 10px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{stats.newPeriod}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fr ? 'Nouveaux' : 'New'}</div>
+        </div>
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: '14px 10px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--status-resolved)' }}>{stats.resolvedPeriod}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fr ? 'Résolus' : 'Resolved'}</div>
+        </div>
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: '14px 10px', textAlign: 'center' }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-muted)' }}>{stats.removedPeriod}</div>
+          <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{fr ? 'Retirés' : 'Removed'}</div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Actifs par type' : 'Active by type'}</div>
+          {stats.activeByType.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun.' : 'None.'}</div>}
+          {stats.activeByType.map((t: any, i: number) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '5px 0', borderBottom: '1px solid var(--panel-border)' }}>
+              <span>{t.icon ?? '📍'} {t.typeName}</span>
+              <strong>{t.count}</strong>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Performance de résolution' : 'Resolution performance'}</div>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>
+            {fr ? 'Taux de résolution : ' : 'Resolution rate: '}
+            <strong>{stats.resolutionPerformance.rate !== null ? `${stats.resolutionPerformance.rate}%` : (fr ? 'N/D' : 'N/A')}</strong>
+          </div>
+          <div style={{ fontSize: 13, marginBottom: 12 }}>
+            {fr ? 'Temps moyen : ' : 'Average time: '}
+            <strong>{stats.resolutionPerformance.avgResolutionDays !== null ? `${stats.resolutionPerformance.avgResolutionDays} ${fr ? 'jours' : 'days'}` : (fr ? 'N/D' : 'N/A')}</strong>
+          </div>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Classement (TOP 100)' : 'Ranking (TOP 100)'}</div>
+          {stats.ranking.myRank ? (
+            <div style={{ fontSize: 13 }}>
+              {fr ? 'Rang ' : 'Rank '}<strong>{stats.ranking.myRank}</strong>{fr ? ' sur ' : ' of '}{stats.ranking.totalRanked}
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                {fr ? 'Plus de signalements actifs = rang moins bon' : 'More active reports = worse rank'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Pas assez de signalements pour figurer au classement.' : 'Not enough reports to rank.'}</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Zones routières les plus problématiques' : 'Most problematic road zones'}</div>
+          {stats.problematicZones.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucune.' : 'None.'}</div>}
+          {stats.problematicZones.slice(0, 8).map((z: any, i: number) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--panel-border)' }}>
+              <span>{z.civicRange ? `${z.civicRange} ${z.streetName}` : z.streetName}</span>
+              <strong>{z.count}</strong>
+            </div>
+          ))}
+        </div>
+        <div style={{ flex: '1 1 260px' }}>
+          <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Plus confirmés ("Présent")' : 'Most confirmed ("Present")'}</div>
+          {stats.mostConfirmed.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun.' : 'None.'}</div>}
+          {stats.mostConfirmed.slice(0, 8).map((r: any) => (
+            <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '5px 0', borderBottom: '1px solid var(--panel-border)' }}>
+              <span>{r.icon ?? '📍'} {r.addressText ?? '—'}</span>
+              <strong>👍 {r.confirmationsCount}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
