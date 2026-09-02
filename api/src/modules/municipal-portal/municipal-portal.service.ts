@@ -165,6 +165,25 @@ export class MunicipalPortalService {
    * voir requestAccess() — mais cette fonction reste réutilisée pour
    * toute approbation manuelle, peu importe qui l'effectue. */
   private async applyApproval(requestId: string, targetUserId: string, regionId: string, roleName: 'municipal_staff' | 'municipal_admin', reviewerId: string) {
+    // Sécurité : ne jamais écraser silencieusement le rôle d'un compte
+    // admin/super_admin du site. Sans cette vérification, approuver une
+    // demande d'accès municipal pour un tel compte (ex. un admin qui
+    // teste le formulaire avec son propre compte) remplaçait
+    // discrètement son role_id par municipal_admin/staff, lui faisant
+    // perdre tout accès administratif du site — bug reel rencontre et
+    // corrige dans ce projet.
+    const currentRole = await this.db
+      .selectFrom('users')
+      .innerJoin('roles', 'roles.id', 'users.role_id')
+      .select('roles.name as roleName')
+      .where('users.id', '=', targetUserId)
+      .executeTakeFirst();
+    if (currentRole && (currentRole.roleName === 'admin' || currentRole.roleName === 'super_admin')) {
+      throw new ForbiddenException(
+        "Ce compte est déjà administrateur du site — impossible de lui attribuer un rôle municipal sans risquer de lui faire perdre ses droits d'administration. Utilise un autre compte pour cette demande.",
+      );
+    }
+
     const role = await this.db.selectFrom('roles').select('id').where('name', '=', roleName).executeTakeFirstOrThrow();
 
     await this.db.transaction().execute(async (trx) => {
