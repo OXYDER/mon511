@@ -700,16 +700,19 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
   const [role, setRole] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [inviteRank, setInviteRank] = useState('employee');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [permSaving, setPermSaving] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   function load() {
     api.get<any>('/municipal-portal/my-access-status').then((s) => setRole(s.role ?? null)).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/team').then(setTeam).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/rank-permissions').then(setPermissions).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/invites').then(setPendingInvites).catch(() => {});
   }
 
   useEffect(load, []);
@@ -738,12 +741,24 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
     setGenerating(true);
     setInviteLink(null);
     try {
-      const r = await api.post<{ token: string }>('/municipal-portal/my-region/invites', { rank: inviteRank });
+      const r = await api.post<{ token: string }>('/municipal-portal/my-region/invites', { rank: inviteRank, email: inviteEmail.trim() || undefined });
       setInviteLink(`${window.location.origin}/?municipalInvite=${r.token}`);
+      setInviteEmail('');
+      load();
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : 'Erreur.');
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function cancelInvite(inviteId: string) {
+    setFeedback(null);
+    try {
+      await api.post(`/municipal-portal/my-region/invites/${inviteId}/cancel`, {});
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
     }
   }
 
@@ -817,14 +832,27 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
       {role === 'municipal_admin' && (
         <>
           <div className="section-label">{fr ? "Inviter un nouveau membre" : 'Invite a new member'}</div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+            {fr
+              ? "Avec un courriel : la personne reçoit un lien directement — si elle n'a pas encore de compte mon511, elle peut en créer un avec cette même adresse et rejoindra automatiquement l'équipe. Sans courriel : génère un lien générique à copier-coller toi-même."
+              : "With an email: the person receives a link directly — if they don't have a mon511 account yet, they can create one with that same address and will automatically join the team. Without email: generates a generic link for you to copy and share."}
+          </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
             <select value={inviteRank} onChange={(e) => setInviteRank(e.target.value)}>
               {RANKS.map((r) => (
                 <option key={r} value={r}>{fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en}</option>
               ))}
             </select>
+            <input
+              className="text-input"
+              type="email"
+              style={{ flex: '1 1 200px' }}
+              placeholder={fr ? 'Courriel (optionnel)' : 'Email (optional)'}
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+            />
             <button className="btn-primary" onClick={generateInvite} disabled={generating}>
-              {generating ? (fr ? 'Génération...' : 'Generating...') : (fr ? "Générer un lien" : 'Generate link')}
+              {generating ? (fr ? 'Génération...' : 'Generating...') : inviteEmail.trim() ? (fr ? 'Envoyer' : 'Send') : (fr ? "Générer un lien" : 'Generate link')}
             </button>
           </div>
           {inviteLink && (
@@ -839,6 +867,24 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
                 </span>
               </div>
             </div>
+          )}
+
+          {pendingInvites.length > 0 && (
+            <>
+              <div className="section-label">{fr ? 'Invitations en attente' : 'Pending invitations'} ({pendingInvites.length})</div>
+              {pendingInvites.map((inv) => (
+                <div key={inv.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+                  <div>
+                    {RANK_LABELS[inv.rank]?.icon} {fr ? RANK_LABELS[inv.rank]?.fr : RANK_LABELS[inv.rank]?.en}
+                    {inv.email && <> — {inv.email}</>}
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                      {fr ? 'Expire le' : 'Expires'} {new Date(inv.expiresAt).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                  <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => cancelInvite(inv.id)}>{fr ? 'Annuler' : 'Cancel'}</button>
+                </div>
+              ))}
+            </>
           )}
 
           <div className="section-label">{fr ? 'Permissions par rang' : 'Permissions by rank'}</div>

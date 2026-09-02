@@ -466,7 +466,7 @@ export class MunicipalPortalService {
    * pour les jetons de vérification), usage unique, expire dans 48h.
    * Seul un municipal_admin peut générer un lien — jamais un
    * municipal_staff, même un "directeur". */
-  async createMyRegionInvite(userId: string, rank: string) {
+  async createMyRegionInvite(userId: string, rank: string, email?: string) {
     const { regionId } = await this.getScopeOrThrow(userId);
     if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
       throw new BadRequestException('Rang invalide.');
@@ -474,13 +474,68 @@ export class MunicipalPortalService {
 
     const token = randomBytes(24).toString('hex');
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
+    const cleanEmail = email?.trim().toLowerCase() || null;
 
     await this.db
       .insertInto('municipal_invites')
-      .values({ region_id: regionId, rank: rank as any, token, created_by: userId, expires_at: expiresAt as any })
+      .values({ region_id: regionId, rank: rank as any, token, email: cleanEmail, created_by: userId, expires_at: expiresAt as any })
       .execute();
 
-    return { token, expiresAt };
+    if (cleanEmail) {
+      const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', regionId).executeTakeFirst();
+      const RANK_LABELS: Record<string, string> = { director: 'Directeur', foreman: 'Contremaître', employee: 'Employé' };
+      const frontendUrl = process.env.FRONTEND_URL ?? 'https://mon511.ca';
+      const inviteUrl = `${frontendUrl}/?municipalInvite=${token}`;
+      this.email
+        .send(
+          cleanEmail,
+          `Invitation à rejoindre l'équipe municipale de ${region?.name_fr ?? 'ta municipalité'} — mon511.ca`,
+          `Tu as été invité(e) à rejoindre l'équipe municipale de ${region?.name_fr ?? ''} en tant que ${RANK_LABELS[rank] ?? rank}. Si tu n'as pas encore de compte mon511, tu peux en créer un avec cette même adresse courriel en cliquant le lien — ton compte sera automatiquement rattaché à l'équipe. Ce lien expire dans 48 heures et ne peut être utilisé qu'une seule fois.`,
+          { ctaLabel: "Rejoindre l'équipe", ctaUrl: inviteUrl },
+        )
+        .catch(() => {});
+    }
+
+    return { token, expiresAt, email: cleanEmail };
+  }
+
+  /** Invitations en attente (ni utilisées, ni expirées) pour la
+   * municipalité — pour l'affichage et l'annulation dans la section
+   * Équipe. */
+  async findMyRegionPendingInvites(userId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    return this.db
+      .selectFrom('municipal_invites')
+      .select(['id', 'rank', 'email', 'expires_at as expiresAt', 'created_at as createdAt'])
+      .where('region_id', '=', regionId)
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', new Date() as any)
+      .orderBy('created_at', 'desc')
+      .execute();
+  }
+
+  /** Annule (supprime) une invitation pas encore utilisée — seul un
+   * municipal_admin, seulement pour sa propre municipalité. */
+  async cancelMyRegionInvite(userId: string, inviteId: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    const invite = await this.db.selectFrom('municipal_invites').select(['id', 'region_id', 'used_at']).where('id', '=', inviteId).executeTakeFirst();
+    if (!invite || invite.region_id !== regionId) throw new NotFoundException('Invitation introuvable.');
+    if (invite.used_at) throw new BadRequestException('Cette invitation a déjà été utilisée — impossible de l\'annuler.');
+    await this.db.deleteFrom('municipal_invites').where('id', '=', inviteId).execute();
+    return { cancelled: true };
+  }
+
+  /** Aperçu public d'une invitation (SANS la consommer) — pour afficher
+   * "tu as été invité à rejoindre X" avant même que l'usager soit
+   * connecté, et pré-remplir son adresse courriel au moment de
+   * s'inscrire. */
+  async previewInvite(token: string) {
+    const invite = await this.db.selectFrom('municipal_invites').selectAll().where('token', '=', token).executeTakeFirst();
+    if (!invite || invite.used_at || new Date(invite.expires_at) < new Date()) {
+      return { valid: false };
+    }
+    const region = await this.db.selectFrom('regions').select('name_fr').where('id', '=', invite.region_id).executeTakeFirst();
+    return { valid: true, regionName: region?.name_fr, rank: invite.rank, email: invite.email };
   }
 
   /** Utilise un lien d'invitation — l'usager DOIT déjà être connecté à
@@ -498,7 +553,10 @@ export class MunicipalPortalService {
 
     // Même protection déjà en place pour l'approbation manuelle — ne
     // jamais écraser silencieusement un compte déjà admin/super_admin
-    // du site.
+    // du site NI un compte déjà membre d'une équipe municipale (même
+    // rang inférieur) — l'usager a rapporté exactement ce cas : un
+    // "directeur" ayant cliqué un lien d'invitation "employé" se
+    // retrouvait rétrogradé sans avertissement.
     const currentRole = await this.db
       .selectFrom('users')
       .innerJoin('roles', 'roles.id', 'users.role_id')
@@ -507,6 +565,20 @@ export class MunicipalPortalService {
       .executeTakeFirst();
     if (currentRole && (currentRole.roleName === 'admin' || currentRole.roleName === 'super_admin')) {
       throw new ForbiddenException("Ce compte est déjà administrateur du site — utilise un autre compte pour rejoindre une équipe municipale.");
+    }
+    if (currentRole && (currentRole.roleName === 'municipal_admin' || currentRole.roleName === 'municipal_staff')) {
+      throw new ForbiddenException("Ce compte fait déjà partie d'une équipe municipale — utilise un autre compte, ou retire d'abord ce compte de son équipe actuelle (section Équipe) avant d'utiliser ce lien.");
+    }
+
+    // Si l'invitation cible une adresse précise (envoyée par courriel),
+    // seul un compte avec exactement cette adresse peut l'utiliser —
+    // empêche qu'un lien destiné à une personne précise soit intercepté
+    // et utilisé par quelqu'un d'autre.
+    if (invite.email) {
+      const currentUser = await this.db.selectFrom('users').select('email').where('id', '=', userId).executeTakeFirst();
+      if (!currentUser || currentUser.email.toLowerCase() !== invite.email.toLowerCase()) {
+        throw new ForbiddenException(`Cette invitation est destinée à ${invite.email} — connecte-toi avec cette adresse précise pour l'utiliser.`);
+      }
     }
 
     const staffRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'municipal_staff').executeTakeFirstOrThrow();

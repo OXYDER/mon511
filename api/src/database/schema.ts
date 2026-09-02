@@ -97,6 +97,7 @@ export interface MunicipalInvitesTable {
   region_id: string;
   rank: 'director' | 'foreman' | 'employee';
   token: string;
+  email: string | null;
   created_by: string;
   expires_at: Timestamp;
   used_at: Timestamp | null;

@@ -161,8 +161,27 @@ export class MunicipalPortalController {
   @Post('my-region/invites')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_admin')
-  createMyRegionInvite(@CurrentUser() user: CurrentUserPayload, @Body('rank') rank: string) {
-    return this.service.createMyRegionInvite(user.userId, rank);
+  createMyRegionInvite(@CurrentUser() user: CurrentUserPayload, @Body('rank') rank: string, @Body('email') email?: string) {
+    return this.service.createMyRegionInvite(user.userId, rank, email);
+  }
+
+  @Get('my-region/invites')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  findMyRegionPendingInvites(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionPendingInvites(user.userId);
+  }
+
+  @Post('my-region/invites/:inviteId/cancel')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  cancelMyRegionInvite(@Param('inviteId') inviteId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.cancelMyRegionInvite(user.userId, inviteId);
+  }
+
+  @Get('invites/:token/preview')
+  previewInvite(@Param('token') token: string) {
+    return this.service.previewInvite(token);
   }
 
   @Post('invites/:token/redeem')
