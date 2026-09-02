@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api';
 import MapView, { MapPin } from './MapView';
+import CustomSelect from './CustomSelect';
 
 interface Props {
   lang: 'fr' | 'en';
@@ -439,16 +440,22 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ flex: '1 1 160px' }}>
-          {STATUS_FILTER_OPTIONS.map((o) => (
-            <option key={o.key} value={o.key}>{fr ? o.label.fr : o.label.en}</option>
-          ))}
-        </select>
-        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ flex: '1 1 160px' }}>
-          <option value="lastReportedAt">{fr ? 'Trier : plus récent' : 'Sort: most recent'}</option>
-          <option value="reportCount">{fr ? 'Trier : nombre de signalements' : 'Sort: report count'}</option>
-          <option value="problemTypeNameFr">{fr ? 'Trier : type' : 'Sort: type'}</option>
-        </select>
+        <CustomSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={STATUS_FILTER_OPTIONS.map((o) => ({ value: o.key, label: fr ? o.label.fr : o.label.en }))}
+          style={{ flex: '1 1 160px' }}
+        />
+        <CustomSelect
+          value={sortBy}
+          onChange={(v) => setSortBy(v as any)}
+          options={[
+            { value: 'lastReportedAt', label: fr ? 'Trier : plus récent' : 'Sort: most recent' },
+            { value: 'reportCount', label: fr ? 'Trier : nombre de signalements' : 'Sort: report count' },
+            { value: 'problemTypeNameFr', label: fr ? 'Trier : type' : 'Sort: type' },
+          ]}
+          style={{ flex: '1 1 160px' }}
+        />
       </div>
 
       {viewMode === 'list' && (
@@ -850,11 +857,12 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
           </div>
           {role === 'municipal_admin' && m.roleName === 'municipal_staff' && (
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <select value={m.rank ?? 'employee'} onChange={(e) => changeRank(m.id, e.target.value)} style={{ fontSize: 11 }}>
-                {RANKS.map((r) => (
-                  <option key={r} value={r}>{fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en}</option>
-                ))}
-              </select>
+              <CustomSelect
+                value={m.rank ?? 'employee'}
+                onChange={(v) => changeRank(m.id, v)}
+                options={RANKS.map((r) => ({ value: r, label: fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en }))}
+                style={{ width: 140 }}
+              />
               <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => remove(m.id)}>{fr ? 'Retirer' : 'Remove'}</button>
             </div>
           )}
@@ -870,11 +878,12 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
               : "With an email: the person receives a link directly — if they don't have a mon511 account yet, they can create one with that same address and will automatically join the team. Without email: generates a generic link for you to copy and share."}
           </p>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-            <select value={inviteRank} onChange={(e) => setInviteRank(e.target.value)}>
-              {RANKS.map((r) => (
-                <option key={r} value={r}>{fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en}</option>
-              ))}
-            </select>
+            <CustomSelect
+              value={inviteRank}
+              onChange={setInviteRank}
+              options={RANKS.map((r) => ({ value: r, label: fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en }))}
+              style={{ width: 160 }}
+            />
             <input
               className="text-input"
               type="email"

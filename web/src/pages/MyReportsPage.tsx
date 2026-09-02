@@ -3,6 +3,7 @@ import { api } from '../api';
 import { pickName, timeAgo, statusPillClass } from '../i18n';
 import { compressImage } from '../imageCompression';
 import Lightbox from '../components/Lightbox';
+import CustomSelect from '../components/CustomSelect';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface Props {
@@ -209,24 +210,35 @@ export default function MyReportsPage({ onClose, lang }: Props) {
         </div>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ flex: 1 }}>
-            <option value="all">{lang === 'fr' ? 'Tous les statuts' : 'All statuses'}</option>
-            {Object.entries(STATUS_LABELS).map(([key, [fr, en]]) => (
-              <option key={key} value={key}>{lang === 'fr' ? fr : en}</option>
-            ))}
-          </select>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} style={{ flex: 1 }}>
-            <option value="date_desc">{lang === 'fr' ? 'Plus récent' : 'Newest'}</option>
-            <option value="date_asc">{lang === 'fr' ? 'Plus ancien' : 'Oldest'}</option>
-            <option value="municipality">{lang === 'fr' ? 'Municipalité (A-Z)' : 'Municipality (A-Z)'}</option>
-          </select>
+          <CustomSelect
+            value={filterStatus}
+            onChange={setFilterStatus}
+            options={[
+              { value: 'all', label: lang === 'fr' ? 'Tous les statuts' : 'All statuses' },
+              ...Object.entries(STATUS_LABELS).map(([key, [fr, en]]) => ({ value: key, label: lang === 'fr' ? fr : en })),
+            ]}
+            style={{ flex: 1 }}
+          />
+          <CustomSelect
+            value={sortBy}
+            onChange={(v) => setSortBy(v as any)}
+            options={[
+              { value: 'date_desc', label: lang === 'fr' ? 'Plus récent' : 'Newest' },
+              { value: 'date_asc', label: lang === 'fr' ? 'Plus ancien' : 'Oldest' },
+              { value: 'municipality', label: lang === 'fr' ? 'Municipalité (A-Z)' : 'Municipality (A-Z)' },
+            ]}
+            style={{ flex: 1 }}
+          />
         </div>
-        <select value={filterTypeId} onChange={(e) => setFilterTypeId(e.target.value)} style={{ width: '100%', marginBottom: 14 }}>
-          <option value="all">{lang === 'fr' ? 'Tous les types' : 'All types'}</option>
-          {types.map((t) => (
-            <option key={t.id} value={t.id}>{t.icon} {pickName(t.name_fr, t.name_en, lang)}</option>
-          ))}
-        </select>
+        <CustomSelect
+          value={filterTypeId}
+          onChange={setFilterTypeId}
+          options={[
+            { value: 'all', label: lang === 'fr' ? 'Tous les types' : 'All types' },
+            ...types.map((t: any) => ({ value: t.id, label: `${t.icon} ${pickName(t.name_fr, t.name_en, lang)}` })),
+          ]}
+          style={{ width: '100%', marginBottom: 14 }}
+        />
 
         {filteredReports.length === 0 && (
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
@@ -378,11 +390,7 @@ export default function MyReportsPage({ onClose, lang }: Props) {
 
                       <div className="field-group">
                         <label className="field-label">{lang === 'fr' ? 'Type de problème' : 'Problem type'}</label>
-                        <select value={problemTypeId} onChange={(e) => setProblemTypeId(e.target.value)}>
-                          {types.map((t) => (
-                            <option key={t.id} value={t.id}>{t.icon} {pickName(t.name_fr, t.name_en, lang)}</option>
-                          ))}
-                        </select>
+                        <CustomSelect value={problemTypeId} onChange={setProblemTypeId} options={types.map((t: any) => ({ value: t.id, label: `${t.icon} ${pickName(t.name_fr, t.name_en, lang)}` }))} />
                       </div>
                       <div className="field-group">
                         <label className="field-label">{lang === 'fr' ? 'Description' : 'Description'}</label>

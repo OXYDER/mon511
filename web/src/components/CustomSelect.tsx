@@ -9,13 +9,14 @@ interface Props {
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  style?: React.CSSProperties;
 }
 
 /** Menu déroulant personnalisé — contrairement à <select>, la liste ouverte
  * d'un <select> natif ne peut presque pas être stylée dans la plupart des
  * navigateurs. Ce composant reproduit l'apparence fermée ET ouverte aux
  * couleurs du site. */
-export default function CustomSelect({ value, options, onChange }: Props) {
+export default function CustomSelect({ value, options, onChange, style }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
@@ -29,7 +30,7 @@ export default function CustomSelect({ value, options, onChange }: Props) {
   }, []);
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} style={{ position: 'relative', ...style }}>
       <button
         type="button"
         className="text-input custom-select-trigger"

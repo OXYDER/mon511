@@ -3,6 +3,7 @@ import { api } from '../api';
 import { reverseGeocodeAddress, snapToRoad, searchCities, GeocodingResult } from '../geocoding';
 import { pickName } from '../i18n';
 import { compressImage } from '../imageCompression';
+import CustomSelect from './CustomSelect';
 
 interface ProblemType {
   id: string;
@@ -506,11 +507,15 @@ export default function CreateReportModal({ onClose, onCreated, initialCoords, l
 
             <div className="field-group">
               <label className="field-label">{lang === 'fr' ? 'La municipalité a-t-elle été avisée ?' : 'Has the municipality been notified?'}</label>
-              <select value={municipalityNotified} onChange={(e) => setMunicipalityNotified(e.target.value as any)}>
-                <option value="unknown">{lang === 'fr' ? 'Je ne sais pas' : "I don't know"}</option>
-                <option value="yes">{lang === 'fr' ? 'Oui' : 'Yes'}</option>
-                <option value="no">{lang === 'fr' ? 'Non' : 'No'}</option>
-              </select>
+              <CustomSelect
+                value={municipalityNotified}
+                onChange={(v) => setMunicipalityNotified(v as any)}
+                options={[
+                  { value: 'unknown', label: lang === 'fr' ? 'Je ne sais pas' : "I don't know" },
+                  { value: 'yes', label: lang === 'fr' ? 'Oui' : 'Yes' },
+                  { value: 'no', label: lang === 'fr' ? 'Non' : 'No' },
+                ]}
+              />
               {municipalityNotified === 'yes' && (
                 <input
                   className="text-input"

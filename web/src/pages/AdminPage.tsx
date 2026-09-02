@@ -4,6 +4,7 @@ import { statusPillClass, timeAgo } from '../i18n';
 import ToggleSwitch from '../components/ToggleSwitch';
 import { compressImage } from '../imageCompression';
 import ConfirmModal from '../components/ConfirmModal';
+import CustomSelect from '../components/CustomSelect';
 
 interface Props {
   onClose: () => void;
@@ -695,11 +696,7 @@ function ProblemTypesAdmin() {
                   </div>
                   <div className="field-group" style={{ flex: 1 }}>
                     <label className="field-label">Catégorie</label>
-                    <select value={editCategoryId} onChange={(e) => setEditCategoryId(e.target.value)}>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                    <CustomSelect value={editCategoryId} onChange={setEditCategoryId} options={categories.map((c: any) => ({ value: c.id, label: c.name }))} />
                   </div>
                 </div>
                 <button className="btn-primary" onClick={() => saveEdit(t.id)} disabled={saving}>
@@ -822,17 +819,18 @@ function UsersAdmin() {
                 <div className="rc-title">{u.email}</div>
                 <div className="rc-meta">réputation {u.reputation_score}</div>
               </div>
-              <select
-                value={u.roleName}
-                onClick={(e) => e.stopPropagation()}
-                onChange={(e) => changeRole(u.id, e.target.value)}
-                style={{ width: 140, marginRight: 10 }}
-              >
-                <option value="user">user</option>
-                <option value="moderator">moderator</option>
-                <option value="admin">admin</option>
-                <option value="super_admin">super_admin</option>
-              </select>
+              <div onClick={(e) => e.stopPropagation()} style={{ width: 140, marginRight: 10 }}>
+                <CustomSelect
+                  value={u.roleName}
+                  onChange={(v) => changeRole(u.id, v)}
+                  options={[
+                    { value: 'user', label: 'user' },
+                    { value: 'moderator', label: 'moderator' },
+                    { value: 'admin', label: 'admin' },
+                    { value: 'super_admin', label: 'super_admin' },
+                  ]}
+                />
+              </div>
               <div onClick={(e) => e.stopPropagation()}>
                 <ToggleSwitch
                   on={u.status !== 'suspended'}
@@ -1526,16 +1524,21 @@ function AllReportsAdmin() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <select style={{ flex: '1 1 160px' }} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">Tous les statuts</option>
-          {Object.entries(STATUS_LABELS_ALL).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
-        <select style={{ flex: '1 1 160px' }} value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
-          <option value="created_at">Trier par date</option>
-          <option value="municipality">Trier par municipalité</option>
-        </select>
+        <CustomSelect
+          value={status}
+          onChange={setStatus}
+          options={[{ value: '', label: 'Tous les statuts' }, ...Object.entries(STATUS_LABELS_ALL).map(([key, label]) => ({ value: key, label: label as string }))]}
+          style={{ flex: '1 1 160px' }}
+        />
+        <CustomSelect
+          value={sortBy}
+          onChange={(v) => setSortBy(v as any)}
+          options={[
+            { value: 'created_at', label: 'Trier par date' },
+            { value: 'municipality', label: 'Trier par municipalité' },
+          ]}
+          style={{ flex: '1 1 160px' }}
+        />
         <button className="btn-ghost" onClick={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
           {sortDir === 'asc' ? '↓ Ascendant' : '↑ Descendant'}
         </button>
@@ -1643,19 +1646,11 @@ function AllReportsAdmin() {
                 </div>
                 <div className="field-group">
                   <label className="field-label">Type de problème</label>
-                  <select value={editTypeId} onChange={(e) => setEditTypeId(e.target.value)}>
-                    {types.map((t) => (
-                      <option key={t.id} value={t.id}>{t.icon} {t.name_fr}</option>
-                    ))}
-                  </select>
+                  <CustomSelect value={editTypeId} onChange={setEditTypeId} options={types.map((t: any) => ({ value: t.id, label: `${t.icon} ${t.name_fr}` }))} />
                 </div>
                 <div className="field-group">
                   <label className="field-label">Statut</label>
-                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
-                    {Object.entries(STATUS_LABELS_ALL).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
+                  <CustomSelect value={editStatus} onChange={setEditStatus} options={Object.entries(STATUS_LABELS_ALL).map(([key, label]) => ({ value: key, label: label as string }))} />
                 </div>
                 <div className="field-group">
                   <label className="field-label">Description</label>
@@ -1924,12 +1919,12 @@ function SupportTicketsAdmin() {
       <div className="section-label" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
         Tickets de support ({tickets.length})
       </div>
-      <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: '100%', marginBottom: 12 }}>
-        <option value="">Tous les statuts</option>
-        {Object.entries(TICKET_STATUS_LABELS).map(([key, label]) => (
-          <option key={key} value={key}>{label}</option>
-        ))}
-      </select>
+      <CustomSelect
+        value={statusFilter}
+        onChange={setStatusFilter}
+        options={[{ value: '', label: 'Tous les statuts' }, ...Object.entries(TICKET_STATUS_LABELS).map(([key, label]) => ({ value: key, label: label as string }))]}
+        style={{ width: '100%', marginBottom: 12 }}
+      />
       {tickets.length === 0 && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Aucun ticket.</div>}
       {tickets.map((t) => {
         const isExpanded = expandedId === t.id;
