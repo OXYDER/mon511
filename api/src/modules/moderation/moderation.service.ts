@@ -280,7 +280,7 @@ export class ModerationService {
         .leftJoin('users', 'users.id', 'reports.user_id')
         .leftJoin('regions', 'regions.id', 'reports.region_id')
         .select([
-          'reports.id', 'reports.user_id', 'reports.address_text', 'reports.created_at',
+          'reports.id', 'reports.user_id', 'reports.address_text', 'reports.created_at', 'reports.region_id', 'reports.description',
           'problem_types.name_fr as problemTypeNameFr',
           'users.email', 'users.first_name',
           'regions.name_fr as municipalityName',
@@ -314,6 +314,41 @@ export class ModerationService {
             this.email
               .sendTemplated('report_approved', report.email, commonVars, { ctaLabel: 'Voir mon signalement', ctaUrl: reportUrl })
               .catch(() => {});
+          }
+
+          // Publication automatique dans le fil communautaire ET dans le
+          // fil de la municipalité — demandé explicitement, pour qu'un
+          // signalement approuvé n'ait pas besoin d'une deuxième
+          // approbation manuelle distincte (celle des posts créés à la
+          // main) : le signalement vient déjà d'être approuvé par un
+          // modérateur, exiger un second passage serait redondant.
+          // status: 'published' directement, pas 'pending_moderation'.
+          try {
+            const newPost = await this.db
+              .insertInto('posts')
+              .values({
+                author_id: report.user_id,
+                report_id: reportId,
+                region_id: report.region_id ?? null,
+                category: 'road_conditions',
+                body: report.description ?? null,
+                visibility: 'public',
+                status: 'published',
+              })
+              .returning('id')
+              .executeTakeFirstOrThrow();
+
+            const photos = await this.db.selectFrom('report_photos').select('url').where('report_id', '=', reportId).orderBy('uploaded_at', 'asc').execute();
+            if (photos.length > 0) {
+              await this.db
+                .insertInto('post_media')
+                .values(photos.map((p, i) => ({ post_id: newPost.id, url: p.url, media_type: 'photo' as const, order_index: i })))
+                .execute();
+            }
+          } catch {
+            // Ne bloque jamais l'approbation elle-même si la création du
+            // post échoue pour une raison quelconque — c'est un effet de
+            // bord secondaire, pas le cœur de la décision de modération.
           }
           // L'envoi individuel par signalement approuvé a été remplacé par
           // le rapport périodique (hebdomadaire ou mensuel, voir
