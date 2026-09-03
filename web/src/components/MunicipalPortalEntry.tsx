@@ -1042,6 +1042,8 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   const [newSlaAck, setNewSlaAck] = useState('48');
   const [newSlaRes, setNewSlaRes] = useState('336');
   const [slaSaving, setSlaSaving] = useState(false);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [auditFilter, setAuditFilter] = useState('all');
 
   const STAT_LABELS: Record<string, string> = {
     active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
@@ -1059,6 +1061,11 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const params = auditFilter !== 'all' ? `?targetType=${auditFilter}` : '';
+    api.get<any[]>(`/municipal-portal/my-region/audit-log${params}`).then(setAuditLog).catch(() => {});
+  }, [auditFilter]);
 
   function loadSlaRules() {
     api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
@@ -1166,6 +1173,49 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
           {slaSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Ajouter/mettre à jour' : 'Add/update')}
         </button>
       </div>
+
+      <div className="section-label">{fr ? "Journal d'activité" : 'Activity log'}</div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {fr ? 'Qui a fait quoi et quand — les 100 dernières actions.' : 'Who did what and when — the last 100 actions.'}
+      </p>
+      <CustomSelect
+        value={auditFilter}
+        onChange={setAuditFilter}
+        options={[
+          { value: 'all', label: fr ? 'Toutes les cibles' : 'All targets' },
+          { value: 'incident', label: fr ? 'Signalements/incidents' : 'Reports/incidents' },
+          { value: 'work_order', label: fr ? 'Bons de travail' : 'Work orders' },
+          { value: 'team_member', label: fr ? 'Équipe' : 'Team' },
+        ]}
+        style={{ marginBottom: 10, width: 220 }}
+      />
+      {auditLog.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucune action enregistrée.' : 'No actions recorded.'}</div>}
+      {auditLog.map((entry) => {
+        const ACTION_LABELS: Record<string, { fr: string; en: string }> = {
+          status_changed: { fr: 'a changé le statut', en: 'changed the status' },
+          assigned: { fr: "a changé l'assignation", en: 'changed the assignment' },
+          priority_overridden: { fr: 'a remplacé la priorité', en: 'overrode the priority' },
+          public_status_changed: { fr: 'a changé le statut public', en: 'changed the public status' },
+          team_member_removed: { fr: "a retiré un membre de l'équipe", en: 'removed a team member' },
+          rank_changed: { fr: 'a changé un rang', en: 'changed a rank' },
+        };
+        const actionLabel = ACTION_LABELS[entry.action] ?? { fr: entry.action, en: entry.action };
+        const actorName = entry.actorFirstName || entry.actorLastName ? `${entry.actorFirstName ?? ''} ${entry.actorLastName ?? ''}`.trim() : (entry.actorEmail ?? (fr ? 'Système' : 'System'));
+        return (
+          <div key={entry.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 11.5 }}>
+            <span style={{ color: 'var(--text-muted)' }}>
+              {new Date(entry.createdAt).toLocaleString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+            {' — '}
+            <strong>{actorName}</strong> {fr ? actionLabel.fr : actionLabel.en}
+            {entry.details && (entry.details.from !== undefined || entry.details.to !== undefined) && (
+              <span style={{ color: 'var(--text-muted)' }}>
+                {' '}({entry.details.from !== undefined && entry.details.from !== null ? `${entry.details.from} → ` : ''}{entry.details.to})
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
