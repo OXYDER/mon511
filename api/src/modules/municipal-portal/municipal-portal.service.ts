@@ -591,6 +591,89 @@ export class MunicipalPortalService {
     return { processed: incidents.length };
   }
 
+  // ---------- File "À traiter" ----------
+
+  /** Présente uniquement les dossiers qui nécessitent une action —
+   * pas toute la liste, seulement ce qui requiert vraiment l'attention
+   * d'un employé, avec la raison précise pourquoi. Combine plusieurs
+   * sources (incidents jamais reconnus, non assignés, priorité
+   * critique, SLA à risque/dépassé, bons de travail en retard) en une
+   * seule liste triée par urgence. Un même incident peut apparaître
+   * pour PLUSIEURS raisons à la fois — chacune listée séparément,
+   * jamais fusionnée en une seule ligne ambiguë. */
+  async findMyRegionToProcessQueue(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
+
+    const incidentRows = await sql<{
+      groupKey: string; incidentId: string | null; problemTypeNameFr: string; problemTypeIcon: string | null;
+      addressText: string | null; caseNumber: string | null; priority: string; internalStatus: string;
+      assignedTo: string | null; firstReportedAt: Date; problemTypeId: string; resolvedAt: Date | null; updatedAt: Date | null;
+    }>`
+      WITH grouped AS (
+        SELECT
+          COALESCE(incident_id::text, id::text) AS group_key,
+          incident_id, id, problem_type_id, address_text, created_at, resolved_at,
+          ROW_NUMBER() OVER (PARTITION BY COALESCE(incident_id::text, id::text) ORDER BY created_at ASC) AS rn
+        FROM reports
+        WHERE region_id = ${regionId} AND status IN ('pending_moderation', 'published_unresolved')
+      )
+      SELECT
+        g.group_key AS "groupKey", g.incident_id AS "incidentId", pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon",
+        g.address_text AS "addressText", inc.case_number AS "caseNumber", COALESCE(inc.priority, 'medium') AS "priority",
+        COALESCE(rmt.internal_status, 'new') AS "internalStatus", rmt.assigned_to AS "assignedTo",
+        g.created_at AS "firstReportedAt", g.problem_type_id AS "problemTypeId", g.resolved_at AS "resolvedAt", rmt.updated_at AS "updatedAt"
+      FROM grouped g
+      INNER JOIN problem_types pt ON pt.id = g.problem_type_id
+      LEFT JOIN report_municipal_tracking rmt ON rmt.report_id = g.id
+      LEFT JOIN incidents inc ON inc.id = g.incident_id
+      WHERE g.rn = 1
+    `.execute(this.db).then((r) => r.rows);
+
+    const items: { groupKey: string; type: 'incident'; reason: string; reasonLabel: { fr: string; en: string }; problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null; caseNumber: string | null; priority: string; urgencyRank: number }[] = [];
+
+    for (const inc of incidentRows) {
+      const sla = await this.getSlaStatusForIncident(regionId, inc.problemTypeId, inc.firstReportedAt, inc.updatedAt, inc.resolvedAt);
+      if (inc.internalStatus === 'new') {
+        items.push({ groupKey: inc.groupKey, type: 'incident', reason: 'unrecognized', reasonLabel: { fr: 'Nouveau — pas encore reconnu', en: 'New — not yet acknowledged' }, problemTypeNameFr: inc.problemTypeNameFr, problemTypeIcon: inc.problemTypeIcon, addressText: inc.addressText, caseNumber: inc.caseNumber, priority: inc.priority, urgencyRank: 1 });
+      }
+      if (!inc.assignedTo && inc.internalStatus !== 'done') {
+        items.push({ groupKey: inc.groupKey, type: 'incident', reason: 'unassigned', reasonLabel: { fr: 'Non assigné', en: 'Unassigned' }, problemTypeNameFr: inc.problemTypeNameFr, problemTypeIcon: inc.problemTypeIcon, addressText: inc.addressText, caseNumber: inc.caseNumber, priority: inc.priority, urgencyRank: 3 });
+      }
+      if (inc.priority === 'urgent' && inc.internalStatus !== 'done') {
+        items.push({ groupKey: inc.groupKey, type: 'incident', reason: 'critical_priority', reasonLabel: { fr: 'Priorité critique', en: 'Critical priority' }, problemTypeNameFr: inc.problemTypeNameFr, problemTypeIcon: inc.problemTypeIcon, addressText: inc.addressText, caseNumber: inc.caseNumber, priority: inc.priority, urgencyRank: 0 });
+      }
+      if (sla.resolution === 'late') {
+        items.push({ groupKey: inc.groupKey, type: 'incident', reason: 'sla_late', reasonLabel: { fr: 'Échéance SLA dépassée', en: 'SLA deadline passed' }, problemTypeNameFr: inc.problemTypeNameFr, problemTypeIcon: inc.problemTypeIcon, addressText: inc.addressText, caseNumber: inc.caseNumber, priority: inc.priority, urgencyRank: 0 });
+      } else if (sla.resolution === 'at_risk') {
+        items.push({ groupKey: inc.groupKey, type: 'incident', reason: 'sla_at_risk', reasonLabel: { fr: 'Échéance SLA imminente', en: 'SLA deadline imminent' }, problemTypeNameFr: inc.problemTypeNameFr, problemTypeIcon: inc.problemTypeIcon, addressText: inc.addressText, caseNumber: inc.caseNumber, priority: inc.priority, urgencyRank: 2 });
+      }
+    }
+
+    const overdueWorkOrders = await this.db
+      .selectFrom('work_orders')
+      .select(['id', 'title', 'priority', 'due_date', 'group_key as groupKey', 'address_text as addressText'])
+      .where('region_id', '=', regionId)
+      .where('status', 'not in', ['completed', 'cancelled'])
+      .where('due_date', 'is not', null)
+      .where(sql<boolean>`due_date < CURRENT_DATE`)
+      .execute();
+
+    const workOrderItems = overdueWorkOrders.map((wo) => ({
+      groupKey: wo.id,
+      type: 'work_order' as const,
+      reason: 'work_order_overdue',
+      reasonLabel: { fr: 'Bon de travail en retard', en: 'Overdue work order' },
+      problemTypeNameFr: wo.title,
+      problemTypeIcon: '🔧',
+      addressText: wo.addressText,
+      caseNumber: null,
+      priority: wo.priority,
+      urgencyRank: 0,
+    }));
+
+    return [...items, ...workOrderItems].sort((a, b) => a.urgencyRank - b.urgencyRank);
+  }
+
   static readonly RANKS = ['director', 'foreman', 'employee'] as const;
 
   /** Permissions des trois rangs pour une municipalité — crée les

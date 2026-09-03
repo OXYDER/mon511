@@ -219,6 +219,13 @@ export class MunicipalPortalController {
     return this.service.getMyRegionDashboard(user.userId);
   }
 
+  @Get('my-region/to-process')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionToProcessQueue(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionToProcessQueue(user.userId);
+  }
+
   @Get('my-region/reports/queue')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')
