@@ -35,6 +35,12 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
   const [tab, setTab] = useState('dashboard');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean> | null>(null);
+  // Cible de navigation croisée — permet à une section (ex. la file
+  // "À traiter" du tableau de bord) d'ouvrir directement une fiche
+  // détaillée qui vit dans une AUTRE section (Tous les signalements /
+  // Interventions), sans que ces sections ne se connaissent
+  // directement entre elles.
+  const [pendingNavTarget, setPendingNavTarget] = useState<{ type: 'incident' | 'work_order'; groupKey: string } | null>(null);
   const fr = lang === 'fr';
 
   useEffect(() => {
@@ -118,13 +124,13 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
           </div>
 
           <div style={{ flex: 1, minWidth: 0, maxWidth: 1100 }}>
-            {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} />}
-            {tab === 'reports' && <ReportsListView lang={lang} />}
+            {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} onNavigateToItem={(type, groupKey) => { setPendingNavTarget({ type, groupKey }); setTab(type === 'incident' ? 'reports' : 'interventions'); }} />}
+            {tab === 'reports' && <ReportsListView lang={lang} pendingNavTarget={tab === 'reports' ? pendingNavTarget : null} onNavTargetConsumed={() => setPendingNavTarget(null)} />}
             {tab === 'settings' && <ReportSettingsView lang={lang} />}
             {tab === 'stats' && <StatsView lang={lang} />}
             {tab === 'team' && <TeamView lang={lang} />}
             {tab === 'comparatives' && <ComparativesView lang={lang} />}
-            {tab === 'interventions' && <WorkOrdersListView lang={lang} />}
+            {tab === 'interventions' && <WorkOrdersListView lang={lang} pendingNavTarget={tab === 'interventions' ? pendingNavTarget : null} onNavTargetConsumed={() => setPendingNavTarget(null)} />}
           </div>
         </div>
       )}
@@ -259,7 +265,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
 ];
 
 
-function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
+function DashboardView({ lang, regionName, onNavigateToItem }: { lang: 'fr' | 'en'; regionName?: string; onNavigateToItem: (type: 'incident' | 'work_order', groupKey: string) => void }) {
   const [data, setData] = useState<any>(null);
   const [toProcess, setToProcess] = useState<any[]>([]);
   const fr = lang === 'fr';
@@ -298,7 +304,11 @@ function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
               : 'Only what genuinely needs your attention, with the specific reason — a single case may appear for several reasons.'}
           </p>
           {toProcess.slice(0, 8).map((item: any, i: number) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: i < toProcess.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none', fontSize: 11.5 }}>
+            <div
+              key={i}
+              onClick={() => onNavigateToItem(item.type, item.groupKey)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: i < toProcess.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none', fontSize: 11.5, cursor: 'pointer' }}
+            >
               <span>{item.problemTypeIcon ?? '📍'}</span>
               <span style={{ flex: 1 }}>
                 {item.problemTypeNameFr} — {item.addressText ?? '—'}
@@ -354,7 +364,7 @@ function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
   );
 }
 
-function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
+function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang: 'fr' | 'en'; pendingNavTarget?: { type: 'incident' | 'work_order'; groupKey: string } | null; onNavTargetConsumed?: () => void }) {
   const [groups, setGroups] = useState<any[]>([]);
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map'>('list');
@@ -362,6 +372,17 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const fr = lang === 'fr';
+
+  // Navigation croisée depuis une autre section (ex. la file "À
+  // traiter" du tableau de bord) — ouvre directement cette fiche, puis
+  // signale au parent que la cible a été consommée pour ne pas
+  // rouvrir la même fiche indéfiniment.
+  useEffect(() => {
+    if (pendingNavTarget?.type === 'incident') {
+      setDetailKey(pendingNavTarget.groupKey);
+      onNavTargetConsumed?.();
+    }
+  }, [pendingNavTarget]);
 
   const STATUS_FILTER_OPTIONS: { key: string; label: { fr: string; en: string } }[] = [
     { key: 'all', label: { fr: 'Tous les statuts', en: 'All statuses' } },
@@ -1174,13 +1195,20 @@ const WO_PRIORITY_LABELS: Record<string, { fr: string; en: string; icon: string 
 /** Liste des bons de travail — le "plus complet possible" demandé :
  * peuvent partir d'un incident existant OU exister librement (ex.
  * entretien préventif sans signalement citoyen). */
-function WorkOrdersListView({ lang }: { lang: 'fr' | 'en' }) {
+function WorkOrdersListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang: 'fr' | 'en'; pendingNavTarget?: { type: 'incident' | 'work_order'; groupKey: string } | null; onNavTargetConsumed?: () => void }) {
   const [orders, setOrders] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const fr = lang === 'fr';
+
+  useEffect(() => {
+    if (pendingNavTarget?.type === 'work_order') {
+      setDetailId(pendingNavTarget.groupKey);
+      onNavTargetConsumed?.();
+    }
+  }, [pendingNavTarget]);
 
   function load() {
     const params = new URLSearchParams();
