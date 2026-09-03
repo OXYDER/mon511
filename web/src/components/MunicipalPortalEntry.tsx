@@ -397,6 +397,32 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
     return <span style={{ color: s.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{s.icon} {fr ? s.fr : s.en}</span>;
   }
 
+  function priorityBadge(priority: string) {
+    const map: Record<string, { icon: string; color: string; fr: string; en: string }> = {
+      low: { icon: '🔵', color: 'var(--text-muted)', fr: 'Basse', en: 'Low' },
+      medium: { icon: '🟡', color: '#D4A017', fr: 'Moyenne', en: 'Medium' },
+      high: { icon: '🟠', color: '#E8730C', fr: 'Haute', en: 'High' },
+      urgent: { icon: '🔴', color: 'var(--accent-signal)', fr: 'Urgente', en: 'Urgent' },
+    };
+    const p = map[priority] ?? map.medium;
+    return <span style={{ color: p.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{p.icon} {fr ? p.fr : p.en}</span>;
+  }
+
+  function slaBadge(sla: { acknowledgment: string; resolution: string } | undefined) {
+    if (!sla) return null;
+    const worst = sla.resolution === 'late' || sla.acknowledgment === 'late' ? 'late'
+      : sla.resolution === 'at_risk' || sla.acknowledgment === 'at_risk' ? 'at_risk'
+      : sla.resolution === 'done' ? 'done' : 'on_time';
+    const map: Record<string, { icon: string; color: string; fr: string; en: string }> = {
+      on_time: { icon: '✅', color: 'var(--status-resolved)', fr: 'Dans les délais', en: 'On time' },
+      at_risk: { icon: '⚠️', color: '#E8730C', fr: 'À risque', en: 'At risk' },
+      late: { icon: '⏰', color: 'var(--accent-signal)', fr: 'En retard', en: 'Late' },
+      done: { icon: '✔️', color: 'var(--status-resolved)', fr: 'Complété', en: 'Done' },
+    };
+    const w = map[worst];
+    return <span style={{ color: w.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{w.icon} {fr ? w.fr : w.en}</span>;
+  }
+
   const VIEW_MODES: { key: typeof viewMode; icon: string; label: { fr: string; en: string } }[] = [
     { key: 'list', icon: '☰', label: { fr: 'Liste', en: 'List' } },
     { key: 'table', icon: '▤', label: { fr: 'Tableau', en: 'Table' } },
@@ -463,9 +489,13 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
               >
                 {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr} — {g.addressText ?? '—'}</div>
+                  <div style={{ fontWeight: 600 }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr} — {g.addressText ?? '—'}{g.caseNumber && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}> · {g.caseNumber}</span>}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     {statusBadge(g.status)}
+                    {' · '}
+                    {priorityBadge(g.priority)}
+                    {' · '}
+                    {slaBadge(g.sla)}
                     {' · '}
                     {g.reportCount > 1
                       ? (fr ? `${g.reportCount} signalements citoyens` : `${g.reportCount} citizen reports`)
@@ -493,6 +523,8 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
               <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('problemTypeNameFr')}>{fr ? 'Type' : 'Type'}</th>
               <th style={{ padding: '6px 8px' }}>{fr ? 'Adresse' : 'Address'}</th>
               <th style={{ padding: '6px 8px' }}>{fr ? 'Statut' : 'Status'}</th>
+              <th style={{ padding: '6px 8px' }}>{fr ? 'Priorité' : 'Priority'}</th>
+              <th style={{ padding: '6px 8px' }}>{fr ? 'SLA' : 'SLA'}</th>
               <th style={{ padding: '6px 8px', cursor: 'pointer', textAlign: 'right' }} onClick={() => setSortBy('reportCount')}>{fr ? 'Signalements' : 'Reports'}</th>
               <th style={{ padding: '6px 8px' }}>{fr ? 'Premier' : 'First'}</th>
               <th style={{ padding: '6px 8px', cursor: 'pointer' }} onClick={() => setSortBy('lastReportedAt')}>{fr ? 'Dernier' : 'Last'}</th>
@@ -504,6 +536,8 @@ function ReportsListView({ lang }: { lang: 'fr' | 'en' }) {
                 <td style={{ padding: '7px 8px' }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{g.addressText ?? '—'}</td>
                 <td style={{ padding: '7px 8px' }}>{statusBadge(g.status)}</td>
+                <td style={{ padding: '7px 8px' }}>{priorityBadge(g.priority)}</td>
+                <td style={{ padding: '7px 8px' }}>{slaBadge(g.sla)}</td>
                 <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: g.reportCount > 1 ? 700 : 400 }}>{g.reportCount}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.firstReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
                 <td style={{ padding: '7px 8px', color: 'var(--text-muted)' }}>{new Date(g.lastReportedAt).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</td>
@@ -951,6 +985,12 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   const [reportSettings, setReportSettings] = useState<{ enabled: boolean; frequency: 'weekly' | 'monthly'; enabled_stats: string[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [slaRules, setSlaRules] = useState<any[]>([]);
+  const [problemTypes, setProblemTypes] = useState<any[]>([]);
+  const [newSlaTypeId, setNewSlaTypeId] = useState('');
+  const [newSlaAck, setNewSlaAck] = useState('48');
+  const [newSlaRes, setNewSlaRes] = useState('336');
+  const [slaSaving, setSlaSaving] = useState(false);
 
   const STAT_LABELS: Record<string, string> = {
     active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
@@ -965,7 +1005,28 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
 
   useEffect(() => {
     api.get<any>('/municipal-portal/my-region/report/settings').then(setReportSettings).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
+    api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
   }, []);
+
+  function loadSlaRules() {
+    api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
+  }
+
+  async function saveSlaRule(problemTypeId: string | null, ackHours: number, resHours: number) {
+    setSlaSaving(true);
+    try {
+      await api.post('/municipal-portal/my-region/sla-rules', { problemTypeId, targetAcknowledgmentHours: ackHours, targetResolutionHours: resHours });
+      setNewSlaTypeId('');
+      setNewSlaAck('48');
+      setNewSlaRes('336');
+      loadSlaRules();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSlaSaving(false);
+    }
+  }
 
   function toggleStat(key: string) {
     setReportSettings((prev) => {
@@ -1026,6 +1087,34 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
         {saving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
       </button>
       {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>{feedback}</div>}
+
+      <div className="section-label">{fr ? 'Règles SLA (délais de service)' : 'SLA rules (service delays)'}</div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+        {fr
+          ? "Délai cible avant prise en charge et avant résolution. Une règle sans type de problème précis (« Tous les types ») sert de valeur par défaut."
+          : 'Target delay before acknowledgment and before resolution. A rule without a specific problem type ("All types") serves as the default.'}
+      </p>
+      {slaRules.map((r) => (
+        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+          <span>{r.problemTypeName ?? (fr ? 'Tous les types' : 'All types')}</span>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {fr ? 'Prise en charge' : 'Ack.'} {r.targetAcknowledgmentHours}h · {fr ? 'Résolution' : 'Res.'} {r.targetResolutionHours}h
+          </span>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <CustomSelect
+          value={newSlaTypeId}
+          onChange={setNewSlaTypeId}
+          options={[{ value: '', label: fr ? 'Tous les types (défaut)' : 'All types (default)' }, ...problemTypes.map((t: any) => ({ value: t.id, label: `${t.icon ?? ''} ${t.name_fr}` }))]}
+          style={{ flex: '1 1 200px' }}
+        />
+        <input className="text-input" type="number" style={{ width: 90 }} value={newSlaAck} onChange={(e) => setNewSlaAck(e.target.value)} placeholder={fr ? 'Prise en charge (h)' : 'Ack. (h)'} />
+        <input className="text-input" type="number" style={{ width: 90 }} value={newSlaRes} onChange={(e) => setNewSlaRes(e.target.value)} placeholder={fr ? 'Résolution (h)' : 'Res. (h)'} />
+        <button className="btn-ghost" onClick={() => saveSlaRule(newSlaTypeId || null, Number(newSlaAck), Number(newSlaRes))} disabled={slaSaving}>
+          {slaSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Ajouter/mettre à jour' : 'Add/update')}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1479,6 +1568,30 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
     }
   }
 
+  async function overridePriority(priority: string) {
+    setSaving(true);
+    try {
+      await api.post(`/municipal-portal/my-region/incidents/${groupKey}/priority/override`, { priority });
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetPriorityToAutomatic() {
+    setSaving(true);
+    try {
+      await api.post(`/municipal-portal/my-region/incidents/${groupKey}/priority/reset`, {});
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveAssignmentAndNotes() {
     setSaving(true);
     setFeedback(null);
@@ -1537,9 +1650,35 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
       )}
 
       <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 20 }}>
+        {detail.caseNumber && <>📋 {detail.caseNumber} · </>}
         {detail.reportCount > 1
           ? (fr ? `${detail.reportCount} signalements citoyens regroupés` : `${detail.reportCount} grouped citizen reports`)
           : (fr ? '1 signalement' : '1 report')}
+        {detail.sla && (
+          <>
+            {' · '}{fr ? 'Prise en charge' : 'Acknowledgment'}: {detail.sla.acknowledgment === 'late' ? '⏰' : detail.sla.acknowledgment === 'at_risk' ? '⚠️' : '✅'}
+            {' · '}{fr ? 'Résolution' : 'Resolution'}: {detail.sla.resolution === 'late' ? '⏰' : detail.sla.resolution === 'at_risk' ? '⚠️' : detail.sla.resolution === 'done' ? '✔️' : '✅'}
+          </>
+        )}
+      </div>
+
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Priorité' : 'Priority'}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 6 }}>
+        {['low', 'medium', 'high', 'urgent'].map((p) => (
+          <button key={p} className="btn-ghost" style={{ fontSize: 12, border: detail.priority === p ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => overridePriority(p)} disabled={saving}>
+            {{ low: '🔵', medium: '🟡', high: '🟠', urgent: '🔴' }[p]} {{ low: fr ? 'Basse' : 'Low', medium: fr ? 'Moyenne' : 'Medium', high: fr ? 'Haute' : 'High', urgent: fr ? 'Urgente' : 'Urgent' }[p]}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 20 }}>
+        {detail.priorityOverridden ? (
+          <>
+            {fr ? 'Remplacée manuellement.' : 'Manually overridden.'}{' '}
+            <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={resetPriorityToAutomatic}>{fr ? 'Redonner au calcul automatique' : 'Reset to automatic'}</span>
+          </>
+        ) : (
+          detail.priorityScore !== null && (fr ? `Score automatique : ${detail.priorityScore}/100` : `Automatic score: ${detail.priorityScore}/100`)
+        )}
       </div>
 
       <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut public (visible sur la carte)' : 'Public status (visible on the map)'}</div>
