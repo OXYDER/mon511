@@ -124,11 +124,7 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
             {tab === 'stats' && <StatsView lang={lang} />}
             {tab === 'team' && <TeamView lang={lang} />}
             {tab === 'comparatives' && <ComparativesView lang={lang} />}
-            {['interventions'].includes(tab) && (
-              <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                {fr ? 'Bientôt disponible.' : 'Coming soon.'}
-              </div>
-            )}
+            {tab === 'interventions' && <WorkOrdersListView lang={lang} />}
           </div>
         </div>
       )}
@@ -243,7 +239,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
   {
     group: 'OPÉRATIONS',
     items: [
-      { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: false, permissionKey: 'can_view_reports' },
+      { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: true, permissionKey: 'can_view_reports' },
     ],
   },
   {
@@ -1041,6 +1037,365 @@ const INTERNAL_STATUS_OPTIONS: { key: 'new' | 'acknowledged' | 'in_progress' | '
   { key: 'done', icon: '🔵', label: { fr: 'Complété', en: 'Done' } },
 ];
 
+
+const WO_STATUS_LABELS: Record<string, { fr: string; en: string; icon: string }> = {
+  draft: { fr: 'Brouillon', en: 'Draft', icon: '📝' },
+  scheduled: { fr: 'Planifié', en: 'Scheduled', icon: '📅' },
+  in_progress: { fr: 'En cours', en: 'In progress', icon: '🔧' },
+  completed: { fr: 'Complété', en: 'Completed', icon: '✅' },
+  cancelled: { fr: 'Annulé', en: 'Cancelled', icon: '✕' },
+};
+const WO_PRIORITY_LABELS: Record<string, { fr: string; en: string; icon: string }> = {
+  low: { fr: 'Basse', en: 'Low', icon: '🔵' },
+  medium: { fr: 'Moyenne', en: 'Medium', icon: '🟡' },
+  high: { fr: 'Haute', en: 'High', icon: '🟠' },
+  urgent: { fr: 'Urgente', en: 'Urgent', icon: '🔴' },
+};
+
+/** Liste des bons de travail — le "plus complet possible" demandé :
+ * peuvent partir d'un incident existant OU exister librement (ex.
+ * entretien préventif sans signalement citoyen). */
+function WorkOrdersListView({ lang }: { lang: 'fr' | 'en' }) {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [priorityFilter, setPriorityFilter] = useState('all');
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const fr = lang === 'fr';
+
+  function load() {
+    const params = new URLSearchParams();
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (priorityFilter !== 'all') params.set('priority', priorityFilter);
+    api.get<any[]>(`/municipal-portal/my-region/work-orders?${params.toString()}`).then(setOrders).catch(() => {});
+  }
+
+  useEffect(load, [statusFilter, priorityFilter]);
+
+  if (detailId) {
+    return <WorkOrderDetailScreen lang={lang} id={detailId} onBack={() => { setDetailId(null); load(); }} />;
+  }
+  if (creating) {
+    return <WorkOrderCreateForm lang={lang} onCreated={(id) => { setCreating(false); setDetailId(id); }} onCancel={() => setCreating(false)} />;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Interventions' : 'Interventions'} ({orders.length})</div>
+        <button className="btn-primary" onClick={() => setCreating(true)}>+ {fr ? 'Nouveau bon de travail' : 'New work order'}</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        <CustomSelect
+          value={statusFilter}
+          onChange={setStatusFilter}
+          options={[{ value: 'all', label: fr ? 'Tous les statuts' : 'All statuses' }, ...Object.entries(WO_STATUS_LABELS).map(([k, v]) => ({ value: k, label: `${v.icon} ${fr ? v.fr : v.en}` }))]}
+          style={{ flex: '1 1 160px' }}
+        />
+        <CustomSelect
+          value={priorityFilter}
+          onChange={setPriorityFilter}
+          options={[{ value: 'all', label: fr ? 'Toutes les priorités' : 'All priorities' }, ...Object.entries(WO_PRIORITY_LABELS).map(([k, v]) => ({ value: k, label: `${v.icon} ${fr ? v.fr : v.en}` }))]}
+          style={{ flex: '1 1 160px' }}
+        />
+      </div>
+
+      {orders.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun bon de travail.' : 'No work orders.'}</div>}
+      {orders.map((o) => (
+        <div key={o.id} className="report-card" onClick={() => setDetailId(o.id)}>
+          <div className="rc-icon-hex">{o.incidentIcon ?? '🔧'}</div>
+          <div className="rc-body">
+            <div className="rc-title">{o.title}</div>
+            <div className="rc-meta">
+              {WO_STATUS_LABELS[o.status]?.icon} {fr ? WO_STATUS_LABELS[o.status]?.fr : WO_STATUS_LABELS[o.status]?.en}
+              {' · '}{WO_PRIORITY_LABELS[o.priority]?.icon} {fr ? WO_PRIORITY_LABELS[o.priority]?.fr : WO_PRIORITY_LABELS[o.priority]?.en}
+              {(o.incidentAddressText || o.addressText) && <> · {o.incidentAddressText ?? o.addressText}</>}
+              {o.assignedTo && <> · {o.assignedTo}</>}
+              {o.dueDate && <> · {fr ? 'Échéance' : 'Due'} {new Date(o.dueDate).toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { day: 'numeric', month: 'short' })}</>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Formulaire de création — depuis un incident existant (groupKey
+ * fourni) ou complètement libre (adresse saisie directement). */
+function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'fr' | 'en'; groupKey?: string; onCreated: (id: string) => void; onCancel: () => void }) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [priority, setPriority] = useState('medium');
+  const [assignedTo, setAssignedTo] = useState('');
+  const [addressText, setAddressText] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
+  const [estimatedCost, setEstimatedCost] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fr = lang === 'fr';
+
+  async function submit() {
+    if (!title.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const r = await api.post<{ id: string }>('/municipal-portal/my-region/work-orders', {
+        groupKey,
+        title: title.trim(),
+        description: description.trim() || undefined,
+        priority,
+        assignedTo: assignedTo.trim() || undefined,
+        addressText: !groupKey ? (addressText.trim() || undefined) : undefined,
+        scheduledDate: scheduledDate || undefined,
+        dueDate: dueDate || undefined,
+        estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
+        estimatedCost: estimatedCost ? Number(estimatedCost) : undefined,
+      });
+      onCreated(r.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onCancel}>← {fr ? 'Annuler' : 'Cancel'}</button>
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Nouveau bon de travail' : 'New work order'}</div>
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Titre' : 'Title'}</label>
+        <input className="text-input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={fr ? 'Ex. Réparation nid-de-poule' : 'E.g. Pothole repair'} />
+      </div>
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Description' : 'Description'}</label>
+        <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
+      </div>
+      {!groupKey && (
+        <div className="field-group">
+          <label className="field-label">{fr ? 'Adresse' : 'Address'}</label>
+          <input className="text-input" value={addressText} onChange={(e) => setAddressText(e.target.value)} placeholder={fr ? "Ex. Entretien préventif — pas lié à un signalement" : 'E.g. Preventive maintenance — not linked to a report'} />
+        </div>
+      )}
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Priorité' : 'Priority'}</label>
+        <CustomSelect value={priority} onChange={setPriority} options={Object.entries(WO_PRIORITY_LABELS).map(([k, v]) => ({ value: k, label: `${v.icon} ${fr ? v.fr : v.en}` }))} />
+      </div>
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
+        <input className="text-input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder={fr ? 'Nom de la personne ou de l\'équipe' : 'Name of person or team'} />
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Date prévue' : 'Scheduled date'}</label>
+          <input className="text-input" type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)} />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Échéance' : 'Due date'}</label>
+          <input className="text-input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Heures estimées' : 'Estimated hours'}</label>
+          <input className="text-input" type="number" step="0.5" value={estimatedHours} onChange={(e) => setEstimatedHours(e.target.value)} />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Coût estimé ($)' : 'Estimated cost ($)'}</label>
+          <input className="text-input" type="number" step="0.01" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} />
+        </div>
+      </div>
+      <button className="btn-primary" onClick={submit} disabled={saving || !title.trim()}>
+        {saving ? (fr ? 'Création...' : 'Creating...') : (fr ? 'Créer le bon de travail' : 'Create work order')}
+      </button>
+    </div>
+  );
+}
+
+/** Fiche détaillée d'un bon de travail — le plus complet possible :
+ * statut, priorité, assignation, dates, heures/coûts estimés et
+ * réels, notes, liste de vérification, photos avant/pendant/après. */
+function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: string; onBack: () => void }) {
+  const [detail, setDetail] = useState<any>(null);
+  const [newTask, setNewTask] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const fr = lang === 'fr';
+
+  function load() {
+    api.get<any>(`/municipal-portal/my-region/work-orders/${id}`).then(setDetail).catch(() => {});
+  }
+  useEffect(load, [id]);
+
+  async function patch(changes: Record<string, any>) {
+    setSaving(true);
+    try {
+      await api.patch(`/municipal-portal/my-region/work-orders/${id}`, changes);
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addTask() {
+    if (!newTask.trim()) return;
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/tasks`, { description: newTask.trim() }).catch(() => {});
+    setNewTask('');
+    load();
+  }
+
+  async function toggleTask(taskId: string) {
+    await api.post(`/municipal-portal/my-region/work-order-tasks/${taskId}/toggle`, {}).catch(() => {});
+    load();
+  }
+
+  async function deleteTask(taskId: string) {
+    await api.post(`/municipal-portal/my-region/work-order-tasks/${taskId}/delete`, {}).catch(() => {});
+    load();
+  }
+
+  async function uploadPhoto(phase: string, file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('phase', phase);
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/photos`, form).catch(() => {});
+    load();
+  }
+
+  async function confirmDelete() {
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/delete`, {}).catch(() => {});
+    onBack();
+  }
+
+  if (!detail) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
+
+  const completedTasks = detail.tasks.filter((t: any) => t.completed).length;
+
+  return (
+    <div>
+      <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onBack}>← {fr ? 'Retour à la liste' : 'Back to list'}</button>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700 }}>{detail.title}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+            {detail.incident ? `${detail.incident.icon ?? '📍'} ${detail.incident.typeName} — ${detail.incident.addressText ?? '—'}` : (detail.address_text ?? (fr ? 'Aucune adresse' : 'No address'))}
+          </div>
+        </div>
+        <button className="btn-ghost btn-danger" style={{ fontSize: 11.5 }} onClick={() => setConfirmingDelete(true)}>{fr ? 'Supprimer' : 'Delete'}</button>
+      </div>
+      {confirmingDelete && (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, margin: '10px 0' }}>
+          <div style={{ fontSize: 12.5, marginBottom: 8 }}>{fr ? 'Supprimer ce bon de travail définitivement ?' : 'Permanently delete this work order?'}</div>
+          <div className="action-row">
+            <button className="btn-primary" onClick={confirmDelete}>{fr ? 'Supprimer' : 'Delete'}</button>
+            <button className="btn-ghost" onClick={() => setConfirmingDelete(false)}>{fr ? 'Annuler' : 'Cancel'}</button>
+          </div>
+        </div>
+      )}
+
+      {detail.description && <p style={{ fontSize: 12.5, marginBottom: 16 }}>{detail.description}</p>}
+
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Statut' : 'Status'}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+        {Object.entries(WO_STATUS_LABELS).map(([k, v]) => (
+          <button key={k} className="btn-ghost" style={{ fontSize: 12, border: detail.status === k ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => patch({ status: k })} disabled={saving}>
+            {v.icon} {fr ? v.fr : v.en}
+          </button>
+        ))}
+      </div>
+
+      <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Priorité' : 'Priority'}</div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+        {Object.entries(WO_PRIORITY_LABELS).map(([k, v]) => (
+          <button key={k} className="btn-ghost" style={{ fontSize: 12, border: detail.priority === k ? '1.5px solid var(--accent-signal)' : '1px solid var(--panel-border)' }} onClick={() => patch({ priority: k })} disabled={saving}>
+            {v.icon} {fr ? v.fr : v.en}
+          </button>
+        ))}
+      </div>
+
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
+        <input className="text-input" defaultValue={detail.assigned_to ?? ''} onBlur={(e) => patch({ assignedTo: e.target.value })} />
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Date prévue' : 'Scheduled date'}</label>
+          <input className="text-input" type="date" defaultValue={detail.scheduled_date ?? ''} onBlur={(e) => patch({ scheduledDate: e.target.value })} />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Échéance' : 'Due date'}</label>
+          <input className="text-input" type="date" defaultValue={detail.due_date ?? ''} onBlur={(e) => patch({ dueDate: e.target.value })} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Heures estimées' : 'Estimated hours'}</label>
+          <input className="text-input" type="number" step="0.5" defaultValue={detail.estimated_hours ?? ''} onBlur={(e) => patch({ estimatedHours: e.target.value ? Number(e.target.value) : null })} />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Heures réelles' : 'Actual hours'}</label>
+          <input className="text-input" type="number" step="0.5" defaultValue={detail.actual_hours ?? ''} onBlur={(e) => patch({ actualHours: e.target.value ? Number(e.target.value) : null })} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Coût estimé ($)' : 'Estimated cost ($)'}</label>
+          <input className="text-input" type="number" step="0.01" defaultValue={detail.estimated_cost ?? ''} onBlur={(e) => patch({ estimatedCost: e.target.value ? Number(e.target.value) : null })} />
+        </div>
+        <div className="field-group" style={{ flex: 1 }}>
+          <label className="field-label">{fr ? 'Coût réel ($)' : 'Actual cost ($)'}</label>
+          <input className="text-input" type="number" step="0.01" defaultValue={detail.actual_cost ?? ''} onBlur={(e) => patch({ actualCost: e.target.value ? Number(e.target.value) : null })} />
+        </div>
+      </div>
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Notes' : 'Notes'}</label>
+        <textarea rows={3} defaultValue={detail.notes ?? ''} onBlur={(e) => patch({ notes: e.target.value })} />
+      </div>
+      {feedback && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{feedback}</div>}
+
+      <div className="section-label">{fr ? 'Liste de vérification' : 'Checklist'} {detail.tasks.length > 0 && `(${completedTasks}/${detail.tasks.length})`}</div>
+      {detail.tasks.map((t: any) => (
+        <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0' }}>
+          <input type="checkbox" checked={t.completed} onChange={() => toggleTask(t.id)} />
+          <span style={{ flex: 1, fontSize: 12.5, textDecoration: t.completed ? 'line-through' : 'none', color: t.completed ? 'var(--text-muted)' : 'var(--text-body)' }}>{t.description}</span>
+          <button className="btn-ghost" style={{ fontSize: 10.5 }} onClick={() => deleteTask(t.id)}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, marginBottom: 20 }}>
+        <input className="text-input" style={{ flex: 1 }} value={newTask} onChange={(e) => setNewTask(e.target.value)} placeholder={fr ? 'Ajouter une étape...' : 'Add a step...'} onKeyDown={(e) => e.key === 'Enter' && addTask()} />
+        <button className="btn-ghost" onClick={addTask}>+ {fr ? 'Ajouter' : 'Add'}</button>
+      </div>
+
+      <div className="section-label">{fr ? 'Photos' : 'Photos'}</div>
+      {(['before', 'during', 'after'] as const).map((phase) => (
+        <div key={phase} style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+            {phase === 'before' ? (fr ? 'Avant' : 'Before') : phase === 'during' ? (fr ? 'Pendant' : 'During') : (fr ? 'Après' : 'After')}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {detail.photos.filter((p: any) => p.phase === phase).map((p: any) => (
+              <img key={p.id} src={p.url} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8 }} />
+            ))}
+            <label className="btn-ghost" style={{ fontSize: 11, cursor: 'pointer' }}>
+              + {fr ? 'Ajouter' : 'Add'}
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(phase, f); e.target.value = ''; }} />
+            </label>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Fiche détaillée d'un incident — galerie photo, statut interne,
  * assignation, notes, et ligne du temps. Remplace le petit dépliage
  * précédent, devenu insuffisant une fois qu'on veut vraiment gérer un
@@ -1059,6 +1414,7 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
   const [publicNoteVisible, setPublicNoteVisible] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [publicStatusSaving, setPublicStatusSaving] = useState(false);
+  const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
   const fr = lang === 'fr';
 
   function load() {
@@ -1143,6 +1499,10 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
     <div>
       <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onBack}>← {fr ? 'Retour à la liste' : 'Back to list'}</button>
 
+      {creatingWorkOrder ? (
+        <WorkOrderCreateForm lang={lang} groupKey={groupKey} onCreated={() => setCreatingWorkOrder(false)} onCancel={() => setCreatingWorkOrder(false)} />
+      ) : (
+      <>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10, marginBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 24 }}>{detail.problemTypeIcon ?? '📍'}</span>
@@ -1151,7 +1511,12 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
             {!editing && <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{detail.addressText ?? '—'}</div>}
           </div>
         </div>
-        {!editing && <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setEditing(true)}>✏️ {fr ? 'Modifier' : 'Edit'}</button>}
+        {!editing && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setCreatingWorkOrder(true)}>🔧 {fr ? 'Créer un bon de travail' : 'Create work order'}</button>
+            <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setEditing(true)}>✏️ {fr ? 'Modifier' : 'Edit'}</button>
+          </div>
+        )}
       </div>
 
       {editing && (
@@ -1274,6 +1639,8 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
           </div>
         </div>
       ))}
+      </>
+      )}
     </div>
   );
 }
