@@ -31,12 +31,24 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
   const [escalateSuggested, setEscalateSuggested] = useState(false);
   const [preparingTicket, setPreparingTicket] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  // Reste vrai tant que l'usager n'a pas défilé volontairement vers le
+  // haut — sans ce suivi, chaque nouveau message (y compris la
+  // réponse de l'assistant) ramenait de force la vue tout en bas,
+  // rendant impossible la lecture de l'historique plus haut.
+  const isNearBottomRef = useRef(true);
   const sessionId = getOrCreateSessionId();
 
   function loadHistory() {
     api.get<{ conversationId: string | null; messages: any[] }>(`/support/chat/history?sessionId=${sessionId}`)
       .then((data) => setMessages(data.messages.map((m) => ({ role: m.role, content: m.content }))))
       .catch(() => {});
+  }
+
+  function handleScroll() {
+    const el = containerRef.current;
+    if (!el) return;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   }
 
   useEffect(() => {
@@ -48,13 +60,16 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   async function send() {
     const text = input.trim();
     if (!text || sending) return;
     setInput('');
+    isNearBottomRef.current = true; // propre message — toujours voir la réponse qui suit
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setSending(true);
     try {
@@ -73,6 +88,7 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
 
   async function resetChat() {
     await api.post('/support/chat/reset', { sessionId }).catch(() => {});
+    isNearBottomRef.current = true;
     setMessages([]);
     setEscalateSuggested(false);
     setInput('');
@@ -115,7 +131,7 @@ export default function SupportChatWidget({ onClose, lang, onOpenTicketForm }: P
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div ref={containerRef} onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {messages.length === 0 && (
             <div style={{ fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center', marginTop: 20 }}>
               {lang === 'fr'

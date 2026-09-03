@@ -1706,4 +1706,190 @@ export class MunicipalPortalService {
     );
     return { sent: true };
   }
+
+  // ---------- Bons de travail (Interventions) ----------
+
+  /** Crée un bon de travail — soit lié à un incident existant (groupKey
+   * fourni, adresse/type dérivés automatiquement), soit complètement
+   * libre (ex. entretien préventif sans signalement citoyen,
+   * addressText saisie directement). */
+  async createWorkOrder(
+    userId: string,
+    dto: {
+      groupKey?: string; title: string; description?: string; priority?: string; assignedTo?: string;
+      addressText?: string; scheduledDate?: string; dueDate?: string; estimatedHours?: number; estimatedCost?: number;
+    },
+  ) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+
+    const order = await this.db
+      .insertInto('work_orders')
+      .values({
+        region_id: regionId,
+        group_key: dto.groupKey ?? null,
+        title: dto.title,
+        description: dto.description ?? null,
+        priority: (dto.priority as any) ?? 'medium',
+        assigned_to: dto.assignedTo ?? null,
+        address_text: dto.addressText ?? null,
+        scheduled_date: dto.scheduledDate ?? null,
+        due_date: dto.dueDate ?? null,
+        estimated_hours: dto.estimatedHours ?? null,
+        estimated_cost: dto.estimatedCost ?? null,
+        created_by: userId,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+
+    return { id: order.id };
+  }
+
+  /** Liste des bons de travail de la municipalité — avec filtres
+   * optionnels par statut et priorité. Pour chaque bon lié à un
+   * incident, dérive le type de problème et l'adresse de l'incident
+   * (pas dupliqués sur le bon lui-même). */
+  async findMyRegionWorkOrders(userId: string, status?: string, priority?: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
+
+    let query = this.db
+      .selectFrom('work_orders')
+      .select([
+        'id', 'group_key as groupKey', 'title', 'status', 'priority', 'assigned_to as assignedTo',
+        'address_text as addressText', 'scheduled_date as scheduledDate', 'due_date as dueDate',
+        'completed_at as completedAt', 'created_at as createdAt',
+      ])
+      .where('region_id', '=', regionId);
+
+    if (status) query = query.where('status', '=', status as any);
+    if (priority) query = query.where('priority', '=', priority as any);
+
+    const orders = await query.orderBy('created_at', 'desc').execute();
+
+    // Résout l'adresse/type des bons liés à un incident, en un seul
+    // aller-retour plutôt qu'une requête par bon.
+    const groupKeys = orders.filter((o) => o.groupKey).map((o) => o.groupKey!);
+    const incidentInfo = groupKeys.length
+      ? await this.db
+          .selectFrom('reports')
+          .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+          .select([sql<string>`COALESCE(reports.incident_id::text, reports.id::text)`.as('groupKey'), 'reports.address_text as addressText', 'problem_types.name_fr as typeName', 'problem_types.icon'])
+          .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) IN (${sql.join(groupKeys)})`)
+          .execute()
+      : [];
+    const incidentByKey = new Map(incidentInfo.map((i) => [i.groupKey, i]));
+
+    return orders.map((o) => ({
+      ...o,
+      incidentAddressText: o.groupKey ? incidentByKey.get(o.groupKey)?.addressText : null,
+      incidentTypeName: o.groupKey ? incidentByKey.get(o.groupKey)?.typeName : null,
+      incidentIcon: o.groupKey ? incidentByKey.get(o.groupKey)?.icon : null,
+    }));
+  }
+
+  /** Fiche détaillée d'un bon de travail — tâches, photos, tout. */
+  async findWorkOrderDetail(userId: string, id: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
+    const order = await this.db.selectFrom('work_orders').selectAll().where('id', '=', id).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    const [tasks, photos, incident] = await Promise.all([
+      this.db.selectFrom('work_order_tasks').selectAll().where('work_order_id', '=', id).orderBy('position', 'asc').execute(),
+      this.db.selectFrom('work_order_photos').selectAll().where('work_order_id', '=', id).orderBy('uploaded_at', 'asc').execute(),
+      order.group_key
+        ? this.db
+            .selectFrom('reports')
+            .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
+            .select(['reports.address_text as addressText', 'problem_types.name_fr as typeName', 'problem_types.icon'])
+            .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${order.group_key}`)
+            .limit(1)
+            .executeTakeFirst()
+        : Promise.resolve(null),
+    ]);
+
+    return { ...order, tasks, photos, incident };
+  }
+
+  /** Modifie un bon de travail — n'importe quel champ, y compris le
+   * statut. Marque completed_at automatiquement en passant à
+   * 'completed', le retire si on repasse à un autre statut. */
+  async updateWorkOrder(userId: string, id: string, changes: Record<string, any>) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', id).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    const ALLOWED_KEYS: Record<string, string> = {
+      title: 'title', description: 'description', status: 'status', priority: 'priority', assignedTo: 'assigned_to',
+      addressText: 'address_text', scheduledDate: 'scheduled_date', dueDate: 'due_date',
+      estimatedHours: 'estimated_hours', actualHours: 'actual_hours', estimatedCost: 'estimated_cost', actualCost: 'actual_cost', notes: 'notes',
+    };
+    const values: Record<string, any> = { updated_at: new Date() };
+    for (const [key, column] of Object.entries(ALLOWED_KEYS)) {
+      if (changes[key] !== undefined) values[column] = changes[key];
+    }
+    if (changes.status === 'completed') values.completed_at = new Date();
+    else if (changes.status) values.completed_at = null;
+
+    await this.db.updateTable('work_orders').set(values).where('id', '=', id).execute();
+    return { updated: true };
+  }
+
+  async deleteWorkOrder(userId: string, id: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', id).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+    await this.db.deleteFrom('work_orders').where('id', '=', id).execute();
+    return { deleted: true };
+  }
+
+  async addWorkOrderTask(userId: string, workOrderId: string, description: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', workOrderId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    const maxPos = await this.db.selectFrom('work_order_tasks').select(sql<number>`COALESCE(max(position), -1)`.as('max')).where('work_order_id', '=', workOrderId).executeTakeFirst();
+    const task = await this.db
+      .insertInto('work_order_tasks')
+      .values({ work_order_id: workOrderId, description, position: (maxPos?.max ?? -1) + 1 })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { id: task.id };
+  }
+
+  async toggleWorkOrderTask(userId: string, taskId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const task = await this.db
+      .selectFrom('work_order_tasks')
+      .innerJoin('work_orders', 'work_orders.id', 'work_order_tasks.work_order_id')
+      .select(['work_order_tasks.id', 'work_order_tasks.completed'])
+      .where('work_order_tasks.id', '=', taskId)
+      .where('work_orders.region_id', '=', regionId)
+      .executeTakeFirst();
+    if (!task) throw new NotFoundException('Tâche introuvable.');
+    await this.db.updateTable('work_order_tasks').set({ completed: !task.completed }).where('id', '=', taskId).execute();
+    return { completed: !task.completed };
+  }
+
+  async deleteWorkOrderTask(userId: string, taskId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const task = await this.db
+      .selectFrom('work_order_tasks')
+      .innerJoin('work_orders', 'work_orders.id', 'work_order_tasks.work_order_id')
+      .select('work_order_tasks.id')
+      .where('work_order_tasks.id', '=', taskId)
+      .where('work_orders.region_id', '=', regionId)
+      .executeTakeFirst();
+    if (!task) throw new NotFoundException('Tâche introuvable.');
+    await this.db.deleteFrom('work_order_tasks').where('id', '=', taskId).execute();
+    return { deleted: true };
+  }
+
+  async uploadWorkOrderPhoto(userId: string, workOrderId: string, phase: string, file: Express.Multer.File) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', workOrderId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    const { url } = await this.uploads.uploadGenericFile('work-order-photos', file);
+    await this.db.insertInto('work_order_photos').values({ work_order_id: workOrderId, url, phase: phase as any }).execute();
+    return { url };
+  }
 }

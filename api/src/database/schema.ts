@@ -92,6 +92,46 @@ export interface MunicipalRankPermissionsTable {
   can_manage_settings: Generated<boolean>;
 }
 
+export interface WorkOrdersTable {
+  id: Generated<string>;
+  region_id: string;
+  group_key: string | null;
+  title: string;
+  description: string | null;
+  status: Generated<'draft' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'>;
+  priority: Generated<'low' | 'medium' | 'high' | 'urgent'>;
+  assigned_to: string | null;
+  address_text: string | null;
+  scheduled_date: string | null;
+  due_date: string | null;
+  completed_at: Timestamp | null;
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  estimated_cost: number | null;
+  actual_cost: number | null;
+  notes: string | null;
+  created_by: string;
+  created_at: Generated<Timestamp>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface WorkOrderTasksTable {
+  id: Generated<string>;
+  work_order_id: string;
+  description: string;
+  completed: Generated<boolean>;
+  position: Generated<number>;
+  created_at: Generated<Timestamp>;
+}
+
+export interface WorkOrderPhotosTable {
+  id: Generated<string>;
+  work_order_id: string;
+  url: string;
+  phase: Generated<'before' | 'during' | 'after'>;
+  uploaded_at: Generated<Timestamp>;
+}
+
 export interface MunicipalInvitesTable {
   id: Generated<string>;
   region_id: string;
@@ -546,6 +586,9 @@ export interface Database {
   incident_status_history: IncidentStatusHistoryTable;
   municipal_rank_permissions: MunicipalRankPermissionsTable;
   municipal_invites: MunicipalInvitesTable;
+  work_orders: WorkOrdersTable;
+  work_order_tasks: WorkOrderTasksTable;
+  work_order_photos: WorkOrderPhotosTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

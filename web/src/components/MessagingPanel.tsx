@@ -39,6 +39,14 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+  // Mémorise la dernière valeur de startWithUserId déjà traitée — sans
+  // ça, l'effet ci-dessous (qui ouvre la conversation) se redéclenchait
+  // à CHAQUE rafraîchissement de la liste des conversations (toutes les
+  // 5 secondes, un nouveau tableau à chaque fois même si rien n'a
+  // changé), rappelant openConversation() en boucle et forçant un
+  // retour permanent en bas du fil — rendant impossible la lecture de
+  // l'historique plus haut.
+  const startedForUserIdRef = useRef<string | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const otherIsTypingRef = useRef(false);
   const lastTypingEmitRef = useRef(0);
@@ -172,9 +180,12 @@ export default function MessagingPanel({ onClose, lang, currentUserId, onUnreadC
   }, [conversations]);
 
   useEffect(() => {
-    if (!startWithUserId) return;
+    if (!startWithUserId || startedForUserIdRef.current === startWithUserId) return;
     const existing = conversations.find((c) => c.otherUserId === startWithUserId);
-    if (existing) openConversation(existing.conversation_id);
+    if (existing) {
+      startedForUserIdRef.current = startWithUserId;
+      openConversation(existing.conversation_id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startWithUserId, conversations]);
 

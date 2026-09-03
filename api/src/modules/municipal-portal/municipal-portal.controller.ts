@@ -438,4 +438,75 @@ export class MunicipalPortalController {
     res.setHeader('Content-Disposition', 'attachment; filename="signalements-mon511.csv"');
     res.send('\uFEFF' + csv); // BOM pour un bon affichage des accents dans Excel
   }
+
+  // ---------- Bons de travail (Interventions) ----------
+
+  @Post('my-region/work-orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  createWorkOrder(@CurrentUser() user: CurrentUserPayload, @Body() dto: any) {
+    return this.service.createWorkOrder(user.userId, dto);
+  }
+
+  @Get('my-region/work-orders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionWorkOrders(@CurrentUser() user: CurrentUserPayload, @Query('status') status?: string, @Query('priority') priority?: string) {
+    return this.service.findMyRegionWorkOrders(user.userId, status, priority);
+  }
+
+  @Get('my-region/work-orders/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findWorkOrderDetail(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.findWorkOrderDetail(user.userId, id);
+  }
+
+  @Patch('my-region/work-orders/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  updateWorkOrder(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body() changes: Record<string, any>) {
+    return this.service.updateWorkOrder(user.userId, id, changes);
+  }
+
+  @Post('my-region/work-orders/:id/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteWorkOrder(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteWorkOrder(user.userId, id);
+  }
+
+  @Post('my-region/work-orders/:id/tasks')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  addWorkOrderTask(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('description') description: string) {
+    return this.service.addWorkOrderTask(user.userId, id, description);
+  }
+
+  @Post('my-region/work-order-tasks/:taskId/toggle')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  toggleWorkOrderTask(@Param('taskId') taskId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.toggleWorkOrderTask(user.userId, taskId);
+  }
+
+  @Post('my-region/work-order-tasks/:taskId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteWorkOrderTask(@Param('taskId') taskId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteWorkOrderTask(user.userId, taskId);
+  }
+
+  @Post('my-region/work-orders/:id/photos')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadWorkOrderPhoto(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('phase') phase: string,
+    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), new FileTypeValidator({ fileType: /(jpg|jpeg|png|webp)$/ })] })) file: Express.Multer.File,
+  ) {
+    return this.service.uploadWorkOrderPhoto(user.userId, id, phase, file);
+  }
 }
