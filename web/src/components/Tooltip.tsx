@@ -21,14 +21,21 @@ interface Props {
  * elle-même se positionne en `position: fixed` à partir des vraies
  * coordonnées de l'élément (getBoundingClientRect), jamais relative au
  * wrapper — donc jamais de conflit, peu importe où ce composant est
- * utilisé. */
+ * utilisé.
+ *
+ * ATTENTION : un élément display:contents n'a plus de "boîte" propre
+ * à mesurer — getBoundingClientRect() dessus retourne toujours des
+ * coordonnées à zéro (coin supérieur gauche de l'écran), peu importe
+ * où l'élément apparaît vraiment. Il faut donc mesurer le premier
+ * enfant RÉEL (le déclencheur passé en children, qui lui a une vraie
+ * boîte), jamais le conteneur lui-même. */
 export default function Tooltip({ text, children, side = 'bottom' }: Props) {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const ref = useRef<HTMLSpanElement>(null);
 
   function show() {
-    const rect = ref.current?.getBoundingClientRect();
+    const rect = ref.current?.firstElementChild?.getBoundingClientRect();
     if (!rect) return;
     const positions: Record<string, { top: number; left: number }> = {
       top: { top: rect.top - 8, left: rect.left + rect.width / 2 },
