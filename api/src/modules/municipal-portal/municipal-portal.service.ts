@@ -451,6 +451,146 @@ export class MunicipalPortalService {
     return { updated: true };
   }
 
+  // ---------- Priorité automatique et SLA ----------
+
+  /** Calcule (ou recalcule) le score de priorité d'un incident — 0 à
+   * 100, basé sur la sévérité par défaut du type de problème, l'âge du
+   * dossier, et le nombre de confirmations citoyennes. N'écrase JAMAIS
+   * une priorité déjà remplacée manuellement (priority_overridden) —
+   * le gestionnaire garde toujours le dernier mot, le calcul
+   * automatique ne fait que proposer. Les facteurs sont conservés
+   * (priority_factors) pour expliquer clairement "pourquoi ce score",
+   * pas seulement le résultat final. */
+  async computeIncidentPriority(groupKey: string): Promise<void> {
+    const incident = await this.db.selectFrom('incidents').select(['id', 'problem_type_id', 'first_reported_at', 'priority_overridden']).where('id', '=', groupKey).executeTakeFirst();
+    if (!incident || incident.priority_overridden) return; // pas un vrai incident, ou déjà fixé manuellement
+
+    const problemType = await this.db.selectFrom('problem_types').select('default_severity').where('id', '=', incident.problem_type_id).executeTakeFirst();
+    const confirmations = await this.db
+      .selectFrom('report_confirmations')
+      .innerJoin('reports', 'reports.id', 'report_confirmations.report_id')
+      .select(sql<number>`count(*)`.as('count'))
+      .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${groupKey}`)
+      .executeTakeFirst();
+
+    const SEVERITY_BASE: Record<string, number> = { low: 20, medium: 50, high: 80 };
+    const baseSeverity = SEVERITY_BASE[problemType?.default_severity ?? 'medium'] ?? 50;
+
+    const ageDays = Math.floor((Date.now() - new Date(incident.first_reported_at as any).getTime()) / (1000 * 60 * 60 * 24));
+    const ageBonus = Math.min(ageDays, 30); // +1 point/jour, plafonné à 30
+
+    const confirmationCount = Number(confirmations?.count ?? 0);
+    const confirmationBonus = Math.min(confirmationCount * 5, 25); // +5 points/confirmation, plafonné à 25
+
+    const score = Math.min(Math.round(baseSeverity * 0.6 + ageBonus + confirmationBonus), 100);
+    const priority = score >= 81 ? 'urgent' : score >= 56 ? 'high' : score >= 31 ? 'medium' : 'low';
+
+    await this.db
+      .updateTable('incidents')
+      .set({
+        priority: priority as any,
+        priority_score: score,
+        priority_factors: JSON.stringify({ baseSeverity, ageDays, ageBonus, confirmationCount, confirmationBonus }) as any,
+      })
+      .where('id', '=', groupKey)
+      .execute();
+  }
+
+  /** Remplace manuellement la priorité — le gestionnaire garde
+   * toujours le dernier mot. Fige priority_overridden à true, le
+   * calcul automatique ne touchera plus jamais cet incident à moins
+   * qu'un gestionnaire ne redemande explicitement un recalcul (voir
+   * resetIncidentPriorityToAutomatic). */
+  async overrideIncidentPriority(userId: string, groupKey: string, priority: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const incident = await this.db.selectFrom('incidents').select('id').where('id', '=', groupKey).where('region_id', '=', regionId).executeTakeFirst();
+    if (!incident) throw new NotFoundException("Ce signalement n'est pas rattaché à un incident (encore jamais regroupé) — la priorité automatique ne s'applique qu'aux incidents.");
+    await this.db.updateTable('incidents').set({ priority: priority as any, priority_overridden: true }).where('id', '=', groupKey).execute();
+    return { updated: true };
+  }
+
+  /** Redonne la main au calcul automatique — retire le figeage manuel
+   * et recalcule immédiatement. */
+  async resetIncidentPriorityToAutomatic(userId: string, groupKey: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const incident = await this.db.selectFrom('incidents').select('id').where('id', '=', groupKey).where('region_id', '=', regionId).executeTakeFirst();
+    if (!incident) throw new NotFoundException('Incident introuvable.');
+    await this.db.updateTable('incidents').set({ priority_overridden: false }).where('id', '=', groupKey).execute();
+    await this.computeIncidentPriority(groupKey);
+    return { updated: true };
+  }
+
+  /** Statut SLA d'un incident — "dans les délais", "à risque" (moins de
+   * 25% du délai restant) ou "en retard", basé sur les règles
+   * configurées (spécifique au type de problème, sinon règle par
+   * défaut de la municipalité, sinon 48h/336h par défaut si aucune
+   * règle n'existe). Calcule séparément le respect du délai de PRISE
+   * EN CHARGE (premier changement de statut interne) et de
+   * RÉSOLUTION. */
+  async getSlaStatusForIncident(regionId: string, problemTypeId: string, firstReportedAt: Date, acknowledgedAt: Date | null, resolvedAt: Date | null) {
+    const rule = await this.db
+      .selectFrom('sla_rules')
+      .selectAll()
+      .where('region_id', '=', regionId)
+      .where((eb) => eb.or([eb('problem_type_id', '=', problemTypeId), eb('problem_type_id', 'is', null)]))
+      .orderBy(sql`problem_type_id IS NULL`, 'asc') // priorité à la règle spécifique au type, avant la règle par défaut
+      .limit(1)
+      .executeTakeFirst();
+
+    const targetAckHours = rule?.target_acknowledgment_hours ?? 48;
+    const targetResolutionHours = rule?.target_resolution_hours ?? 336;
+    const now = Date.now();
+    const elapsedHours = (now - new Date(firstReportedAt).getTime()) / (1000 * 60 * 60);
+
+    function statusFor(elapsed: number, target: number, doneAt: Date | null): 'on_time' | 'at_risk' | 'late' | 'done' {
+      if (doneAt) return 'done';
+      if (elapsed > target) return 'late';
+      if (elapsed > target * 0.75) return 'at_risk';
+      return 'on_time';
+    }
+
+    return {
+      acknowledgment: statusFor(elapsedHours, targetAckHours, acknowledgedAt),
+      resolution: statusFor(elapsedHours, targetResolutionHours, resolvedAt),
+      targetAckHours,
+      targetResolutionHours,
+    };
+  }
+
+  async getMyRegionSlaRules(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    return this.db
+      .selectFrom('sla_rules')
+      .leftJoin('problem_types', 'problem_types.id', 'sla_rules.problem_type_id')
+      .select(['sla_rules.id', 'sla_rules.problem_type_id as problemTypeId', 'problem_types.name_fr as problemTypeName', 'sla_rules.target_acknowledgment_hours as targetAcknowledgmentHours', 'sla_rules.target_resolution_hours as targetResolutionHours'])
+      .where('sla_rules.region_id', '=', regionId)
+      .execute();
+  }
+
+  async setMyRegionSlaRule(userId: string, problemTypeId: string | null, targetAcknowledgmentHours: number, targetResolutionHours: number) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    await this.db
+      .insertInto('sla_rules')
+      .values({ region_id: regionId, problem_type_id: problemTypeId, target_acknowledgment_hours: targetAcknowledgmentHours, target_resolution_hours: targetResolutionHours })
+      .onConflict((oc) => oc.columns(['region_id', 'problem_type_id']).doUpdateSet({ target_acknowledgment_hours: targetAcknowledgmentHours, target_resolution_hours: targetResolutionHours }))
+      .execute();
+    return { updated: true };
+  }
+
+  /** Recalcule la priorité de TOUS les incidents encore actifs — pour
+   * appliquer le moteur de score aux incidents déjà existants avant sa
+   * mise en place (même principe que le rattrapage des incidents
+   * eux-mêmes), déclenchement manuel depuis l'admin. */
+  async recomputeAllIncidentPriorities(): Promise<{ processed: number }> {
+    const incidents = await this.db
+      .selectFrom('incidents')
+      .select('id')
+      .where(sql<boolean>`EXISTS (SELECT 1 FROM reports r WHERE r.incident_id = incidents.id AND r.status IN ('pending_moderation', 'published_unresolved'))`)
+      .execute();
+    for (const inc of incidents) await this.computeIncidentPriority(inc.id);
+    return { processed: incidents.length };
+  }
+
   static readonly RANKS = ['director', 'foreman', 'employee'] as const;
 
   /** Permissions des trois rangs pour une municipalité — crée les
@@ -1002,16 +1142,18 @@ export class MunicipalPortalService {
     const { regionId } = await this.checkPermission(userId, 'can_view_reports');
     const searchPattern = search ? `%${search}%` : null;
 
-    return sql<{
+    const rows = await sql<{
       groupKey: string; incidentId: string | null; representativeReportId: string;
-      problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null; description: string | null;
+      problemTypeId: string; problemTypeNameFr: string; problemTypeIcon: string | null; addressText: string | null; description: string | null;
       reportCount: number; firstReportedAt: Date; lastReportedAt: Date; thumbnailUrl: string | null;
       lat: number; lng: number; status: string; internalStatus: string;
+      caseNumber: string | null; priority: string; priorityScore: number | null;
+      acknowledgedAt: Date | null; resolvedAt: Date | null;
     }>`
       WITH grouped AS (
         SELECT
           COALESCE(incident_id::text, id::text) AS group_key,
-          incident_id, id, problem_type_id, address_text, description, created_at, location, status,
+          incident_id, id, problem_type_id, address_text, description, created_at, location, status, resolved_at,
           ROW_NUMBER() OVER (PARTITION BY COALESCE(incident_id::text, id::text) ORDER BY created_at ASC) AS rn
         FROM reports
         WHERE region_id = ${regionId}
@@ -1020,19 +1162,31 @@ export class MunicipalPortalService {
       )
       SELECT
         g.group_key AS "groupKey", g.incident_id AS "incidentId", g.id AS "representativeReportId",
-        pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon", g.address_text AS "addressText", g.description AS "description",
+        g.problem_type_id AS "problemTypeId", pt.name_fr AS "problemTypeNameFr", pt.icon AS "problemTypeIcon", g.address_text AS "addressText", g.description AS "description",
         g.status AS "status", COALESCE(rmt.internal_status, 'new') AS "internalStatus",
         (SELECT count(*) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key AND r2.status != 'rejected') AS "reportCount",
         (SELECT min(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "firstReportedAt",
         (SELECT max(created_at) FROM reports r2 WHERE COALESCE(r2.incident_id::text, r2.id::text) = g.group_key) AS "lastReportedAt",
         (SELECT url FROM report_photos WHERE report_photos.report_id = g.id ORDER BY uploaded_at ASC LIMIT 1) AS "thumbnailUrl",
-        ST_Y(g.location::geometry) AS "lat", ST_X(g.location::geometry) AS "lng"
+        ST_Y(g.location::geometry) AS "lat", ST_X(g.location::geometry) AS "lng",
+        inc.case_number AS "caseNumber", COALESCE(inc.priority, 'medium') AS "priority", inc.priority_score AS "priorityScore",
+        rmt.updated_at AS "acknowledgedAt", g.resolved_at AS "resolvedAt"
       FROM grouped g
       INNER JOIN problem_types pt ON pt.id = g.problem_type_id
       LEFT JOIN report_municipal_tracking rmt ON rmt.report_id = g.id
+      LEFT JOIN incidents inc ON inc.id = g.incident_id
       WHERE g.rn = 1
       ORDER BY "lastReportedAt" DESC
     `.execute(this.db).then((r) => r.rows);
+
+    // Statut SLA calculé en TypeScript (pas en SQL brut, plus simple à
+    // maintenir) — réutilise getSlaStatusForIncident déjà construit.
+    return Promise.all(
+      rows.map(async (r) => ({
+        ...r,
+        sla: await this.getSlaStatusForIncident(regionId, r.problemTypeId, r.firstReportedAt, r.acknowledgedAt, r.resolvedAt),
+      })),
+    );
   }
 
   /** Détail des signalements individuels d'un incident (ou d'un groupe
@@ -1072,6 +1226,7 @@ export class MunicipalPortalService {
       .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
       .select([
         'reports.id', 'reports.description', 'reports.address_text', 'reports.status', 'reports.created_at',
+        'reports.problem_type_id', 'reports.resolved_at',
         'problem_types.name_fr as problemTypeNameFr', 'problem_types.icon as problemTypeIcon',
       ])
       .where('reports.region_id', '=', regionId)
@@ -1122,8 +1277,17 @@ export class MunicipalPortalService {
       ...statusEvents.map((e) => ({ type: 'status_change' as const, at: e.changedAt, status: e.internalStatus, note: e.note, visibleToPublic: e.visibleToPublic, by: e.changedByFirstName })),
     ].sort((a, b) => new Date(b.at as any).getTime() - new Date(a.at as any).getTime());
 
+    const incident = await this.db.selectFrom('incidents').select(['case_number', 'priority', 'priority_overridden', 'priority_score', 'priority_factors']).where('id', '=', groupKey).executeTakeFirst();
+    const sla = await this.getSlaStatusForIncident(regionId, reports[0].problem_type_id, reports[0].created_at as any, tracking?.updatedAt as any, reports[0].resolved_at as any);
+
     return {
       groupKey,
+      caseNumber: incident?.case_number ?? null,
+      priority: incident?.priority ?? 'medium',
+      priorityOverridden: incident?.priority_overridden ?? false,
+      priorityScore: incident?.priority_score ?? null,
+      priorityFactors: incident?.priority_factors ?? null,
+      sla,
       problemTypeNameFr: reports[0].problemTypeNameFr,
       problemTypeIcon: reports[0].problemTypeIcon,
       addressText: reports[0].address_text,
@@ -1254,6 +1418,12 @@ export class MunicipalPortalService {
         })
         .execute();
     }
+
+    // Recalcule la priorité — l'âge du dossier et potentiellement les
+    // confirmations ont changé depuis le dernier calcul. N'écrase
+    // jamais une priorité déjà remplacée manuellement (voir
+    // computeIncidentPriority).
+    await this.computeIncidentPriority(groupKey);
 
     return { updated: reports.length };
   }

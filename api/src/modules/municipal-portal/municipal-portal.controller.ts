@@ -509,4 +509,46 @@ export class MunicipalPortalController {
   ) {
     return this.service.uploadWorkOrderPhoto(user.userId, id, phase, file);
   }
+
+  // ---------- Priorité automatique et SLA ----------
+
+  @Post('my-region/incidents/:groupKey/priority/override')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  overrideIncidentPriority(@Param('groupKey') groupKey: string, @CurrentUser() user: CurrentUserPayload, @Body('priority') priority: string) {
+    return this.service.overrideIncidentPriority(user.userId, groupKey, priority);
+  }
+
+  @Post('my-region/incidents/:groupKey/priority/reset')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  resetIncidentPriorityToAutomatic(@Param('groupKey') groupKey: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.resetIncidentPriorityToAutomatic(user.userId, groupKey);
+  }
+
+  @Post('admin/recompute-priorities')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'super_admin')
+  recomputeAllIncidentPriorities() {
+    return this.service.recomputeAllIncidentPriorities();
+  }
+
+  @Get('my-region/sla-rules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionSlaRules(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionSlaRules(user.userId);
+  }
+
+  @Post('my-region/sla-rules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  setMyRegionSlaRule(
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('problemTypeId') problemTypeId: string | null,
+    @Body('targetAcknowledgmentHours') targetAcknowledgmentHours: number,
+    @Body('targetResolutionHours') targetResolutionHours: number,
+  ) {
+    return this.service.setMyRegionSlaRule(user.userId, problemTypeId, targetAcknowledgmentHours, targetResolutionHours);
+  }
 }

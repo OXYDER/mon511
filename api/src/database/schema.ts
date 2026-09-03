@@ -162,9 +162,28 @@ export interface IncidentsTable {
   region_id: string | null;
   problem_type_id: string;
   location: string; // geometry(Point, 4326), manipulé via ST_* dans les requêtes
+  case_number: string | null;
+  priority: Generated<'low' | 'medium' | 'high' | 'urgent'>;
+  priority_overridden: Generated<boolean>;
+  priority_score: number | null;
+  priority_factors: unknown | null; // jsonb
   first_reported_at: Generated<Timestamp>;
   last_reported_at: Generated<Timestamp>;
   created_at: Generated<Timestamp>;
+}
+
+export interface SlaRulesTable {
+  id: Generated<string>;
+  region_id: string;
+  problem_type_id: string | null;
+  target_acknowledgment_hours: Generated<number>;
+  target_resolution_hours: Generated<number>;
+}
+
+export interface CaseNumberCountersTable {
+  region_id: string;
+  year: number;
+  next_number: Generated<number>;
 }
 
 export interface ReportsTable {
@@ -589,6 +608,8 @@ export interface Database {
   work_orders: WorkOrdersTable;
   work_order_tasks: WorkOrderTasksTable;
   work_order_photos: WorkOrderPhotosTable;
+  sla_rules: SlaRulesTable;
+  case_number_counters: CaseNumberCountersTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

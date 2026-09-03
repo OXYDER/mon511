@@ -380,6 +380,37 @@ export class ReportsService {
    * début. Déclenchement manuel depuis l'admin (comme les sources de
    * données externes), pas automatique au démarrage — potentiellement
    * lent selon le nombre de signalements à traiter. */
+  /** Génère le prochain numéro de dossier immuable pour une
+   * municipalité — format MON-<abrégé>-<année>-<numéro séquentiel sur
+   * 5 chiffres>, ex. MON-DAN-2026-00184. L'abrégé est dérivé
+   * simplement (3 premières lettres du nom, majuscules, accents
+   * retirés) — un identifiant lisible et déterministe, pas une
+   * abréviation officielle parfaite ; l'unicité réelle vient du
+   * compteur séquentiel par (municipalité, année), pas de l'abrégé
+   * lui-même (deux municipalités pourraient partager le même abrégé
+   * sans jamais entrer en conflit). Le compteur (case_number_counters)
+   * est incrémenté par une seule requête UPSERT atomique — élimine
+   * toute course entre deux créations de dossier simultanées, contrairement
+   * à un simple SELECT COUNT(*) + 1. */
+  private async generateCaseNumber(db: Kysely<Database>, regionId: string): Promise<string> {
+    const region = await db.selectFrom('regions').select('name_fr').where('id', '=', regionId).executeTakeFirst();
+    const abbrev = (region?.name_fr ?? 'MUN')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // retire les accents
+      .replace(/[^a-zA-Z]/g, '')
+      .slice(0, 3)
+      .toUpperCase()
+      .padEnd(3, 'X');
+    const year = new Date().getFullYear();
+
+    const counter = await sql<{ next_number: number }>`
+      INSERT INTO case_number_counters (region_id, year, next_number) VALUES (${regionId}, ${year}, 2)
+      ON CONFLICT (region_id, year) DO UPDATE SET next_number = case_number_counters.next_number + 1
+      RETURNING next_number - 1 AS next_number
+    `.execute(db).then((r) => r.rows[0]);
+
+    return `MON-${abbrev}-${year}-${String(counter.next_number).padStart(5, '0')}`;
+  }
+
   async backfillIncidents(): Promise<{ processed: number; incidentsCreated: number; attachedToExisting: number }> {
     const ungrouped = await this.db
       .selectFrom('reports')
@@ -410,12 +441,14 @@ export class ReportsService {
         await this.db.updateTable('incidents').set({ last_reported_at: new Date() as any }).where('id', '=', incidentId).execute();
         attachedToExisting++;
       } else {
+        const caseNumber = await this.generateCaseNumber(this.db, r.region_id!);
         const newIncident = await this.db
           .insertInto('incidents')
           .values({
             region_id: r.region_id!,
             problem_type_id: r.problem_type_id,
             location: sql`ST_SetSRID(ST_MakePoint(${r.lng}, ${r.lat}), 4326)` as any,
+            case_number: caseNumber,
           })
           .returning('id')
           .executeTakeFirstOrThrow();
@@ -489,12 +522,14 @@ export class ReportsService {
           incidentId = nearbyOpenIncident.id;
           await trx.updateTable('incidents').set({ last_reported_at: new Date() as any }).where('id', '=', incidentId).execute();
         } else {
+          const caseNumber = await this.generateCaseNumber(trx, region.id);
           const newIncident = await trx
             .insertInto('incidents')
             .values({
               region_id: region.id,
               problem_type_id: dto.problemTypeId,
               location: sql`ST_SetSRID(ST_MakePoint(${dto.longitude}, ${dto.latitude}), 4326)` as any,
+              case_number: caseNumber,
             })
             .returning('id')
             .executeTakeFirstOrThrow();
