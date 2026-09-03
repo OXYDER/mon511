@@ -547,6 +547,13 @@ export class MunicipalPortalController {
     return this.service.getMyRegionSlaRules(user.userId);
   }
 
+  @Get('my-region/audit-log')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionAuditLog(@CurrentUser() user: CurrentUserPayload, @Query('targetType') targetType?: string) {
+    return this.service.findMyRegionAuditLog(user.userId, targetType);
+  }
+
   @Post('my-region/sla-rules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

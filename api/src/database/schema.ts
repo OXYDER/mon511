@@ -172,6 +172,17 @@ export interface IncidentsTable {
   created_at: Generated<Timestamp>;
 }
 
+export interface AuditLogTable {
+  id: Generated<string>;
+  region_id: string;
+  actor_id: string | null;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: unknown | null; // jsonb
+  created_at: Generated<Timestamp>;
+}
+
 export interface SlaRulesTable {
   id: Generated<string>;
   region_id: string;
@@ -610,6 +621,7 @@ export interface Database {
   work_order_photos: WorkOrderPhotosTable;
   sla_rules: SlaRulesTable;
   case_number_counters: CaseNumberCountersTable;
+  audit_log: AuditLogTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

@@ -339,6 +339,36 @@ export class MunicipalPortalService {
     throw new ForbiddenException("Ton rang n'a pas accès à cette section — un gestionnaire principal peut ajuster les permissions dans Équipe.");
   }
 
+  // ---------- Journal d'audit ----------
+
+  /** Enregistre une action dans le journal — appelé par les autres
+   * méthodes de mutation, jamais bloquant (une erreur d'écriture du
+   * journal ne doit jamais faire échouer l'action elle-même, c'est un
+   * enregistrement secondaire, pas le cœur de la logique). */
+  private async logAudit(regionId: string, actorId: string | null, action: string, targetType: string, targetId: string, details?: Record<string, any>) {
+    await this.db
+      .insertInto('audit_log')
+      .values({ region_id: regionId, actor_id: actorId, action, target_type: targetType, target_id: targetId, details: details ? JSON.stringify(details) as any : null })
+      .execute()
+      .catch(() => {});
+  }
+
+  /** Journal filtrable — pour la page dédiée du portail. */
+  async findMyRegionAuditLog(userId: string, targetType?: string, limit = 100) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    let query = this.db
+      .selectFrom('audit_log')
+      .leftJoin('users', 'users.id', 'audit_log.actor_id')
+      .select([
+        'audit_log.id', 'audit_log.action', 'audit_log.target_type as targetType', 'audit_log.target_id as targetId',
+        'audit_log.details', 'audit_log.created_at as createdAt',
+        'users.first_name as actorFirstName', 'users.last_name as actorLastName', 'users.email as actorEmail',
+      ])
+      .where('audit_log.region_id', '=', regionId);
+    if (targetType) query = query.where('audit_log.target_type', '=', targetType);
+    return query.orderBy('audit_log.created_at', 'desc').limit(limit).execute();
+  }
+
   /** Permissions effectives de l'usager courant — pour que le frontend
    * sache quoi afficher/cacher dans la navigation latérale. Un
    * municipal_admin a toujours tout à true. */
@@ -426,6 +456,7 @@ export class MunicipalPortalService {
 
     const userRole = await this.db.selectFrom('roles').select('id').where('name', '=', 'user').executeTakeFirstOrThrow();
     await this.db.updateTable('users').set({ role_id: userRole.id, region_id: null }).where('id', '=', targetUserId).execute();
+    await this.logAudit(regionId, userId, 'team_member_removed', 'team_member', targetUserId, {});
     return { removed: true };
   }
 
@@ -448,6 +479,7 @@ export class MunicipalPortalService {
       throw new NotFoundException("Ce compte ne fait pas partie de ton équipe en tant qu'employé.");
     }
     await this.db.updateTable('users').set({ municipal_rank: rank as any }).where('id', '=', targetUserId).execute();
+    await this.logAudit(regionId, userId, 'rank_changed', 'team_member', targetUserId, { to: rank });
     return { updated: true };
   }
 
@@ -503,9 +535,10 @@ export class MunicipalPortalService {
    * resetIncidentPriorityToAutomatic). */
   async overrideIncidentPriority(userId: string, groupKey: string, priority: string) {
     const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
-    const incident = await this.db.selectFrom('incidents').select('id').where('id', '=', groupKey).where('region_id', '=', regionId).executeTakeFirst();
+    const incident = await this.db.selectFrom('incidents').select(['id', 'priority']).where('id', '=', groupKey).where('region_id', '=', regionId).executeTakeFirst();
     if (!incident) throw new NotFoundException("Ce signalement n'est pas rattaché à un incident (encore jamais regroupé) — la priorité automatique ne s'applique qu'aux incidents.");
     await this.db.updateTable('incidents').set({ priority: priority as any, priority_overridden: true }).where('id', '=', groupKey).execute();
+    await this.logAudit(regionId, userId, 'priority_overridden', 'incident', groupKey, { from: incident.priority, to: priority });
     return { updated: true };
   }
 
@@ -1434,6 +1467,8 @@ export class MunicipalPortalService {
       .where('id', 'in', reports.map((r) => r.id))
       .execute();
 
+    await this.logAudit(regionId, userId, 'public_status_changed', 'incident', groupKey, { to: status });
+
     return { updated: reports.length };
   }
 
@@ -1457,6 +1492,8 @@ export class MunicipalPortalService {
       .where(sql<boolean>`COALESCE(incident_id::text, id::text) = ${groupKey}`)
       .execute();
     if (reports.length === 0) throw new NotFoundException('Incident introuvable.');
+
+    const previousTracking = await this.db.selectFrom('report_municipal_tracking').select(['internal_status', 'assigned_to']).where('report_id', '=', reports[0].id).executeTakeFirst();
 
     for (const r of reports) {
       await this.db
@@ -1500,6 +1537,13 @@ export class MunicipalPortalService {
           changed_by: userId,
         })
         .execute();
+    }
+
+    if (changes.internalStatus !== undefined && changes.internalStatus !== previousTracking?.internal_status) {
+      await this.logAudit(regionId, userId, 'status_changed', 'incident', groupKey, { from: previousTracking?.internal_status ?? 'new', to: changes.internalStatus });
+    }
+    if (changes.assignedTo !== undefined && changes.assignedTo !== previousTracking?.assigned_to) {
+      await this.logAudit(regionId, userId, 'assigned', 'incident', groupKey, { from: previousTracking?.assigned_to ?? null, to: changes.assignedTo });
     }
 
     // Recalcule la priorité — l'âge du dossier et potentiellement les
