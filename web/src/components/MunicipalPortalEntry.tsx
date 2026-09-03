@@ -261,10 +261,12 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
 
 function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: string }) {
   const [data, setData] = useState<any>(null);
+  const [toProcess, setToProcess] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any>('/municipal-portal/my-region/dashboard').then(setData).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/to-process').then(setToProcess).catch(() => {});
   }, []);
 
   if (!data) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
@@ -284,6 +286,34 @@ function DashboardView({ lang, regionName }: { lang: 'fr' | 'en'; regionName?: s
       <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18 }}>
         {fr ? "Voici l'état actuel de votre territoire." : "Here's the current state of your territory."}
       </div>
+
+      {toProcess.length > 0 && (
+        <div style={{ background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+            ⚡ {fr ? 'À traiter' : 'To process'} ({toProcess.length})
+          </div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+            {fr
+              ? "Seulement ce qui nécessite vraiment ton attention, avec la raison précise — un même dossier peut apparaître pour plusieurs raisons."
+              : 'Only what genuinely needs your attention, with the specific reason — a single case may appear for several reasons.'}
+          </p>
+          {toProcess.slice(0, 8).map((item: any, i: number) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: i < toProcess.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none', fontSize: 11.5 }}>
+              <span>{item.problemTypeIcon ?? '📍'}</span>
+              <span style={{ flex: 1 }}>
+                {item.problemTypeNameFr} — {item.addressText ?? '—'}
+                {item.caseNumber && <span style={{ color: 'var(--text-muted)' }}> · {item.caseNumber}</span>}
+              </span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--accent-signal)' }}>{fr ? item.reasonLabel.fr : item.reasonLabel.en}</span>
+            </div>
+          ))}
+          {toProcess.length > 8 && (
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 6 }}>
+              {fr ? `+ ${toProcess.length - 8} autre(s) — voir Tous les signalements et Interventions.` : `+ ${toProcess.length - 8} more — see All reports and Interventions.`}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
         {cards.map((c) => (
