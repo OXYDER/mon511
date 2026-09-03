@@ -1369,6 +1369,21 @@ function AllReportsAdmin() {
       setBackfillRunning(false);
     }
   }
+  const [priorityRecomputeRunning, setPriorityRecomputeRunning] = useState(false);
+  const [priorityRecomputeResult, setPriorityRecomputeResult] = useState<string | null>(null);
+
+  async function runPriorityRecompute() {
+    setPriorityRecomputeRunning(true);
+    setPriorityRecomputeResult(null);
+    try {
+      const r = await api.post<{ processed: number }>('/municipal-portal/admin/recompute-priorities', {});
+      setPriorityRecomputeResult(`${r.processed} incident(s) recalculé(s).`);
+    } catch (err) {
+      setPriorityRecomputeResult(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setPriorityRecomputeRunning(false);
+    }
+  }
   const [deleting, setDeleting] = useState(false);
   const LIMIT = 30;
 
@@ -1514,6 +1529,20 @@ function AllReportsAdmin() {
           {backfillRunning ? 'Traitement...' : '🔗 Rattraper les incidents existants'}
         </button>
         {backfillResult && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8 }}>{backfillResult}</div>}
+      </div>
+
+      <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Priorité automatique</div>
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+          Recalcule le score de priorité de tous les incidents actifs (sévérité du type, âge du dossier,
+          confirmations citoyennes). Les nouveaux changements de statut recalculent automatiquement —
+          ce bouton ne sert qu'à appliquer le moteur aux incidents déjà existants avant sa mise en place.
+          Ne touche jamais une priorité déjà remplacée manuellement par un employé municipal.
+        </p>
+        <button className="btn-ghost" onClick={runPriorityRecompute} disabled={priorityRecomputeRunning}>
+          {priorityRecomputeRunning ? 'Traitement...' : '⚡ Recalculer les priorités'}
+        </button>
+        {priorityRecomputeResult && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8 }}>{priorityRecomputeResult}</div>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
