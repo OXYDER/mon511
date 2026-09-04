@@ -554,6 +554,20 @@ export class MunicipalPortalController {
     return this.service.findMyRegionAuditLog(user.userId, targetType);
   }
 
+  @Get('my-region/communication-templates')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionCommunicationTemplates(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionCommunicationTemplates(user.userId);
+  }
+
+  @Patch('my-region/communication-templates/:templateKey')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  setMyRegionCommunicationTemplate(@Param('templateKey') templateKey: string, @CurrentUser() user: CurrentUserPayload, @Body('body') body: string) {
+    return this.service.setMyRegionCommunicationTemplate(user.userId, templateKey, body);
+  }
+
   @Post('my-region/sla-rules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

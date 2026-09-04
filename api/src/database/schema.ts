@@ -172,6 +172,13 @@ export interface IncidentsTable {
   created_at: Generated<Timestamp>;
 }
 
+export interface CommunicationTemplatesTable {
+  id: Generated<string>;
+  region_id: string;
+  template_key: string;
+  body: string;
+}
+
 export interface AuditLogTable {
   id: Generated<string>;
   region_id: string;
@@ -622,6 +629,7 @@ export interface Database {
   sla_rules: SlaRulesTable;
   case_number_counters: CaseNumberCountersTable;
   audit_log: AuditLogTable;
+  communication_templates: CommunicationTemplatesTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;

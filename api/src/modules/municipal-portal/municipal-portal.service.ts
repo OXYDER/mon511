@@ -369,6 +369,44 @@ export class MunicipalPortalService {
     return query.orderBy('audit_log.created_at', 'desc').limit(limit).execute();
   }
 
+  // ---------- Modèles de communication ----------
+
+  static readonly DEFAULT_COMMUNICATION_TEMPLATES: Record<string, string> = {
+    acknowledgment: 'Ta demande a bien été reçue et sera analysée par notre équipe.',
+    inspection_scheduled: 'Une inspection sur place est prévue prochainement.',
+    work_planned: 'Les travaux sont maintenant planifiés.',
+    work_done: 'Les travaux ont été complétés.',
+    out_of_jurisdiction: "Ce signalement concerne une infrastructure qui n'est pas sous la responsabilité de la municipalité — il a été transmis à l'organisme concerné.",
+    info_request: "Nous avons besoin d'informations supplémentaires pour traiter ce signalement — n'hésite pas à ajouter une photo ou une précision.",
+  };
+
+  /** Modèles de communication de la municipalité — crée les valeurs
+   * par défaut à la demande si elles n'existent pas encore (même
+   * principe que les permissions par rang), jamais au moment de la
+   * migration. */
+  async getMyRegionCommunicationTemplates(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const existing = await this.db.selectFrom('communication_templates').selectAll().where('region_id', '=', regionId).execute();
+    const byKey = new Map(existing.map((t) => [t.template_key, t]));
+    return Object.entries(MunicipalPortalService.DEFAULT_COMMUNICATION_TEMPLATES).map(([key, defaultBody]) => ({
+      templateKey: key,
+      body: byKey.get(key)?.body ?? defaultBody,
+    }));
+  }
+
+  async setMyRegionCommunicationTemplate(userId: string, templateKey: string, body: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    if (!(templateKey in MunicipalPortalService.DEFAULT_COMMUNICATION_TEMPLATES)) {
+      throw new BadRequestException('Modèle invalide.');
+    }
+    await this.db
+      .insertInto('communication_templates')
+      .values({ region_id: regionId, template_key: templateKey, body })
+      .onConflict((oc) => oc.columns(['region_id', 'template_key']).doUpdateSet({ body }))
+      .execute();
+    return { updated: true };
+  }
+
   /** Permissions effectives de l'usager courant — pour que le frontend
    * sache quoi afficher/cacher dans la navigation latérale. Un
    * municipal_admin a toujours tout à true. */
