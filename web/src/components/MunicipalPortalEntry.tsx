@@ -1044,6 +1044,14 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   const [slaSaving, setSlaSaving] = useState(false);
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [auditFilter, setAuditFilter] = useState('all');
+  const [rules, setRules] = useState<any[]>([]);
+  const [newRuleName, setNewRuleName] = useState('');
+  const [newRuleTypeId, setNewRuleTypeId] = useState('');
+  const [newRuleKeyword, setNewRuleKeyword] = useState('');
+  const [newRulePriority, setNewRulePriority] = useState('');
+  const [newRuleAssignedTo, setNewRuleAssignedTo] = useState('');
+  const [ruleSaving, setRuleSaving] = useState(false);
+  const [ruleError, setRuleError] = useState<string | null>(null);
 
   const STAT_LABELS: Record<string, string> = {
     active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
@@ -1060,6 +1068,7 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     api.get<any>('/municipal-portal/my-region/report/settings').then(setReportSettings).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/automation-rules').then(setRules).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1084,6 +1093,44 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     } finally {
       setSlaSaving(false);
     }
+  }
+
+  function loadRules() {
+    api.get<any[]>('/municipal-portal/my-region/automation-rules').then(setRules).catch(() => {});
+  }
+
+  async function createRule() {
+    setRuleSaving(true);
+    setRuleError(null);
+    try {
+      await api.post('/municipal-portal/my-region/automation-rules', {
+        name: newRuleName.trim(),
+        triggerProblemTypeId: newRuleTypeId || undefined,
+        triggerKeyword: newRuleKeyword.trim() || undefined,
+        actionPriority: newRulePriority || undefined,
+        actionAssignedTo: newRuleAssignedTo.trim() || undefined,
+      });
+      setNewRuleName('');
+      setNewRuleTypeId('');
+      setNewRuleKeyword('');
+      setNewRulePriority('');
+      setNewRuleAssignedTo('');
+      loadRules();
+    } catch (err) {
+      setRuleError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setRuleSaving(false);
+    }
+  }
+
+  async function toggleRule(ruleId: string) {
+    await api.post(`/municipal-portal/my-region/automation-rules/${ruleId}/toggle`, {}).catch(() => {});
+    loadRules();
+  }
+
+  async function deleteRule(ruleId: string) {
+    await api.post(`/municipal-portal/my-region/automation-rules/${ruleId}/delete`, {}).catch(() => {});
+    loadRules();
   }
 
   function toggleStat(key: string) {
@@ -1171,6 +1218,60 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
         <input className="text-input" type="number" style={{ width: 90 }} value={newSlaRes} onChange={(e) => setNewSlaRes(e.target.value)} placeholder={fr ? 'Résolution (h)' : 'Res. (h)'} />
         <button className="btn-ghost" onClick={() => saveSlaRule(newSlaTypeId || null, Number(newSlaAck), Number(newSlaRes))} disabled={slaSaving}>
           {slaSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Ajouter/mettre à jour' : 'Add/update')}
+        </button>
+      </div>
+
+      <div className="section-label">{fr ? 'Automatisations' : 'Automations'}</div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {fr
+          ? "Quand un nouveau signalement correspond à une condition, applique automatiquement une action — s'applique seulement aux NOUVEAUX incidents, jamais rétroactivement."
+          : 'When a new report matches a condition, automatically apply an action — only applies to NEW incidents, never retroactively.'}
+      </p>
+      {rules.map((r) => (
+        <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12, opacity: r.enabled ? 1 : 0.5 }}>
+          <div>
+            <strong>{r.name}</strong>
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+              {fr ? 'Si' : 'If'} {r.triggerProblemTypeName ?? (fr ? 'tout type' : 'any type')}
+              {r.triggerKeyword && <> {fr ? 'contenant' : 'containing'} « {r.triggerKeyword} »</>}
+              {' → '}
+              {r.actionPriority && <>{fr ? 'priorité' : 'priority'} {r.actionPriority}</>}
+              {r.actionPriority && r.actionAssignedTo && ', '}
+              {r.actionAssignedTo && <>{fr ? 'assigné à' : 'assigned to'} {r.actionAssignedTo}</>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => toggleRule(r.id)}>{r.enabled ? (fr ? 'Désactiver' : 'Disable') : (fr ? 'Activer' : 'Enable')}</button>
+            <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => deleteRule(r.id)}>{fr ? 'Supprimer' : 'Delete'}</button>
+          </div>
+        </div>
+      ))}
+      {ruleError && <div className="error-banner" style={{ marginTop: 8 }}>{ruleError}</div>}
+      <div style={{ marginTop: 10 }}>
+        <div className="field-group">
+          <label className="field-label">{fr ? 'Nom de la règle' : 'Rule name'}</label>
+          <input className="text-input" value={newRuleName} onChange={(e) => setNewRuleName(e.target.value)} placeholder={fr ? 'Ex. Arbre tombé sur route municipale' : 'E.g. Fallen tree on municipal road'} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <CustomSelect
+            value={newRuleTypeId}
+            onChange={setNewRuleTypeId}
+            options={[{ value: '', label: fr ? "N'importe quel type" : 'Any type' }, ...problemTypes.map((t: any) => ({ value: t.id, label: `${t.icon ?? ''} ${t.name_fr}` }))]}
+            style={{ flex: '1 1 180px' }}
+          />
+          <input className="text-input" style={{ flex: '1 1 180px' }} value={newRuleKeyword} onChange={(e) => setNewRuleKeyword(e.target.value)} placeholder={fr ? 'Mot-clé dans la description (optionnel)' : 'Keyword in description (optional)'} />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <CustomSelect
+            value={newRulePriority}
+            onChange={setNewRulePriority}
+            options={[{ value: '', label: fr ? 'Ne pas changer la priorité' : "Don't change priority" }, ...Object.entries(WO_PRIORITY_LABELS).map(([k, v]) => ({ value: k, label: `${v.icon} ${fr ? v.fr : v.en}` }))]}
+            style={{ flex: '1 1 180px' }}
+          />
+          <input className="text-input" style={{ flex: '1 1 180px' }} value={newRuleAssignedTo} onChange={(e) => setNewRuleAssignedTo(e.target.value)} placeholder={fr ? "Assigner à (optionnel)" : 'Assign to (optional)'} />
+        </div>
+        <button className="btn-primary" onClick={createRule} disabled={ruleSaving || !newRuleName.trim()}>
+          {ruleSaving ? (fr ? 'Création...' : 'Creating...') : (fr ? 'Créer la règle' : 'Create rule')}
         </button>
       </div>
 
