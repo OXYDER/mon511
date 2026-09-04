@@ -2289,7 +2289,7 @@ export class MunicipalPortalService {
   async createWorkOrder(
     userId: string,
     dto: {
-      groupKey?: string; title: string; description?: string; priority?: string; assignedTo?: string;
+      groupKey?: string; title: string; description?: string; priority?: string; assignedTo?: string; contractorId?: string;
       addressText?: string; scheduledDate?: string; dueDate?: string; estimatedHours?: number; estimatedCost?: number;
     },
   ) {
@@ -2304,6 +2304,7 @@ export class MunicipalPortalService {
         description: dto.description ?? null,
         priority: (dto.priority as any) ?? 'medium',
         assigned_to: dto.assignedTo ?? null,
+        contractor_id: dto.contractorId ?? null,
         address_text: dto.addressText ?? null,
         scheduled_date: dto.scheduledDate ?? null,
         due_date: dto.dueDate ?? null,
@@ -2365,9 +2366,11 @@ export class MunicipalPortalService {
     const order = await this.db.selectFrom('work_orders').selectAll().where('id', '=', id).where('region_id', '=', regionId).executeTakeFirst();
     if (!order) throw new NotFoundException('Bon de travail introuvable.');
 
-    const [tasks, photos, incident] = await Promise.all([
+    const [tasks, photos, documents, contractor, incident] = await Promise.all([
       this.db.selectFrom('work_order_tasks').selectAll().where('work_order_id', '=', id).orderBy('position', 'asc').execute(),
       this.db.selectFrom('work_order_photos').selectAll().where('work_order_id', '=', id).orderBy('uploaded_at', 'asc').execute(),
+      this.db.selectFrom('work_order_documents').selectAll().where('work_order_id', '=', id).orderBy('uploaded_at', 'asc').execute(),
+      order.contractor_id ? this.db.selectFrom('contractors').select(['id', 'name']).where('id', '=', order.contractor_id).executeTakeFirst() : Promise.resolve(null),
       order.group_key
         ? this.db
             .selectFrom('reports')
@@ -2379,7 +2382,7 @@ export class MunicipalPortalService {
         : Promise.resolve(null),
     ]);
 
-    return { ...order, tasks, photos, incident };
+    return { ...order, tasks, photos, documents, contractor, incident };
   }
 
   /** Modifie un bon de travail — n'importe quel champ, y compris le
@@ -2464,5 +2467,106 @@ export class MunicipalPortalService {
     const { url } = await this.uploads.uploadGenericFile('work-order-photos', file);
     await this.db.insertInto('work_order_photos').values({ work_order_id: workOrderId, url, phase: phase as any }).execute();
     return { url };
+  }
+
+  // ---------- Entrepreneurs ----------
+
+  async findMyRegionContractors(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    return this.db.selectFrom('contractors').selectAll().where('region_id', '=', regionId).orderBy('name', 'asc').execute();
+  }
+
+  async createMyRegionContractor(userId: string, dto: { name: string; specialty?: string; contactName?: string; contactEmail?: string; contactPhone?: string; notes?: string }) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const c = await this.db
+      .insertInto('contractors')
+      .values({
+        region_id: regionId, name: dto.name, specialty: dto.specialty ?? null,
+        contact_name: dto.contactName ?? null, contact_email: dto.contactEmail ?? null, contact_phone: dto.contactPhone ?? null, notes: dto.notes ?? null,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { id: c.id };
+  }
+
+  async deleteMyRegionContractor(userId: string, contractorId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const c = await this.db.selectFrom('contractors').select('id').where('id', '=', contractorId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!c) throw new NotFoundException('Entrepreneur introuvable.');
+    await this.db.deleteFrom('contractors').where('id', '=', contractorId).execute();
+    return { deleted: true };
+  }
+
+  /** Assigne (ou retire, contractorId null) un entrepreneur à un bon de
+   * travail — réutilise updateWorkOrder pour tout le reste, cette
+   * méthode gère seulement le champ contractor_id qui n'était pas dans
+   * ALLOWED_KEYS à l'origine. */
+  async assignContractorToWorkOrder(userId: string, workOrderId: string, contractorId: string | null) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', workOrderId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+    await this.db.updateTable('work_orders').set({ contractor_id: contractorId }).where('id', '=', workOrderId).execute();
+    return { updated: true };
+  }
+
+  async uploadWorkOrderDocument(userId: string, workOrderId: string, documentType: string, file: Express.Multer.File) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select('id').where('id', '=', workOrderId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    const { url } = await this.uploads.uploadGenericFile('work-order-documents', file);
+    await this.db.insertInto('work_order_documents').values({ work_order_id: workOrderId, url, filename: file.originalname, document_type: documentType as any }).execute();
+    return { url };
+  }
+
+  // ---------- Budget ----------
+
+  /** Lignes budgétaires d'une année — montant planifié stocké, montant
+   * DÉPENSÉ toujours calculé à la volée à partir des bons de travail
+   * complétés dont le titre ou la description mentionne la catégorie
+   * (rapprochement simple par mot-clé, pas de lien structurel rigide
+   * entre une ligne budgétaire et des bons de travail précis — plus
+   * flexible pour une petite municipalité qui ne voudra pas classer
+   * chaque bon dans une catégorie budgétaire figée). */
+  async getMyRegionBudget(userId: string, year: number) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const lines = await this.db.selectFrom('budget_lines').selectAll().where('region_id', '=', regionId).where('year', '=', year).orderBy('category', 'asc').execute();
+
+    const spentByCategory = await Promise.all(
+      lines.map(async (line) => {
+        const spent = await this.db
+          .selectFrom('work_orders')
+          .select(sql<number>`COALESCE(sum(actual_cost), 0)`.as('total'))
+          .where('region_id', '=', regionId)
+          .where('status', '=', 'completed')
+          .where(sql<boolean>`extract(year from completed_at) = ${year}`)
+          .where((eb) => eb.or([eb('title', 'ilike', `%${line.category}%`), eb('description', 'ilike', `%${line.category}%`)]))
+          .executeTakeFirst();
+        return { ...line, spentAmount: Number(spent?.total ?? 0) };
+      }),
+    );
+
+    const totalPlanned = lines.reduce((sum, l) => sum + Number(l.planned_amount), 0);
+    const totalSpent = spentByCategory.reduce((sum, l) => sum + l.spentAmount, 0);
+
+    return { lines: spentByCategory, totalPlanned, totalSpent };
+  }
+
+  async setMyRegionBudgetLine(userId: string, year: number, category: string, plannedAmount: number) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    await this.db
+      .insertInto('budget_lines')
+      .values({ region_id: regionId, year, category, planned_amount: plannedAmount })
+      .onConflict((oc) => oc.columns(['region_id', 'year', 'category']).doUpdateSet({ planned_amount: plannedAmount }))
+      .execute();
+    return { updated: true };
+  }
+
+  async deleteMyRegionBudgetLine(userId: string, lineId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const line = await this.db.selectFrom('budget_lines').select('id').where('id', '=', lineId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!line) throw new NotFoundException('Ligne budgétaire introuvable.');
+    await this.db.deleteFrom('budget_lines').where('id', '=', lineId).execute();
+    return { deleted: true };
   }
 }

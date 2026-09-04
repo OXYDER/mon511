@@ -101,6 +101,7 @@ export interface WorkOrdersTable {
   status: Generated<'draft' | 'scheduled' | 'in_progress' | 'completed' | 'cancelled'>;
   priority: Generated<'low' | 'medium' | 'high' | 'urgent'>;
   assigned_to: string | null;
+  contractor_id: string | null;
   address_text: string | null;
   scheduled_date: string | null;
   due_date: string | null;
@@ -113,6 +114,35 @@ export interface WorkOrdersTable {
   created_by: string;
   created_at: Generated<Timestamp>;
   updated_at: Generated<Timestamp>;
+}
+
+export interface ContractorsTable {
+  id: Generated<string>;
+  region_id: string;
+  name: string;
+  specialty: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  notes: string | null;
+  created_at: Generated<Timestamp>;
+}
+
+export interface WorkOrderDocumentsTable {
+  id: Generated<string>;
+  work_order_id: string;
+  url: string;
+  filename: string;
+  document_type: Generated<'quote' | 'invoice' | 'other'>;
+  uploaded_at: Generated<Timestamp>;
+}
+
+export interface BudgetLinesTable {
+  id: Generated<string>;
+  region_id: string;
+  year: number;
+  category: string;
+  planned_amount: Generated<number>;
 }
 
 export interface WorkOrderTasksTable {
@@ -639,6 +669,9 @@ export interface Database {
   work_orders: WorkOrdersTable;
   work_order_tasks: WorkOrderTasksTable;
   work_order_photos: WorkOrderPhotosTable;
+  contractors: ContractorsTable;
+  work_order_documents: WorkOrderDocumentsTable;
+  budget_lines: BudgetLinesTable;
   sla_rules: SlaRulesTable;
   case_number_counters: CaseNumberCountersTable;
   audit_log: AuditLogTable;

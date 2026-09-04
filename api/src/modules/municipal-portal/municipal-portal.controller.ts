@@ -528,6 +528,72 @@ export class MunicipalPortalController {
     return this.service.uploadWorkOrderPhoto(user.userId, id, phase, file);
   }
 
+  // ---------- Entrepreneurs ----------
+
+  @Get('my-region/contractors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionContractors(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionContractors(user.userId);
+  }
+
+  @Post('my-region/contractors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  createMyRegionContractor(@CurrentUser() user: CurrentUserPayload, @Body() dto: any) {
+    return this.service.createMyRegionContractor(user.userId, dto);
+  }
+
+  @Post('my-region/contractors/:contractorId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteMyRegionContractor(@Param('contractorId') contractorId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionContractor(user.userId, contractorId);
+  }
+
+  @Post('my-region/work-orders/:id/contractor')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  assignContractorToWorkOrder(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('contractorId') contractorId: string | null) {
+    return this.service.assignContractorToWorkOrder(user.userId, id, contractorId);
+  }
+
+  @Post('my-region/work-orders/:id/documents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadWorkOrderDocument(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUserPayload,
+    @Body('documentType') documentType: string,
+    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 })] })) file: Express.Multer.File,
+  ) {
+    return this.service.uploadWorkOrderDocument(user.userId, id, documentType, file);
+  }
+
+  // ---------- Budget ----------
+
+  @Get('my-region/budget')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionBudget(@CurrentUser() user: CurrentUserPayload, @Query('year') year: string) {
+    return this.service.getMyRegionBudget(user.userId, year ? Number(year) : new Date().getFullYear());
+  }
+
+  @Post('my-region/budget')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  setMyRegionBudgetLine(@CurrentUser() user: CurrentUserPayload, @Body('year') year: number, @Body('category') category: string, @Body('plannedAmount') plannedAmount: number) {
+    return this.service.setMyRegionBudgetLine(user.userId, year, category, plannedAmount);
+  }
+
+  @Post('my-region/budget/:lineId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteMyRegionBudgetLine(@Param('lineId') lineId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionBudgetLine(user.userId, lineId);
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')
