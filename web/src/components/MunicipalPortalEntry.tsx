@@ -1103,6 +1103,17 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   const [newRuleAssignedTo, setNewRuleAssignedTo] = useState('');
   const [ruleSaving, setRuleSaving] = useState(false);
   const [ruleError, setRuleError] = useState<string | null>(null);
+  const [contractors, setContractors] = useState<any[]>([]);
+  const [newContractorName, setNewContractorName] = useState('');
+  const [newContractorSpecialty, setNewContractorSpecialty] = useState('');
+  const [newContractorEmail, setNewContractorEmail] = useState('');
+  const [newContractorPhone, setNewContractorPhone] = useState('');
+  const [contractorSaving, setContractorSaving] = useState(false);
+  const [budget, setBudget] = useState<{ lines: any[]; totalPlanned: number; totalSpent: number } | null>(null);
+  const [budgetYear, setBudgetYear] = useState(new Date().getFullYear());
+  const [newBudgetCategory, setNewBudgetCategory] = useState('');
+  const [newBudgetAmount, setNewBudgetAmount] = useState('');
+  const [budgetSaving, setBudgetSaving] = useState(false);
 
   const STAT_LABELS: Record<string, string> = {
     active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
@@ -1120,6 +1131,7 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     api.get<any[]>('/municipal-portal/my-region/sla-rules').then(setSlaRules).catch(() => {});
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/automation-rules').then(setRules).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/contractors').then(setContractors).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1182,6 +1194,60 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   async function deleteRule(ruleId: string) {
     await api.post(`/municipal-portal/my-region/automation-rules/${ruleId}/delete`, {}).catch(() => {});
     loadRules();
+  }
+
+  function loadContractors() {
+    api.get<any[]>('/municipal-portal/my-region/contractors').then(setContractors).catch(() => {});
+  }
+
+  async function createContractor() {
+    setContractorSaving(true);
+    try {
+      await api.post('/municipal-portal/my-region/contractors', {
+        name: newContractorName.trim(),
+        specialty: newContractorSpecialty.trim() || undefined,
+        contactEmail: newContractorEmail.trim() || undefined,
+        contactPhone: newContractorPhone.trim() || undefined,
+      });
+      setNewContractorName('');
+      setNewContractorSpecialty('');
+      setNewContractorEmail('');
+      setNewContractorPhone('');
+      loadContractors();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setContractorSaving(false);
+    }
+  }
+
+  async function deleteContractor(contractorId: string) {
+    await api.post(`/municipal-portal/my-region/contractors/${contractorId}/delete`, {}).catch(() => {});
+    loadContractors();
+  }
+
+  function loadBudget(year: number) {
+    api.get<any>(`/municipal-portal/my-region/budget?year=${year}`).then(setBudget).catch(() => {});
+  }
+  useEffect(() => { loadBudget(budgetYear); }, [budgetYear]);
+
+  async function createBudgetLine() {
+    setBudgetSaving(true);
+    try {
+      await api.post('/municipal-portal/my-region/budget', { year: budgetYear, category: newBudgetCategory.trim(), plannedAmount: Number(newBudgetAmount) });
+      setNewBudgetCategory('');
+      setNewBudgetAmount('');
+      loadBudget(budgetYear);
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setBudgetSaving(false);
+    }
+  }
+
+  async function deleteBudgetLine(lineId: string) {
+    await api.post(`/municipal-portal/my-region/budget/${lineId}/delete`, {}).catch(() => {});
+    loadBudget(budgetYear);
   }
 
   function toggleStat(key: string) {
@@ -1346,6 +1412,58 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
         </div>
         <button className="btn-primary" onClick={createRule} disabled={ruleSaving || !newRuleName.trim()}>
           {ruleSaving ? (fr ? 'Création...' : 'Creating...') : (fr ? 'Créer la règle' : 'Create rule')}
+        </button>
+      </div>
+
+      <div className="section-label">{fr ? 'Entrepreneurs' : 'Contractors'}</div>
+      {contractors.map((c) => (
+        <div key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+          <div>
+            <strong>{c.name}</strong>
+            {c.specialty && <span style={{ color: 'var(--text-muted)' }}> — {c.specialty}</span>}
+            {(c.contact_email || c.contact_phone) && <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{[c.contact_email, c.contact_phone].filter(Boolean).join(' · ')}</div>}
+          </div>
+          <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => deleteContractor(c.id)}>{fr ? 'Supprimer' : 'Delete'}</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <input className="text-input" style={{ flex: '1 1 160px' }} value={newContractorName} onChange={(e) => setNewContractorName(e.target.value)} placeholder={fr ? 'Nom' : 'Name'} />
+        <input className="text-input" style={{ flex: '1 1 160px' }} value={newContractorSpecialty} onChange={(e) => setNewContractorSpecialty(e.target.value)} placeholder={fr ? 'Spécialité (optionnel)' : 'Specialty (optional)'} />
+        <input className="text-input" style={{ flex: '1 1 160px' }} value={newContractorEmail} onChange={(e) => setNewContractorEmail(e.target.value)} placeholder={fr ? 'Courriel (optionnel)' : 'Email (optional)'} />
+        <input className="text-input" style={{ flex: '1 1 160px' }} value={newContractorPhone} onChange={(e) => setNewContractorPhone(e.target.value)} placeholder={fr ? 'Téléphone (optionnel)' : 'Phone (optional)'} />
+        <button className="btn-ghost" onClick={createContractor} disabled={contractorSaving || !newContractorName.trim()}>
+          {contractorSaving ? (fr ? 'Ajout...' : 'Adding...') : (fr ? 'Ajouter' : 'Add')}
+        </button>
+      </div>
+
+      <div className="section-label">{fr ? 'Budget' : 'Budget'}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setBudgetYear((y) => y - 1)}>←</button>
+        <strong>{budgetYear}</strong>
+        <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setBudgetYear((y) => y + 1)}>→</button>
+      </div>
+      {budget && (
+        <>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 12, fontSize: 12.5 }}>
+            <div>{fr ? 'Planifié' : 'Planned'}: <strong>{budget.totalPlanned.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}</strong></div>
+            <div>{fr ? 'Dépensé' : 'Spent'}: <strong style={{ color: budget.totalSpent > budget.totalPlanned ? 'var(--accent-signal)' : 'var(--status-resolved)' }}>{budget.totalSpent.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}</strong></div>
+          </div>
+          {budget.lines.map((l) => (
+            <div key={l.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+              <span>{l.category}</span>
+              <span>
+                {Number(l.spentAmount).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })} / {Number(l.planned_amount).toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}
+              </span>
+              <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => deleteBudgetLine(l.id)}>{fr ? 'Supprimer' : 'Delete'}</button>
+            </div>
+          ))}
+        </>
+      )}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <input className="text-input" style={{ flex: '1 1 200px' }} value={newBudgetCategory} onChange={(e) => setNewBudgetCategory(e.target.value)} placeholder={fr ? 'Catégorie (ex. Déneigement)' : 'Category (e.g. Snow removal)'} />
+        <input className="text-input" type="number" style={{ width: 140 }} value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} placeholder={fr ? 'Montant planifié ($)' : 'Planned amount ($)'} />
+        <button className="btn-ghost" onClick={createBudgetLine} disabled={budgetSaving || !newBudgetCategory.trim()}>
+          {budgetSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Ajouter/mettre à jour' : 'Add/update')}
         </button>
       </div>
 
@@ -1598,12 +1716,16 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [contractors, setContractors] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   function load() {
     api.get<any>(`/municipal-portal/my-region/work-orders/${id}`).then(setDetail).catch(() => {});
   }
   useEffect(load, [id]);
+  useEffect(() => {
+    api.get<any[]>('/municipal-portal/my-region/contractors').then(setContractors).catch(() => {});
+  }, []);
 
   async function patch(changes: Record<string, any>) {
     setSaving(true);
@@ -1639,6 +1761,19 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
     form.append('file', file);
     form.append('phase', phase);
     await api.post(`/municipal-portal/my-region/work-orders/${id}/photos`, form).catch(() => {});
+    load();
+  }
+
+  async function assignContractor(contractorId: string) {
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/contractor`, { contractorId: contractorId || null }).catch(() => {});
+    load();
+  }
+
+  async function uploadDocument(documentType: string, file: File) {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('documentType', documentType);
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/documents`, form).catch(() => {});
     load();
   }
 
@@ -1697,6 +1832,14 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
       <div className="field-group">
         <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
         <input className="text-input" defaultValue={detail.assigned_to ?? ''} onBlur={(e) => patch({ assignedTo: e.target.value })} />
+      </div>
+      <div className="field-group">
+        <label className="field-label">{fr ? 'Entrepreneur' : 'Contractor'}</label>
+        <CustomSelect
+          value={detail.contractor_id ?? ''}
+          onChange={assignContractor}
+          options={[{ value: '', label: fr ? 'Aucun (travail interne)' : 'None (in-house work)' }, ...contractors.map((c) => ({ value: c.id, label: c.name }))]}
+        />
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <div className="field-group" style={{ flex: 1 }}>
@@ -1760,6 +1903,24 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
             <label className="btn-ghost" style={{ fontSize: 11, cursor: 'pointer' }}>
               + {fr ? 'Ajouter' : 'Add'}
               <input type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(phase, f); e.target.value = ''; }} />
+            </label>
+          </div>
+        </div>
+      ))}
+
+      <div className="section-label">{fr ? 'Documents (soumissions, factures)' : 'Documents (quotes, invoices)'}</div>
+      {(['quote', 'invoice', 'other'] as const).map((docType) => (
+        <div key={docType} style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+            {docType === 'quote' ? (fr ? 'Soumission' : 'Quote') : docType === 'invoice' ? (fr ? 'Facture' : 'Invoice') : (fr ? 'Autre' : 'Other')}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {detail.documents.filter((d: any) => d.document_type === docType).map((d: any) => (
+              <a key={d.id} href={d.url} target="_blank" rel="noopener noreferrer" className="btn-ghost" style={{ fontSize: 11 }}>📄 {d.filename}</a>
+            ))}
+            <label className="btn-ghost" style={{ fontSize: 11, cursor: 'pointer' }}>
+              + {fr ? 'Ajouter' : 'Add'}
+              <input type="file" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadDocument(docType, f); e.target.value = ''; }} />
             </label>
           </div>
         </div>
