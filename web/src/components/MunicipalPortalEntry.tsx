@@ -367,7 +367,7 @@ function DashboardView({ lang, regionName, onNavigateToItem }: { lang: 'fr' | 'e
 function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang: 'fr' | 'en'; pendingNavTarget?: { type: 'incident' | 'work_order'; groupKey: string } | null; onNavTargetConsumed?: () => void }) {
   const [groups, setGroups] = useState<any[]>([]);
   const [detailKey, setDetailKey] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'table' | 'grid' | 'map' | 'kanban'>('list');
   const [sortBy, setSortBy] = useState<'lastReportedAt' | 'reportCount' | 'problemTypeNameFr'>('lastReportedAt');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -411,6 +411,18 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
     return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // Changement de statut par glisser-déposer (vue Kanban) — appelle la
+  // même route que le changement de statut détaillé, juste sans passer
+  // par la fiche complète.
+  async function moveToStatus(groupKey: string, internalStatus: string) {
+    setGroups((prev) => prev.map((g) => (g.groupKey === groupKey ? { ...g, internalStatus } : g))); // optimiste
+    try {
+      await api.patch(`/municipal-portal/my-region/incidents/${groupKey}/tracking`, { internalStatus });
+    } catch {
+      load(); // en cas d'échec, on resynchronise avec le serveur plutôt que de garder un état optimiste faux
+    }
+  }
 
   if (detailKey) {
     return <IncidentDetailScreen lang={lang} groupKey={detailKey} onBack={() => { setDetailKey(null); load(); }} />;
@@ -478,6 +490,7 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
     { key: 'list', icon: '☰', label: { fr: 'Liste', en: 'List' } },
     { key: 'table', icon: '▤', label: { fr: 'Tableau', en: 'Table' } },
     { key: 'grid', icon: '▦', label: { fr: 'Grille', en: 'Grid' } },
+    { key: 'kanban', icon: '▥', label: { fr: 'Kanban', en: 'Kanban' } },
     { key: 'map', icon: '⌖', label: { fr: 'Carte', en: 'Map' } },
   ];
 
@@ -618,6 +631,44 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
       {viewMode === 'map' && (
         <div style={{ borderRadius: 10, overflow: 'hidden' }}>
           <MapView center={mapCenter} pins={mapPins} height={480} theme="dark" />
+        </div>
+      )}
+
+      {viewMode === 'kanban' && (
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+          {INTERNAL_STATUS_OPTIONS.map((col) => {
+            const colGroups = sorted.filter((g) => (g.internalStatus ?? 'new') === col.key);
+            return (
+              <div
+                key={col.key}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const groupKey = e.dataTransfer.getData('text/plain');
+                  if (groupKey) moveToStatus(groupKey, col.key);
+                }}
+                style={{ flex: '0 0 240px', background: 'var(--panel-hover)', borderRadius: 10, padding: 8, minHeight: 200 }}
+              >
+                <div style={{ fontSize: 11.5, fontWeight: 700, marginBottom: 8, padding: '2px 4px' }}>
+                  {col.icon} {fr ? col.label.fr : col.label.en} ({colGroups.length})
+                </div>
+                {colGroups.map((g) => (
+                  <div
+                    key={g.groupKey}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData('text/plain', g.groupKey)}
+                    onClick={() => setDetailKey(g.groupKey)}
+                    style={{ background: 'var(--panel-solid)', border: '1px solid var(--panel-border)', borderRadius: 8, padding: 8, marginBottom: 6, cursor: 'grab', fontSize: 11 }}
+                  >
+                    <div style={{ fontWeight: 600, marginBottom: 3 }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr}</div>
+                    <div style={{ color: 'var(--text-muted)', marginBottom: 3, fontSize: 10.5 }}>{g.addressText ?? '—'}</div>
+                    {priorityBadge(g.priority)}
+                    {g.caseNumber && <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3 }}>{g.caseNumber}</div>}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
