@@ -2032,6 +2032,138 @@ export class MunicipalPortalService {
    * municipalité (enabledStats) — même fonction utilisée pour le vrai
    * envoi périodique et pour le test manuel, garantit que le test
    * reflète fidèlement ce qui sera vraiment envoyé. */
+  // ---------- Rapport exécutif ----------
+
+  /** Point d'entrée public pour le contrôleur — génère les données ET
+   * le rendu HTML en un seul appel, sans exposer renderExecutiveReportHtml
+   * (privée, même esprit que renderReportStatsHtml). */
+  async getExecutiveReportHtml(userId: string, periodStart: Date, periodEnd: Date): Promise<string> {
+    const report = await this.generateExecutiveReport(userId, periodStart, periodEnd);
+    return this.renderExecutiveReportHtml(report);
+  }
+
+  /** Rapport condensé pour une réunion du conseil municipal ou la
+   * direction générale — au-delà des statistiques déjà offertes dans
+   * les rapports périodiques : conformité SLA, délai médian (pas
+   * seulement moyen — moins sensible aux cas extrêmes), coûts des
+   * interventions, tendance par rapport à la période précédente de
+   * même longueur. */
+  async generateExecutiveReport(userId: string, periodStart: Date, periodEnd: Date) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_stats');
+    const baseStats = await this.computeReportStats(regionId, periodStart, periodEnd);
+
+    const periodLengthMs = periodEnd.getTime() - periodStart.getTime();
+    const previousPeriodStart = new Date(periodStart.getTime() - periodLengthMs);
+    const previousPeriodEnd = new Date(periodStart.getTime());
+
+    const [medianResolution, slaCompliance, costSummary, previousPeriodCounts] = await Promise.all([
+      // Médian plutôt que moyen — un seul cas extrême (ex. un dossier
+      // oublié 200 jours) ne fausse pas la lecture globale.
+      sql<{ medianDays: number | null }>`
+        SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch from (resolved_at - created_at)) / 86400) AS "medianDays"
+        FROM reports
+        WHERE region_id = ${regionId} AND status = 'published_resolved' AND resolved_at BETWEEN ${periodStart} AND ${periodEnd}
+      `.execute(this.db).then((r) => r.rows[0]?.medianDays ?? null),
+
+      // Conformité SLA — parmi les incidents RÉSOLUS durant la
+      // période, quelle proportion l'a été dans le délai cible.
+      sql<{ total: number; onTime: number }>`
+        SELECT count(*) AS total, count(*) FILTER (WHERE r.resolved_at <= r.created_at + (COALESCE(sr.target_resolution_hours, sr_default.target_resolution_hours, 336) || ' hours')::interval) AS "onTime"
+        FROM reports r
+        LEFT JOIN sla_rules sr ON sr.region_id = r.region_id AND sr.problem_type_id = r.problem_type_id
+        LEFT JOIN sla_rules sr_default ON sr_default.region_id = r.region_id AND sr_default.problem_type_id IS NULL
+        WHERE r.region_id = ${regionId} AND r.status = 'published_resolved' AND r.resolved_at BETWEEN ${periodStart} AND ${periodEnd}
+      `.execute(this.db).then((r) => r.rows[0] ?? { total: 0, onTime: 0 }),
+
+      // Coûts réels des bons de travail complétés durant la période.
+      this.db
+        .selectFrom('work_orders')
+        .select([sql<number>`COALESCE(sum(actual_cost), 0)`.as('totalActualCost'), sql<number>`COALESCE(sum(actual_hours), 0)`.as('totalActualHours'), sql<number>`count(*)`.as('completedCount')])
+        .where('region_id', '=', regionId)
+        .where('status', '=', 'completed')
+        .where('completed_at', '>=', periodStart as any)
+        .where('completed_at', '<=', periodEnd as any)
+        .executeTakeFirst(),
+
+      // Tendance — même durée de période, juste avant.
+      this.db
+        .selectFrom('reports')
+        .select([
+          sql<number>`count(*) FILTER (WHERE created_at BETWEEN ${previousPeriodStart} AND ${previousPeriodEnd})`.as('previousNew'),
+          sql<number>`count(*) FILTER (WHERE resolved_at BETWEEN ${previousPeriodStart} AND ${previousPeriodEnd})`.as('previousResolved'),
+        ])
+        .where('region_id', '=', regionId)
+        .executeTakeFirst(),
+    ]);
+
+    const slaComplianceRate = slaCompliance.total > 0 ? Math.round((Number(slaCompliance.onTime) / Number(slaCompliance.total)) * 100) : null;
+
+    return {
+      ...baseStats,
+      periodStart,
+      periodEnd,
+      medianResolutionDays: medianResolution !== null ? Math.round(Number(medianResolution) * 10) / 10 : null,
+      slaComplianceRate,
+      slaLateCount: slaCompliance.total > 0 ? Number(slaCompliance.total) - Number(slaCompliance.onTime) : 0,
+      costSummary: {
+        totalActualCost: Number(costSummary?.totalActualCost ?? 0),
+        totalActualHours: Number(costSummary?.totalActualHours ?? 0),
+        completedWorkOrders: Number(costSummary?.completedCount ?? 0),
+      },
+      trend: {
+        newChange: baseStats.newPeriod - Number(previousPeriodCounts?.previousNew ?? 0),
+        resolvedChange: baseStats.resolvedPeriod - Number(previousPeriodCounts?.previousResolved ?? 0),
+      },
+    };
+  }
+
+  /** Rendu HTML du rapport exécutif — plus dense et formel que le
+   * rapport périodique habituel, pensé pour être imprimé ou joint à un
+   * ordre du jour de conseil municipal. */
+  private renderExecutiveReportHtml(report: Awaited<ReturnType<MunicipalPortalService['generateExecutiveReport']>>): string {
+    const fmtDate = (d: Date) => new Date(d).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' });
+    const trendArrow = (n: number) => (n > 0 ? `▲ +${n}` : n < 0 ? `▼ ${n}` : '— 0');
+
+    const zoneRows = report.problematicZones
+      .slice(0, 5)
+      .map((z: any) => `<tr><td style="padding:5px 8px;">${z.streetName}</td><td style="padding:5px 8px;text-align:right;">${z.count}</td></tr>`)
+      .join('');
+    const typeRows = report.activeByType
+      .slice(0, 8)
+      .map((t: any) => `<tr><td style="padding:5px 8px;">${t.icon ?? '📍'} ${t.typeName}</td><td style="padding:5px 8px;text-align:right;">${t.count}</td></tr>`)
+      .join('');
+
+    return `
+      <div style="font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#222;">
+        <h1 style="font-size:20px;margin-bottom:2px;">Rapport exécutif — ${report.regionName}</h1>
+        <p style="font-size:12.5px;color:#666;margin-top:0;">Période du ${fmtDate(report.periodStart)} au ${fmtDate(report.periodEnd)}</p>
+
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+          <tr>
+            <td style="padding:10px;text-align:center;background:#F5F5F5;border-radius:8px;"><div style="font-size:22px;font-weight:700;">${report.newPeriod}</div><div style="font-size:11px;color:#777;">Nouveaux cas</div></td>
+            <td style="padding:10px;text-align:center;background:#F5F5F5;border-radius:8px;"><div style="font-size:22px;font-weight:700;color:#3BD16F;">${report.resolvedPeriod}</div><div style="font-size:11px;color:#777;">Résolus</div></td>
+            <td style="padding:10px;text-align:center;background:#F5F5F5;border-radius:8px;"><div style="font-size:22px;font-weight:700;">${report.slaComplianceRate !== null ? report.slaComplianceRate + '%' : 'N/D'}</div><div style="font-size:11px;color:#777;">Conformité SLA</div></td>
+            <td style="padding:10px;text-align:center;background:#F5F5F5;border-radius:8px;"><div style="font-size:22px;font-weight:700;">${report.medianResolutionDays !== null ? report.medianResolutionDays + 'j' : 'N/D'}</div><div style="font-size:11px;color:#777;">Délai médian</div></td>
+          </tr>
+        </table>
+
+        <h3 style="font-size:14px;">Tendance par rapport à la période précédente</h3>
+        <p style="font-size:13px;">Nouveaux cas : ${trendArrow(report.trend.newChange)} · Résolutions : ${trendArrow(report.trend.resolvedChange)}</p>
+
+        <h3 style="font-size:14px;">Coûts des interventions</h3>
+        <p style="font-size:13px;">${report.costSummary.completedWorkOrders} bon(s) de travail complété(s) — ${report.costSummary.totalActualCost.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })} · ${report.costSummary.totalActualHours} heures</p>
+
+        <h3 style="font-size:14px;">Principaux types de signalements actifs</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">${typeRows || '<tr><td style="padding:5px 8px;">Aucun</td></tr>'}</table>
+
+        <h3 style="font-size:14px;">Zones les plus problématiques</h3>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">${zoneRows || '<tr><td style="padding:5px 8px;">Aucune</td></tr>'}</table>
+
+        ${report.slaLateCount > 0 ? `<p style="font-size:12px;color:#E8730C;margin-top:16px;">⚠️ ${report.slaLateCount} dossier(s) résolu(s) hors du délai cible durant cette période.</p>` : ''}
+      </div>
+    `;
+  }
+
   private renderReportStatsHtml(stats: Awaited<ReturnType<MunicipalPortalService['computeReportStats']>>, enabledStats: string[]): string {
     const section = (title: string, content: string) =>
       `<div style="margin:20px 0;"><h3 style="font-size:15px;margin:0 0 8px;">${title}</h3>${content}</div>`;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { api } from '../api';
+import { api, getToken, API_URL } from '../api';
 import MapView, { MapPin } from './MapView';
 import CustomSelect from './CustomSelect';
 
@@ -1192,6 +1192,19 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     });
   }
 
+  async function openExecutiveReport() {
+    const periodEnd = new Date();
+    const periodStart = new Date();
+    periodStart.setDate(periodStart.getDate() - 30);
+    const params = new URLSearchParams({ periodStart: periodStart.toISOString(), periodEnd: periodEnd.toISOString() });
+    const res = await fetch(`${API_URL}/municipal-portal/my-region/executive-report?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    const html = await res.text();
+    const blob = new Blob([html], { type: 'text/html' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  }
+
   async function save() {
     if (!reportSettings) return;
     setSaving(true);
@@ -1210,6 +1223,16 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
 
   return (
     <div>
+      <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{fr ? 'Rapport exécutif' : 'Executive report'}</div>
+        <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 8 }}>
+          {fr
+            ? "Résumé condensé pour une réunion du conseil municipal — conformité SLA, délai médian, coûts des interventions, tendance vs période précédente. 30 derniers jours."
+            : 'Condensed summary for a council meeting — SLA compliance, median delay, intervention costs, trend vs previous period. Last 30 days.'}
+        </p>
+        <button className="btn-ghost" onClick={openExecutiveReport}>📄 {fr ? 'Ouvrir le rapport exécutif' : 'Open executive report'}</button>
+      </div>
+
       <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Rapport périodique' : 'Periodic report'}</div>
       <div className="privacy-row">
         <span>{fr ? 'Activer le rapport périodique' : 'Enable periodic report'}</span>

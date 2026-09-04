@@ -446,6 +446,17 @@ export class MunicipalPortalController {
     res.send('\uFEFF' + csv); // BOM pour un bon affichage des accents dans Excel
   }
 
+  @Get('my-region/executive-report')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  async getExecutiveReport(@CurrentUser() user: CurrentUserPayload, @Query('periodStart') periodStart: string, @Query('periodEnd') periodEnd: string, @Res() res: Response) {
+    const start = periodStart ? new Date(periodStart) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = periodEnd ? new Date(periodEnd) : new Date();
+    const html = await this.service.getExecutiveReportHtml(user.userId, start, end);
+    res.send(html);
+  }
+
   // ---------- Bons de travail (Interventions) ----------
 
   @Post('my-region/work-orders')
