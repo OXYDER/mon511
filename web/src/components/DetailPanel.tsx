@@ -65,10 +65,10 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
     }
   }
 
-  async function confirm() {
+  async function confirm(confirmationType: 'still_present' | 'more_dangerous' | 'seems_fixed') {
     if (!authenticated) return onRequireAuth();
     try {
-      await api.post(`/reports/${reportId}/confirm`);
+      await api.post(`/reports/${reportId}/confirm`, { confirmationType });
       setFeedback(lang === 'fr' ? 'Confirmation enregistrée. Merci !' : 'Confirmation recorded. Thank you!');
     } catch (err) {
       setError(err instanceof Error ? err.message : (lang === 'fr' ? 'Action impossible.' : 'Action not possible.'));
@@ -269,8 +269,10 @@ export default function DetailPanel({ reportId, onClose, onChanged, authenticate
 
           {feedback && <div className="success-banner">{feedback}</div>}
 
-          <div className="action-row" style={{ margin: '14px 0' }}>
-            <button className="btn-ghost" onClick={confirm}>👍 {lang === 'fr' ? 'Présent' : 'Present'}</button>
+          <div className="action-row" style={{ margin: '14px 0', flexWrap: 'wrap' }}>
+            <button className="btn-ghost" onClick={() => confirm('still_present')} style={{ fontSize: 11.5 }}>👍 {lang === 'fr' ? 'Toujours présent' : 'Still present'}</button>
+            <button className="btn-ghost" onClick={() => confirm('more_dangerous')} style={{ fontSize: 11.5 }}>⚠️ {lang === 'fr' ? 'Plus dangereux' : 'More dangerous'}</button>
+            <button className="btn-ghost" onClick={() => confirm('seems_fixed')} style={{ fontSize: 11.5 }}>✅ {lang === 'fr' ? 'Semble réparé' : 'Seems fixed'}</button>
             <button className="btn-ghost" onClick={suggestResolved}>✔ {lang === 'fr' ? 'Résolu' : 'Resolved'}</button>
             <button className="btn-ghost btn-danger" onClick={flag}>🚩</button>
           </div>

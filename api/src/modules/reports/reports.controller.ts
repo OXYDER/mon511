@@ -76,8 +76,8 @@ export class ReportsController {
 
   @Post(':id/confirm')
   @UseGuards(JwtAuthGuard)
-  confirm(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-    return this.reportsService.confirm(id, user.userId);
+  confirm(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('confirmationType') confirmationType?: 'still_present' | 'more_dangerous' | 'seems_fixed') {
+    return this.reportsService.confirm(id, user.userId, confirmationType);
   }
 
   @Post(':id/flag')

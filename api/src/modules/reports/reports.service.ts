@@ -721,34 +721,38 @@ export class ReportsService {
   /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
 
   /** Confirmation communautaire ("je confirme que ce problème existe toujours"). */
-  async confirm(reportId: string, userId: string) {
-    const result = await this.db
-      .insertInto('report_confirmations')
-      .values({ report_id: reportId, user_id: userId })
-      .onConflict((oc) => oc.doNothing())
-      .executeTakeFirst();
+  async confirm(reportId: string, userId: string, confirmationType: 'still_present' | 'more_dangerous' | 'seems_fixed' = 'still_present') {
+    const existing = await this.db.selectFrom('report_confirmations').select('confirmation_type').where('report_id', '=', reportId).where('user_id', '=', userId).executeTakeFirst();
 
-    // Seulement si c'est une vraie nouvelle confirmation (pas un doublon ignoré).
-    const isNew = !!result.numInsertedOrUpdatedRows && result.numInsertedOrUpdatedRows > 0n;
+    await this.db
+      .insertInto('report_confirmations')
+      .values({ report_id: reportId, user_id: userId, confirmation_type: confirmationType })
+      .onConflict((oc) => oc.columns(['report_id', 'user_id']).doUpdateSet({ confirmation_type: confirmationType, created_at: new Date() as any }))
+      .execute();
+
+    // Nouvelle confirmation (pas déjà confirmé) OU changement de type
+    // (ex. « toujours là » → « semble réparé ») — dans les deux cas, le
+    // compte à rebours d'archivage automatique est remis à zéro.
+    const isNew = !existing;
     if (isNew) {
       const report = await this.db.selectFrom('reports').select('user_id').where('id', '=', reportId).executeTakeFirst();
       await this.reputationService.award(userId, 'gave_confirmation', reportId);
       if (report?.user_id) await this.reputationService.award(report.user_id, 'report_confirmed_by_other', reportId, userId);
-      // Remet le compteur de fraîcheur à zéro — évite l'archivage automatique
-      // du cycle de vie (voir LifecycleService) tant que quelqu'un confirme
-      // régulièrement que le problème existe encore.
-      await this.db
-        .updateTable('reports')
-        .set({ last_confirmed_at: new Date() as any, staleness_reminder_sent_at: null as any })
-        .where('id', '=', reportId)
-        .execute();
     }
+    // Remet le compteur de fraîcheur à zéro — évite l'archivage automatique
+    // du cycle de vie (voir LifecycleService) tant que quelqu'un confirme
+    // régulièrement que le problème existe encore.
+    await this.db
+      .updateTable('reports')
+      .set({ last_confirmed_at: new Date() as any, staleness_reminder_sent_at: null as any })
+      .where('id', '=', reportId)
+      .execute();
 
     // Ne jamais retourner l'objet brut de Kysely — il contient un compteur
     // de type BigInt (numInsertedOrUpdatedRows) qu'Express/JSON.stringify
     // ne sait pas sérialiser, ce qui faisait planter la requête avec une
     // erreur 500 opaque côté client.
-    return { confirmed: isNew };
+    return { confirmed: isNew, confirmationType };
   }
 
   /** Confirmation via le lien reçu par courriel (rappel à 30 jours) — pas

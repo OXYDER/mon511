@@ -536,12 +536,23 @@ export class MunicipalPortalService {
     if (!incident || incident.priority_overridden) return; // pas un vrai incident, ou déjà fixé manuellement
 
     const problemType = await this.db.selectFrom('problem_types').select('default_severity').where('id', '=', incident.problem_type_id).executeTakeFirst();
+
+    // Confirmations pondérées — « plus dangereux » compte davantage
+    // que « toujours là » (signal plus fort de gravité réelle), et
+    // seules les confirmations des 60 derniers jours contribuent au
+    // score (une confirmation vieille de plusieurs mois en dit moins
+    // sur l'état ACTUEL du problème). « Semble réparé » ne contribue
+    // jamais au score — un citoyen qui pense que c'est réparé ne
+    // devrait pas faire GRIMPER la priorité, et baisser automatiquement
+    // la priorité sur cette seule base serait risqué sans validation
+    // municipale.
     const confirmations = await this.db
       .selectFrom('report_confirmations')
       .innerJoin('reports', 'reports.id', 'report_confirmations.report_id')
-      .select(sql<number>`count(*)`.as('count'))
+      .select(['report_confirmations.confirmation_type as confirmationType'])
       .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${groupKey}`)
-      .executeTakeFirst();
+      .where(sql<boolean>`report_confirmations.created_at > now() - interval '60 days'`)
+      .execute();
 
     const SEVERITY_BASE: Record<string, number> = { low: 20, medium: 50, high: 80 };
     const baseSeverity = SEVERITY_BASE[problemType?.default_severity ?? 'medium'] ?? 50;
@@ -549,8 +560,9 @@ export class MunicipalPortalService {
     const ageDays = Math.floor((Date.now() - new Date(incident.first_reported_at as any).getTime()) / (1000 * 60 * 60 * 24));
     const ageBonus = Math.min(ageDays, 30); // +1 point/jour, plafonné à 30
 
-    const confirmationCount = Number(confirmations?.count ?? 0);
-    const confirmationBonus = Math.min(confirmationCount * 5, 25); // +5 points/confirmation, plafonné à 25
+    const stillPresentCount = confirmations.filter((c) => c.confirmationType === 'still_present').length;
+    const moreDangerousCount = confirmations.filter((c) => c.confirmationType === 'more_dangerous').length;
+    const confirmationBonus = Math.min(stillPresentCount * 5 + moreDangerousCount * 8, 30); // plafonné à 30
 
     const score = Math.min(Math.round(baseSeverity * 0.6 + ageBonus + confirmationBonus), 100);
     const priority = score >= 81 ? 'urgent' : score >= 56 ? 'high' : score >= 31 ? 'medium' : 'low';
@@ -560,7 +572,7 @@ export class MunicipalPortalService {
       .set({
         priority: priority as any,
         priority_score: score,
-        priority_factors: JSON.stringify({ baseSeverity, ageDays, ageBonus, confirmationCount, confirmationBonus }) as any,
+        priority_factors: JSON.stringify({ baseSeverity, ageDays, ageBonus, stillPresentCount, moreDangerousCount, confirmationBonus }) as any,
       })
       .where('id', '=', groupKey)
       .execute();

@@ -255,6 +255,7 @@ export interface ReportConfirmationsTable {
   id: Generated<string>;
   report_id: string;
   user_id: string;
+  confirmation_type: Generated<'still_present' | 'more_dangerous' | 'seems_fixed'>;
   created_at: Generated<Timestamp>;
 }
 
