@@ -1598,6 +1598,15 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
  * précédent, devenu insuffisant une fois qu'on veut vraiment gérer un
  * incident (pas juste voir la liste des signalements qui le
  * composent). */
+const COMMUNICATION_TEMPLATE_LABELS: Record<string, { fr: string; en: string }> = {
+  acknowledgment: { fr: 'Accusé de réception', en: 'Acknowledgment' },
+  inspection_scheduled: { fr: 'Inspection prévue', en: 'Inspection scheduled' },
+  work_planned: { fr: 'Travaux planifiés', en: 'Work planned' },
+  work_done: { fr: 'Travaux terminés', en: 'Work done' },
+  out_of_jurisdiction: { fr: 'Hors juridiction', en: 'Out of jurisdiction' },
+  info_request: { fr: "Demande d'information", en: 'Information request' },
+};
+
 function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; groupKey: string; onBack: () => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [notes, setNotes] = useState('');
@@ -1612,7 +1621,12 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
   const [publicStatusSaving, setPublicStatusSaving] = useState(false);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
   const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<any[]>('/municipal-portal/my-region/communication-templates').then(setTemplates).catch(() => {});
+  }, []);
 
   function load() {
     api.get<any>(`/municipal-portal/my-region/incidents/${groupKey}/detail`).then((d) => {
@@ -1814,6 +1828,19 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
       </div>
       {pendingStatus && (
         <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 20 }}>
+          {templates.length > 0 && (
+            <div className="field-group" style={{ marginBottom: 8 }}>
+              <label className="field-label">{fr ? 'Utiliser un modèle (optionnel)' : 'Use a template (optional)'}</label>
+              <CustomSelect
+                value=""
+                onChange={(key) => { const t = templates.find((x) => x.templateKey === key); if (t) setPublicNote(t.body); }}
+                options={[
+                  { value: '', label: fr ? 'Choisir un modèle...' : 'Choose a template...' },
+                  ...templates.map((t) => ({ value: t.templateKey, label: COMMUNICATION_TEMPLATE_LABELS[t.templateKey] ? (fr ? COMMUNICATION_TEMPLATE_LABELS[t.templateKey].fr : COMMUNICATION_TEMPLATE_LABELS[t.templateKey].en) : t.templateKey })),
+                ]}
+              />
+            </div>
+          )}
           <div className="field-group" style={{ marginBottom: 8 }}>
             <label className="field-label">{fr ? 'Note sur ce changement (optionnel)' : 'Note about this change (optional)'}</label>
             <textarea rows={2} value={publicNote} onChange={(e) => setPublicNote(e.target.value)} placeholder={fr ? 'Ex. Réparation prévue mardi prochain' : 'E.g. Repair scheduled for next Tuesday'} />
