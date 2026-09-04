@@ -22,5 +22,6 @@ import { UploadsModule } from '../uploads/uploads.module';
   ],
   controllers: [MunicipalPortalController],
   providers: [MunicipalPortalService],
+  exports: [MunicipalPortalService],
 })
 export class MunicipalPortalModule {}

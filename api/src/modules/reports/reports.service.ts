@@ -8,6 +8,7 @@ import { ReputationService } from '../reputation/reputation.service';
 import { EmailService } from '../../email/email.service';
 import { formatDisplayName } from '../../common/display-name.util';
 import { PostsService } from '../posts/posts.service';
+import { MunicipalPortalService } from '../municipal-portal/municipal-portal.service';
 
 @Injectable()
 export class ReportsService {
@@ -17,6 +18,7 @@ export class ReportsService {
     private readonly reputationService: ReputationService,
     private readonly email: EmailService,
     private readonly posts: PostsService,
+    private readonly municipalPortal: MunicipalPortalService,
   ) {}
 
   /**
@@ -463,6 +465,11 @@ export class ReportsService {
   }
 
   async create(userId: string | null, dto: CreateReportDto) {
+    // Capturé hors de la transaction (incidentId lui-même est déclaré
+    // à l'intérieur, inaccessible après) — nécessaire pour appliquer
+    // les automatisations une fois la transaction confirmée.
+    let capturedIncidentId: string | null = null;
+    let capturedRegionId: string | null = null;
     const report = await this.db.transaction().execute(async (trx) => {
       let region = await trx
         .selectFrom('regions')
@@ -535,6 +542,8 @@ export class ReportsService {
             .executeTakeFirstOrThrow();
           incidentId = newIncident.id;
         }
+        capturedIncidentId = incidentId;
+        capturedRegionId = region.id;
       }
 
       const report = await trx
@@ -588,6 +597,19 @@ export class ReportsService {
       // Jamais pour un signalement anonyme (userId null), qui n'a pas
       // d'auteur à qui attribuer la publication.
       this.posts.createPost(userId, { category: 'road_conditions', visibility: 'public', reportId: report.id }).catch(() => {});
+    }
+
+    // Automatisations "Quand → Si → Alors" — seulement pour un NOUVEL
+    // incident (capturedIncidentId non nul), jamais pour un signalement
+    // simplement rattaché à un incident déjà existant (les règles se
+    // sont déjà appliquées la première fois, pas besoin de les
+    // réappliquer à chaque nouveau signalement du même incident).
+    // S'applique peu importe si le signalement est anonyme ou non — les
+    // règles agissent sur l'incident, pas sur l'auteur.
+    if (capturedIncidentId && capturedRegionId) {
+      this.municipalPortal
+        .applyAutomationRules(capturedRegionId, capturedIncidentId, report.id, dto.problemTypeId, dto.description ?? null)
+        .catch(() => {});
     }
 
     return report;

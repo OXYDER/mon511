@@ -568,6 +568,34 @@ export class MunicipalPortalController {
     return this.service.setMyRegionCommunicationTemplate(user.userId, templateKey, body);
   }
 
+  @Get('my-region/automation-rules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionAutomationRules(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionAutomationRules(user.userId);
+  }
+
+  @Post('my-region/automation-rules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  createMyRegionAutomationRule(@CurrentUser() user: CurrentUserPayload, @Body() dto: any) {
+    return this.service.createMyRegionAutomationRule(user.userId, dto);
+  }
+
+  @Post('my-region/automation-rules/:ruleId/toggle')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  toggleMyRegionAutomationRule(@Param('ruleId') ruleId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.toggleMyRegionAutomationRule(user.userId, ruleId);
+  }
+
+  @Post('my-region/automation-rules/:ruleId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteMyRegionAutomationRule(@Param('ruleId') ruleId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionAutomationRule(user.userId, ruleId);
+  }
+
   @Post('my-region/sla-rules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')

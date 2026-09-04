@@ -407,6 +407,100 @@ export class MunicipalPortalService {
     return { updated: true };
   }
 
+  // ---------- Automatisations "Quand → Si → Alors" ----------
+
+  async findMyRegionAutomationRules(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    return this.db
+      .selectFrom('automation_rules')
+      .leftJoin('problem_types', 'problem_types.id', 'automation_rules.trigger_problem_type_id')
+      .select([
+        'automation_rules.id', 'automation_rules.name', 'automation_rules.trigger_problem_type_id as triggerProblemTypeId',
+        'problem_types.name_fr as triggerProblemTypeName', 'automation_rules.trigger_keyword as triggerKeyword',
+        'automation_rules.action_priority as actionPriority', 'automation_rules.action_assigned_to as actionAssignedTo',
+        'automation_rules.enabled',
+      ])
+      .where('automation_rules.region_id', '=', regionId)
+      .orderBy('automation_rules.created_at', 'desc')
+      .execute();
+  }
+
+  async createMyRegionAutomationRule(
+    userId: string,
+    dto: { name: string; triggerProblemTypeId?: string; triggerKeyword?: string; actionPriority?: string; actionAssignedTo?: string },
+  ) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    if (!dto.triggerProblemTypeId && !dto.triggerKeyword) {
+      throw new BadRequestException("Une règle doit avoir au moins une condition (type de problème ou mot-clé) pour ne jamais s'appliquer à absolument tout par erreur.");
+    }
+    if (!dto.actionPriority && !dto.actionAssignedTo) {
+      throw new BadRequestException('Une règle doit avoir au moins une action (priorité ou assignation).');
+    }
+    const rule = await this.db
+      .insertInto('automation_rules')
+      .values({
+        region_id: regionId, name: dto.name,
+        trigger_problem_type_id: dto.triggerProblemTypeId ?? null, trigger_keyword: dto.triggerKeyword ?? null,
+        action_priority: (dto.actionPriority as any) ?? null, action_assigned_to: dto.actionAssignedTo ?? null,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { id: rule.id };
+  }
+
+  async toggleMyRegionAutomationRule(userId: string, ruleId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    const rule = await this.db.selectFrom('automation_rules').select('enabled').where('id', '=', ruleId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!rule) throw new NotFoundException('Règle introuvable.');
+    await this.db.updateTable('automation_rules').set({ enabled: !rule.enabled }).where('id', '=', ruleId).execute();
+    return { enabled: !rule.enabled };
+  }
+
+  async deleteMyRegionAutomationRule(userId: string, ruleId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    const rule = await this.db.selectFrom('automation_rules').select('id').where('id', '=', ruleId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!rule) throw new NotFoundException('Règle introuvable.');
+    await this.db.deleteFrom('automation_rules').where('id', '=', ruleId).execute();
+    return { deleted: true };
+  }
+
+  /** Applique les règles actives d'une municipalité à un incident
+   * NOUVELLEMENT CRÉÉ — jamais rétroactif sur les incidents existants,
+   * pour rester prévisible (une règle créée aujourd'hui ne devrait pas
+   * silencieusement changer la priorité de centaines d'incidents
+   * passés). Appelée depuis reports.service.ts au moment de la
+   * création d'un incident. Plusieurs règles peuvent s'appliquer —
+   * chacune applique ses actions, la dernière règle traitée "gagne"
+   * en cas de conflit sur le même champ. reportId est le VRAI
+   * signalement représentatif (report_municipal_tracking.report_id y
+   * fait référence, jamais à l'incident lui-même). */
+  async applyAutomationRules(regionId: string, groupKey: string, reportId: string, problemTypeId: string, description: string | null) {
+    const rules = await this.db
+      .selectFrom('automation_rules')
+      .selectAll()
+      .where('region_id', '=', regionId)
+      .where('enabled', '=', true)
+      .execute();
+
+    for (const rule of rules) {
+      const typeMatches = !rule.trigger_problem_type_id || rule.trigger_problem_type_id === problemTypeId;
+      const keywordMatches = !rule.trigger_keyword || (description?.toLowerCase().includes(rule.trigger_keyword.toLowerCase()) ?? false);
+      if (!typeMatches || !keywordMatches) continue;
+
+      if (rule.action_priority) {
+        await this.db.updateTable('incidents').set({ priority: rule.action_priority, priority_overridden: true }).where('id', '=', groupKey).execute();
+      }
+      if (rule.action_assigned_to) {
+        await this.db
+          .insertInto('report_municipal_tracking')
+          .values({ report_id: reportId, region_id: regionId, assigned_to: rule.action_assigned_to })
+          .onConflict((oc) => oc.column('report_id').doUpdateSet({ assigned_to: rule.action_assigned_to }))
+          .execute();
+      }
+      await this.logAudit(regionId, null, 'automation_applied', 'incident', groupKey, { rule: rule.name });
+    }
+  }
+
   /** Permissions effectives de l'usager courant — pour que le frontend
    * sache quoi afficher/cacher dans la navigation latérale. Un
    * municipal_admin a toujours tout à true. */

@@ -172,6 +172,18 @@ export interface IncidentsTable {
   created_at: Generated<Timestamp>;
 }
 
+export interface AutomationRulesTable {
+  id: Generated<string>;
+  region_id: string;
+  name: string;
+  trigger_problem_type_id: string | null;
+  trigger_keyword: string | null;
+  action_priority: 'low' | 'medium' | 'high' | 'urgent' | null;
+  action_assigned_to: string | null;
+  enabled: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+}
+
 export interface CommunicationTemplatesTable {
   id: Generated<string>;
   region_id: string;
@@ -631,6 +643,7 @@ export interface Database {
   case_number_counters: CaseNumberCountersTable;
   audit_log: AuditLogTable;
   communication_templates: CommunicationTemplatesTable;
+  automation_rules: AutomationRulesTable;
   reports: ReportsTable;
   report_photos: ReportPhotosTable;
   report_confirmations: ReportConfirmationsTable;
