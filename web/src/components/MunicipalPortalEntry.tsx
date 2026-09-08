@@ -124,7 +124,7 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
           </div>
 
           <div style={{ flex: 1, minWidth: 0, maxWidth: 1100 }}>
-            {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} onNavigateToItem={(type, groupKey) => { setPendingNavTarget({ type, groupKey }); setTab(type === 'incident' ? 'reports' : 'interventions'); }} />}
+            {tab === 'dashboard' && <DashboardView lang={lang} regionName={status.regionName} onNavigateToItem={(type, groupKey) => { setPendingNavTarget({ type, groupKey }); setTab(type === 'incident' ? 'reports' : 'interventions'); }} onNavigateToTab={setTab} />}
             {tab === 'reports' && <ReportsListView lang={lang} pendingNavTarget={tab === 'reports' ? pendingNavTarget : null} onNavTargetConsumed={() => setPendingNavTarget(null)} />}
             {tab === 'settings' && <ReportSettingsView lang={lang} />}
             {tab === 'stats' && <StatsView lang={lang} />}
@@ -267,15 +267,29 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
 ];
 
 
-function DashboardView({ lang, regionName, onNavigateToItem }: { lang: 'fr' | 'en'; regionName?: string; onNavigateToItem: (type: 'incident' | 'work_order', groupKey: string) => void }) {
+function DashboardView({ lang, regionName, onNavigateToItem, onNavigateToTab }: { lang: 'fr' | 'en'; regionName?: string; onNavigateToItem: (type: 'incident' | 'work_order', groupKey: string) => void; onNavigateToTab: (tab: string) => void }) {
   const [data, setData] = useState<any>(null);
   const [toProcess, setToProcess] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [searching, setSearching] = useState(false);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any>('/municipal-portal/my-region/dashboard').then(setData).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/to-process').then(setToProcess).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) { setSearchResults(null); return; }
+    setSearching(true);
+    const timeout = setTimeout(() => {
+      api.get<any>(`/municipal-portal/my-region/search?q=${encodeURIComponent(searchQuery.trim())}`)
+        .then(setSearchResults)
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [searchQuery]);
 
   if (!data) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
 
@@ -294,6 +308,72 @@ function DashboardView({ lang, regionName, onNavigateToItem }: { lang: 'fr' | 'e
       <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 18 }}>
         {fr ? "Voici l'état actuel de votre territoire." : "Here's the current state of your territory."}
       </div>
+
+      <input
+        className="text-input"
+        style={{ marginBottom: searchResults ? 10 : 20 }}
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder={fr ? '🔍 Rechercher — adresse, dossier, bon de travail, personne, document...' : '🔍 Search — address, case, work order, person, document...'}
+      />
+      {searchResults && (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+          {searching && <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{fr ? 'Recherche...' : 'Searching...'}</div>}
+          {!searching && Object.values(searchResults).every((arr: any) => arr.length === 0) && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{fr ? 'Aucun résultat.' : 'No results.'}</div>
+          )}
+          {searchResults.incidents.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{fr ? 'SIGNALEMENTS/INCIDENTS' : 'REPORTS/INCIDENTS'}</div>
+              {searchResults.incidents.map((r: any) => (
+                <div key={r.groupKey} onClick={() => onNavigateToItem('incident', r.groupKey)} style={{ fontSize: 12, padding: '5px 0', cursor: 'pointer' }}>
+                  {r.icon ?? '📍'} {r.typeName} — {r.addressText ?? '—'}{r.caseNumber && <span style={{ color: 'var(--text-muted)' }}> · {r.caseNumber}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {searchResults.workOrders.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{fr ? 'BONS DE TRAVAIL' : 'WORK ORDERS'}</div>
+              {searchResults.workOrders.map((r: any) => (
+                <div key={r.id} onClick={() => onNavigateToItem('work_order', r.id)} style={{ fontSize: 12, padding: '5px 0', cursor: 'pointer' }}>
+                  🔧 {r.title} {r.addressText && <span style={{ color: 'var(--text-muted)' }}>— {r.addressText}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {searchResults.contractors.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{fr ? 'ENTREPRENEURS' : 'CONTRACTORS'}</div>
+              {searchResults.contractors.map((r: any) => (
+                <div key={r.id} onClick={() => onNavigateToTab('settings')} style={{ fontSize: 12, padding: '5px 0', cursor: 'pointer' }}>
+                  🏗️ {r.name}{r.specialty && <span style={{ color: 'var(--text-muted)' }}> — {r.specialty}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {searchResults.team.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{fr ? 'ÉQUIPE' : 'TEAM'}</div>
+              {searchResults.team.map((r: any) => (
+                <div key={r.id} onClick={() => onNavigateToTab('team')} style={{ fontSize: 12, padding: '5px 0', cursor: 'pointer' }}>
+                  👤 {r.firstName} {r.lastName} <span style={{ color: 'var(--text-muted)' }}>({r.email})</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {searchResults.documents.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{fr ? 'DOCUMENTS' : 'DOCUMENTS'}</div>
+              {searchResults.documents.map((r: any) => (
+                <div key={r.id} onClick={() => onNavigateToItem('work_order', r.workOrderId)} style={{ fontSize: 12, padding: '5px 0', cursor: 'pointer' }}>
+                  📄 {r.filename} <span style={{ color: 'var(--text-muted)' }}>— {r.workOrderTitle}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {toProcess.length > 0 && (
         <div style={{ background: 'var(--accent-signal-dim)', border: '1px solid var(--accent-signal)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
