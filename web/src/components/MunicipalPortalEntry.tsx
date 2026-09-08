@@ -454,7 +454,32 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
   const [sortBy, setSortBy] = useState<'lastReportedAt' | 'reportCount' | 'problemTypeNameFr'>('lastReportedAt');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showAddToWorkOrder, setShowAddToWorkOrder] = useState(false);
+  const [existingOrders, setExistingOrders] = useState<any[]>([]);
+  const [creatingGroupedOrder, setCreatingGroupedOrder] = useState(false);
   const fr = lang === 'fr';
+
+  function toggleSelect(groupKey: string) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
+
+  function openAddToWorkOrder() {
+    api.get<any[]>('/municipal-portal/my-region/work-orders?status=scheduled').then(setExistingOrders).catch(() => {});
+    setShowAddToWorkOrder(true);
+  }
+
+  async function confirmAddToWorkOrder(workOrderId: string) {
+    await api.post(`/municipal-portal/my-region/work-orders/${workOrderId}/incidents`, { groupKeys: Array.from(selectedKeys) }).catch(() => {});
+    setShowAddToWorkOrder(false);
+    setSelectedKeys(new Set());
+    load();
+  }
 
   // Navigation croisée depuis une autre section (ex. la file "À
   // traiter" du tableau de bord) — ouvre directement cette fiche, puis
@@ -509,6 +534,17 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
 
   if (detailKey) {
     return <IncidentDetailScreen lang={lang} groupKey={detailKey} onBack={() => { setDetailKey(null); load(); }} />;
+  }
+
+  if (creatingGroupedOrder) {
+    return (
+      <WorkOrderCreateForm
+        lang={lang}
+        groupKeys={Array.from(selectedKeys)}
+        onCreated={() => { setCreatingGroupedOrder(false); setSelectedKeys(new Set()); load(); }}
+        onCancel={() => setCreatingGroupedOrder(false)}
+      />
+    );
   }
 
   const sorted = [...groups].sort((a, b) => {
@@ -634,6 +670,13 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
                 onClick={() => setDetailKey(g.groupKey)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12.5, cursor: 'pointer' }}
               >
+                <input
+                  type="checkbox"
+                  checked={selectedKeys.has(g.groupKey)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelect(g.groupKey)}
+                  style={{ flexShrink: 0 }}
+                />
                 {g.thumbnailUrl ? <img src={g.thumbnailUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} /> : <div style={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--panel-hover)', borderRadius: 6 }}>{g.problemTypeIcon ?? '📍'}</div>}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600 }}>{g.problemTypeIcon ?? '📍'} {g.problemTypeNameFr} — {g.addressText ?? '—'}{g.caseNumber && <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}> · {g.caseNumber}</span>}</div>
@@ -752,6 +795,30 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
               </div>
             );
           })}
+        </div>
+      )}
+
+      {selectedKeys.size > 0 && (
+        <div style={{ position: 'sticky', bottom: 0, background: 'var(--panel-solid)', border: '1px solid var(--accent-signal)', borderRadius: 12, padding: 12, marginTop: 14, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', boxShadow: 'var(--shadow-panel)' }}>
+          <strong style={{ fontSize: 12.5 }}>{selectedKeys.size} {fr ? 'sélectionné(s)' : 'selected'}</strong>
+          <button className="btn-ghost" style={{ fontSize: 12 }} onClick={openAddToWorkOrder}>{fr ? 'Ajouter à un bon existant' : 'Add to existing order'}</button>
+          <button className="btn-primary" style={{ width: 'auto', fontSize: 12 }} onClick={() => setCreatingGroupedOrder(true)}>{fr ? 'Créer un nouveau bon de travail' : 'Create new work order'}</button>
+          <button className="btn-ghost" style={{ fontSize: 12, marginLeft: 'auto' }} onClick={() => setSelectedKeys(new Set())}>{fr ? 'Désélectionner' : 'Deselect'}</button>
+        </div>
+      )}
+
+      {showAddToWorkOrder && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000 }} onClick={() => setShowAddToWorkOrder(false)}>
+          <div style={{ background: 'var(--panel-solid)', borderRadius: 12, padding: 16, width: 340, maxHeight: '70vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Ajouter à quel bon de travail?' : 'Add to which work order?'}</div>
+            {existingOrders.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun bon planifié en ce moment.' : 'No scheduled orders right now.'}</div>}
+            {existingOrders.map((o) => (
+              <div key={o.id} onClick={() => confirmAddToWorkOrder(o.id)} style={{ padding: '8px 4px', borderBottom: '1px solid var(--panel-border)', cursor: 'pointer', fontSize: 12.5 }}>
+                🔧 {o.title}
+              </div>
+            ))}
+            <button className="btn-ghost" style={{ marginTop: 10, fontSize: 12 }} onClick={() => setShowAddToWorkOrder(false)}>{fr ? 'Annuler' : 'Cancel'}</button>
+          </div>
         </div>
       )}
     </div>
@@ -1942,7 +2009,7 @@ function WorkOrdersListView({ lang, pendingNavTarget, onNavTargetConsumed }: { l
 
 /** Formulaire de création — depuis un incident existant (groupKey
  * fourni) ou complètement libre (adresse saisie directement). */
-function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'fr' | 'en'; groupKey?: string; onCreated: (id: string) => void; onCancel: () => void }) {
+function WorkOrderCreateForm({ lang, groupKey, groupKeys, onCreated, onCancel }: { lang: 'fr' | 'en'; groupKey?: string; groupKeys?: string[]; onCreated: (id: string) => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState('medium');
@@ -1968,6 +2035,7 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
     try {
       const r = await api.post<{ id: string }>('/municipal-portal/my-region/work-orders', {
         groupKey,
+        groupKeys,
         title: title.trim(),
         description: description.trim() || undefined,
         priority,
@@ -1990,6 +2058,11 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
     <div>
       <button className="btn-ghost" style={{ marginBottom: 14, fontSize: 12.5 }} onClick={onCancel}>← {fr ? 'Annuler' : 'Cancel'}</button>
       <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Nouveau bon de travail' : 'New work order'}</div>
+      {groupKeys && groupKeys.length > 1 && (
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+          {fr ? `${groupKeys.length} signalements seront regroupés dans ce bon de travail.` : `${groupKeys.length} reports will be grouped into this work order.`}
+        </p>
+      )}
       {error && <div className="error-banner">{error}</div>}
 
       <div className="field-group">
@@ -2000,7 +2073,7 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
         <label className="field-label">{fr ? 'Description' : 'Description'}</label>
         <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
       </div>
-      {!groupKey && (
+      {!groupKey && !groupKeys?.length && (
         <div className="field-group">
           <label className="field-label">{fr ? 'Adresse' : 'Address'}</label>
           <input className="text-input" value={addressText} onChange={(e) => setAddressText(e.target.value)} placeholder={fr ? "Ex. Entretien préventif — pas lié à un signalement" : 'E.g. Preventive maintenance — not linked to a report'} />
@@ -2233,7 +2306,20 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
         <div>
           <div style={{ fontSize: 17, fontWeight: 700 }}>{detail.title}</div>
           <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-            {detail.incident ? `${detail.incident.icon ?? '📍'} ${detail.incident.typeName} — ${detail.incident.addressText ?? '—'}` : (detail.address_text ?? (fr ? 'Aucune adresse' : 'No address'))}
+            {detail.incidents && detail.incidents.length > 1 ? (
+              <>
+                {detail.incidents.length} {fr ? 'signalements regroupés :' : 'grouped reports:'}
+                <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                  {detail.incidents.map((inc: any) => (
+                    <li key={inc.groupKey}>{inc.icon ?? '📍'} {inc.typeName} — {inc.addressText ?? '—'}</li>
+                  ))}
+                </ul>
+              </>
+            ) : detail.incident ? (
+              `${detail.incident.icon ?? '📍'} ${detail.incident.typeName} — ${detail.incident.addressText ?? '—'}`
+            ) : (
+              detail.address_text ?? (fr ? 'Aucune adresse' : 'No address')
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
