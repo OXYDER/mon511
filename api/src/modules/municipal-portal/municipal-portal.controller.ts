@@ -643,6 +643,13 @@ export class MunicipalPortalController {
     return this.service.findMyRegionRecurringLocations(user.userId);
   }
 
+  @Get('my-region/field-mode')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionFieldModeOrders(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionFieldModeOrders(user.userId);
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')

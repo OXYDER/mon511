@@ -2734,4 +2734,55 @@ export class MunicipalPortalService {
 
     return rows.map((r) => ({ ...r, cumulativeCost: Number(r.cumulativeCost) }));
   }
+
+  // ---------- Mode terrain ----------
+
+  /** Bons de travail actifs (planifiés ou en cours) avec coordonnées
+   * réelles quand disponibles (uniquement pour les bons liés à un
+   * incident — un bon libre n'a qu'une adresse texte, jamais
+   * géocodée), ordonnés en tournée par plus proche voisin (méthode
+   * gloutonne simple, pas un vrai calcul d'itinéraire routier — un
+   * ordre raisonnable, pas nécessairement optimal au sens strict).
+   * NOTE HONNÊTE : ceci n'est PAS un vrai mode hors connexion avec
+   * synchronisation (aucune infrastructure PWA/service worker dans ce
+   * projet actuellement) — une vue simplifiée pensée pour le mobile,
+   * rien de plus. */
+  async findMyRegionFieldModeOrders(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
+
+    const orders = await sql<{
+      id: string; title: string; status: string; priority: string; addressText: string | null;
+      groupKey: string | null; lat: number | null; lng: number | null;
+    }>`
+      SELECT wo.id, wo.title, wo.status, wo.priority, wo.address_text AS "addressText", wo.group_key AS "groupKey",
+        ST_Y(i.location::geometry) AS lat, ST_X(i.location::geometry) AS lng
+      FROM work_orders wo
+      LEFT JOIN incidents i ON i.id::text = wo.group_key
+      WHERE wo.region_id = ${regionId} AND wo.status IN ('scheduled', 'in_progress')
+      ORDER BY wo.due_date ASC NULLS LAST, wo.created_at ASC
+    `.execute(this.db).then((r) => r.rows);
+
+    // Tournée par plus proche voisin — seulement parmi les bons AVEC
+    // coordonnées ; les bons sans coordonnées (adresse libre, jamais
+    // géocodée) restent à la fin, dans leur ordre d'origine.
+    const withCoords = orders.filter((o) => o.lat !== null && o.lng !== null);
+    const withoutCoords = orders.filter((o) => o.lat === null || o.lng === null);
+    const route: typeof withCoords = [];
+    const remaining = [...withCoords];
+    if (remaining.length > 0) {
+      route.push(remaining.shift()!);
+      while (remaining.length > 0) {
+        const last = route[route.length - 1];
+        let nearestIdx = 0;
+        let nearestDist = Infinity;
+        for (let i = 0; i < remaining.length; i++) {
+          const d = Math.hypot(remaining[i].lat! - last.lat!, remaining[i].lng! - last.lng!);
+          if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+        }
+        route.push(remaining.splice(nearestIdx, 1)[0]);
+      }
+    }
+
+    return [...route, ...withoutCoords];
+  }
 }
