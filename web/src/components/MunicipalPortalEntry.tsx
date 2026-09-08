@@ -786,10 +786,12 @@ function StatsView({ lang }: { lang: 'fr' | 'en' }) {
 
 function ComparativesView({ lang }: { lang: 'fr' | 'en' }) {
   const [data, setData] = useState<any>(null);
+  const [sectorStats, setSectorStats] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any>('/municipal-portal/my-region/comparatives').then(setData).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/sector-stats').then(setSectorStats).catch(() => {});
   }, []);
 
   if (!data) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
@@ -840,9 +842,31 @@ function ComparativesView({ lang }: { lang: 'fr' | 'en' }) {
           ))}
         </div>
       </div>
+
+      {sectorStats.length > 0 && (
+        <>
+          <div className="section-label">{fr ? 'Comparaison entre secteurs' : 'Comparison between sectors'}</div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+            {fr ? 'Volume et performance par secteur (configurables dans Paramètres).' : 'Volume and performance by sector (configurable in Settings).'}
+          </p>
+          {sectorStats.map((s) => (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+                <strong>{s.name}</strong>
+              </div>
+              <span style={{ color: 'var(--text-muted)' }}>
+                {s.totalIncidents} {fr ? 'incidents' : 'incidents'} · {s.resolvedIncidents} {fr ? 'résolus' : 'resolved'}
+                {s.avgResolutionDays !== null && <> · {fr ? 'délai moyen' : 'avg delay'} {s.avgResolutionDays}j</>}
+              </span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
+
 
 const RANK_LABELS: Record<string, { fr: string; en: string; icon: string }> = {
   director: { fr: 'Directeur', en: 'Director', icon: '⭐' },
@@ -1114,6 +1138,12 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   const [newBudgetCategory, setNewBudgetCategory] = useState('');
   const [newBudgetAmount, setNewBudgetAmount] = useState('');
   const [budgetSaving, setBudgetSaving] = useState(false);
+  const [sectors, setSectors] = useState<any[]>([]);
+  const [newSectorName, setNewSectorName] = useState('');
+  const [newSectorColor, setNewSectorColor] = useState('#FF5A1F');
+  const [newSectorKeywords, setNewSectorKeywords] = useState('');
+  const [sectorSaving, setSectorSaving] = useState(false);
+  const [sectorError, setSectorError] = useState<string | null>(null);
 
   const STAT_LABELS: Record<string, string> = {
     active_by_type: fr ? 'Signalements actifs par type' : 'Active reports by type',
@@ -1132,6 +1162,7 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
     api.get<any[]>('/problem-types').then(setProblemTypes).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/automation-rules').then(setRules).catch(() => {});
     api.get<any[]>('/municipal-portal/my-region/contractors').then(setContractors).catch(() => {});
+    api.get<any[]>('/municipal-portal/my-region/sectors').then(setSectors).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -1248,6 +1279,31 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
   async function deleteBudgetLine(lineId: string) {
     await api.post(`/municipal-portal/my-region/budget/${lineId}/delete`, {}).catch(() => {});
     loadBudget(budgetYear);
+  }
+
+  function loadSectors() {
+    api.get<any[]>('/municipal-portal/my-region/sectors').then(setSectors).catch(() => {});
+  }
+
+  async function createSector() {
+    setSectorSaving(true);
+    setSectorError(null);
+    try {
+      const keywords = newSectorKeywords.split(',').map((k) => k.trim()).filter(Boolean);
+      await api.post('/municipal-portal/my-region/sectors', { name: newSectorName.trim(), color: newSectorColor, streetKeywords: keywords });
+      setNewSectorName('');
+      setNewSectorKeywords('');
+      loadSectors();
+    } catch (err) {
+      setSectorError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setSectorSaving(false);
+    }
+  }
+
+  async function deleteSector(sectorId: string) {
+    await api.post(`/municipal-portal/my-region/sectors/${sectorId}/delete`, {}).catch(() => {});
+    loadSectors();
   }
 
   function toggleStat(key: string) {
@@ -1464,6 +1520,32 @@ function ReportSettingsView({ lang }: { lang: 'fr' | 'en' }) {
         <input className="text-input" type="number" style={{ width: 140 }} value={newBudgetAmount} onChange={(e) => setNewBudgetAmount(e.target.value)} placeholder={fr ? 'Montant planifié ($)' : 'Planned amount ($)'} />
         <button className="btn-ghost" onClick={createBudgetLine} disabled={budgetSaving || !newBudgetCategory.trim()}>
           {budgetSaving ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Ajouter/mettre à jour' : 'Add/update')}
+        </button>
+      </div>
+
+      <div className="section-label">{fr ? 'Secteurs municipaux' : 'Municipal sectors'}</div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+        {fr
+          ? "Associe automatiquement un NOUVEL incident au premier secteur dont un mot-clé de rue correspond à son adresse — jamais rétroactif. Utile pour comparer volume et performance entre secteurs (voir Comparatifs)."
+          : 'Automatically associates a NEW incident with the first sector whose street keyword matches its address — never retroactive. Useful for comparing volume and performance between sectors (see Comparatives).'}
+      </p>
+      {sectorError && <div className="error-banner" style={{ marginBottom: 8 }}>{sectorError}</div>}
+      {sectors.map((s) => (
+        <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--panel-border)', fontSize: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 12, height: 12, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
+            <strong>{s.name}</strong>
+            <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>{s.street_keywords.join(', ')}</span>
+          </div>
+          <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => deleteSector(s.id)}>{fr ? 'Supprimer' : 'Delete'}</button>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input className="text-input" style={{ flex: '1 1 160px' }} value={newSectorName} onChange={(e) => setNewSectorName(e.target.value)} placeholder={fr ? 'Nom du secteur' : 'Sector name'} />
+        <input type="color" value={newSectorColor} onChange={(e) => setNewSectorColor(e.target.value)} style={{ width: 40, height: 34, padding: 2, border: '1px solid var(--panel-border)', borderRadius: 8, background: 'none', cursor: 'pointer' }} />
+        <input className="text-input" style={{ flex: '1 1 220px' }} value={newSectorKeywords} onChange={(e) => setNewSectorKeywords(e.target.value)} placeholder={fr ? 'Mots-clés séparés par des virgules' : 'Comma-separated keywords'} />
+        <button className="btn-ghost" onClick={createSector} disabled={sectorSaving || !newSectorName.trim() || !newSectorKeywords.trim()}>
+          {sectorSaving ? (fr ? 'Création...' : 'Creating...') : (fr ? 'Créer' : 'Create')}
         </button>
       </div>
 
