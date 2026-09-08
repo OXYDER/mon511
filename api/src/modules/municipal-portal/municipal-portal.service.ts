@@ -2341,17 +2341,23 @@ export class MunicipalPortalService {
   async createWorkOrder(
     userId: string,
     dto: {
-      groupKey?: string; title: string; description?: string; priority?: string; assignedTo?: string; contractorId?: string;
+      groupKey?: string; groupKeys?: string[]; title: string; description?: string; priority?: string; assignedTo?: string; contractorId?: string;
       addressText?: string; scheduledDate?: string; dueDate?: string; estimatedHours?: number; estimatedCost?: number;
     },
   ) {
     const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
 
+    // Compatibilité — l'ancien champ singulier (bouton "Créer un bon de
+    // travail" depuis la fiche d'un incident) continue de fonctionner,
+    // le nouveau tableau (sélection multiple depuis "Tous les
+    // signalements") est simplement normalisé vers la même forme.
+    const allGroupKeys = dto.groupKeys && dto.groupKeys.length > 0 ? dto.groupKeys : dto.groupKey ? [dto.groupKey] : [];
+
     const order = await this.db
       .insertInto('work_orders')
       .values({
         region_id: regionId,
-        group_key: dto.groupKey ?? null,
+        group_key: allGroupKeys[0] ?? null,
         title: dto.title,
         description: dto.description ?? null,
         priority: (dto.priority as any) ?? 'medium',
@@ -2367,7 +2373,41 @@ export class MunicipalPortalService {
       .returning('id')
       .executeTakeFirstOrThrow();
 
+    if (allGroupKeys.length > 0) {
+      await this.db
+        .insertInto('work_order_incidents')
+        .values(allGroupKeys.map((gk) => ({ work_order_id: order.id, group_key: gk })))
+        .execute();
+    }
+
     return { id: order.id };
+  }
+
+  /** Ajoute des incidents supplémentaires à un bon de travail DÉJÀ
+   * existant — pour la sélection multiple depuis "Tous les
+   * signalements" avec l'option "Ajouter à un bon existant". Ignore
+   * silencieusement les incidents déjà liés (clé primaire composite
+   * empêche le doublon). */
+  async addIncidentsToWorkOrder(userId: string, workOrderId: string, groupKeys: string[]) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const order = await this.db.selectFrom('work_orders').select(['id', 'group_key']).where('id', '=', workOrderId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!order) throw new NotFoundException('Bon de travail introuvable.');
+
+    await this.db
+      .insertInto('work_order_incidents')
+      .values(groupKeys.map((gk) => ({ work_order_id: workOrderId, group_key: gk })))
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+
+    // Si le bon n'avait encore aucun incident lié (group_key était
+    // null), le premier incident ajouté devient le "principal" — pour
+    // que le mode terrain et la détection d'emplacements récurrents
+    // (qui ne connaissent qu'un seul lien) continuent de fonctionner.
+    if (!order.group_key) {
+      await this.db.updateTable('work_orders').set({ group_key: groupKeys[0] }).where('id', '=', workOrderId).execute();
+    }
+
+    return { updated: true };
   }
 
   /** Liste des bons de travail de la municipalité — avec filtres
@@ -2418,23 +2458,29 @@ export class MunicipalPortalService {
     const order = await this.db.selectFrom('work_orders').selectAll().where('id', '=', id).where('region_id', '=', regionId).executeTakeFirst();
     if (!order) throw new NotFoundException('Bon de travail introuvable.');
 
-    const [tasks, photos, documents, contractor, incident] = await Promise.all([
+    const linkedGroupKeys = await this.db.selectFrom('work_order_incidents').select('group_key').where('work_order_id', '=', id).execute().then((rows) => rows.map((r) => r.group_key));
+
+    const [tasks, photos, documents, contractor, incidents] = await Promise.all([
       this.db.selectFrom('work_order_tasks').selectAll().where('work_order_id', '=', id).orderBy('position', 'asc').execute(),
       this.db.selectFrom('work_order_photos').selectAll().where('work_order_id', '=', id).orderBy('uploaded_at', 'asc').execute(),
       this.db.selectFrom('work_order_documents').selectAll().where('work_order_id', '=', id).orderBy('uploaded_at', 'asc').execute(),
       order.contractor_id ? this.db.selectFrom('contractors').select(['id', 'name']).where('id', '=', order.contractor_id).executeTakeFirst() : Promise.resolve(null),
-      order.group_key
-        ? this.db
-            .selectFrom('reports')
-            .innerJoin('problem_types', 'problem_types.id', 'reports.problem_type_id')
-            .select(['reports.address_text as addressText', 'problem_types.name_fr as typeName', 'problem_types.icon'])
-            .where(sql<boolean>`COALESCE(reports.incident_id::text, reports.id::text) = ${order.group_key}`)
-            .limit(1)
-            .executeTakeFirst()
-        : Promise.resolve(null),
+      linkedGroupKeys.length > 0
+        ? sql<{ groupKey: string; addressText: string | null; typeName: string; icon: string | null }>`
+            SELECT DISTINCT ON (COALESCE(reports.incident_id::text, reports.id::text))
+              COALESCE(reports.incident_id::text, reports.id::text) AS "groupKey", reports.address_text AS "addressText",
+              problem_types.name_fr AS "typeName", problem_types.icon
+            FROM reports
+            INNER JOIN problem_types ON problem_types.id = reports.problem_type_id
+            WHERE COALESCE(reports.incident_id::text, reports.id::text) IN (${sql.join(linkedGroupKeys)})
+          `.execute(this.db).then((r) => r.rows)
+        : Promise.resolve([]),
     ]);
 
-    return { ...order, tasks, photos, documents, contractor, incident };
+    // "incident" (singulier) conservé pour compatibilité — le premier
+    // de la liste, comme avant cette fonctionnalité. "incidents"
+    // (pluriel) est la vraie liste complète.
+    return { ...order, tasks, photos, documents, contractor, incident: incidents[0] ?? null, incidents };
   }
 
   /** Modifie un bon de travail — n'importe quel champ, y compris le

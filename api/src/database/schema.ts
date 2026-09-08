@@ -154,6 +154,11 @@ export interface BudgetLinesTable {
   planned_amount: Generated<number>;
 }
 
+export interface WorkOrderIncidentsTable {
+  work_order_id: string;
+  group_key: string;
+}
+
 export interface WorkOrderTasksTable {
   id: Generated<string>;
   work_order_id: string;
@@ -688,6 +693,7 @@ export interface Database {
   work_orders: WorkOrdersTable;
   work_order_tasks: WorkOrderTasksTable;
   work_order_photos: WorkOrderPhotosTable;
+  work_order_incidents: WorkOrderIncidentsTable;
   contractors: ContractorsTable;
   municipal_field_workers: MunicipalFieldWorkersTable;
   work_order_documents: WorkOrderDocumentsTable;

@@ -480,6 +480,13 @@ export class MunicipalPortalController {
     return this.service.createWorkOrder(user.userId, dto);
   }
 
+  @Post('my-region/work-orders/:id/incidents')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  addIncidentsToWorkOrder(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload, @Body('groupKeys') groupKeys: string[]) {
+    return this.service.addIncidentsToWorkOrder(user.userId, id, groupKeys);
+  }
+
   @Get('my-region/work-orders')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_staff', 'municipal_admin')
