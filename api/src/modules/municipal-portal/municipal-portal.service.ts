@@ -598,7 +598,8 @@ export class MunicipalPortalService {
    * municipal_admin. */
   async updateTeamMemberRank(userId: string, targetUserId: string, rank: string) {
     const { regionId } = await this.getScopeOrThrow(userId);
-    if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
+    const validRanks = (await this.getRankPermissionsForRegion(regionId)).map((r: any) => r.rank);
+    if (!validRanks.includes(rank)) {
       throw new BadRequestException('Rang invalide.');
     }
     const target = await this.db
@@ -877,7 +878,13 @@ export class MunicipalPortalService {
       employee: { can_view_dashboard: true, can_view_reports: true, can_edit_reports: false, can_view_stats: false, can_view_comparatives: false, can_manage_team: false, can_manage_settings: false },
     };
 
-    return MunicipalPortalService.RANKS.map((rank) => byRank.get(rank) ?? { region_id: regionId, rank, ...DEFAULTS[rank] });
+    // Les 3 rangs fixes en premier (défaut si pas encore configurés),
+    // suivis de tous les rôles personnalisés existants (ceux-là n'ont
+    // pas de valeur par défaut à générer — ils existent forcément déjà
+    // en base, créés explicitement via createMyRegionCustomRole).
+    const builtIn = MunicipalPortalService.RANKS.map((rank) => byRank.get(rank) ?? { region_id: regionId, rank, ...DEFAULTS[rank] });
+    const custom = existing.filter((r) => !(MunicipalPortalService.RANKS as readonly string[]).includes(r.rank));
+    return [...builtIn, ...custom];
   }
 
   /** Seul un municipal_admin peut modifier les permissions — jamais un
@@ -885,7 +892,8 @@ export class MunicipalPortalService {
    * pas s'octroyer plus de droits lui-même). */
   async updateMyRegionRankPermissions(userId: string, rank: string, permissions: Record<string, boolean>) {
     const { regionId } = await this.getScopeOrThrow(userId);
-    if (!(MunicipalPortalService.RANKS as readonly string[]).includes(rank)) {
+    const validRanks = (await this.getRankPermissionsForRegion(regionId)).map((r: any) => r.rank);
+    if (!validRanks.includes(rank)) {
       throw new BadRequestException('Rang invalide.');
     }
 
@@ -902,6 +910,50 @@ export class MunicipalPortalService {
       .execute();
 
     return this.getRankPermissionsForRegion(regionId);
+  }
+
+  /** Crée un rôle personnalisé — au-delà des trois rangs fixes
+   * (director/foreman/employee). Le nom sert directement de valeur
+   * "rank", doit donc être unique dans la municipalité (contrainte
+   * déjà garantie par UNIQUE(region_id, rank) en base). */
+  async createMyRegionCustomRole(userId: string, dto: { name: string; icon?: string; permissions: Record<string, boolean> }) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if ((MunicipalPortalService.RANKS as readonly string[]).includes(dto.name)) {
+      throw new BadRequestException('Ce nom est déjà réservé par un rang fixe.');
+    }
+    const ALLOWED_KEYS = ['can_view_dashboard', 'can_view_reports', 'can_edit_reports', 'can_view_stats', 'can_view_comparatives', 'can_manage_team', 'can_manage_settings'];
+    const values: Record<string, boolean> = {};
+    for (const key of ALLOWED_KEYS) {
+      if (typeof dto.permissions[key] === 'boolean') values[key] = dto.permissions[key];
+    }
+    try {
+      await this.db
+        .insertInto('municipal_rank_permissions')
+        .values({ region_id: regionId, rank: dto.name, display_name: dto.name, icon: dto.icon ?? '🔧', ...values })
+        .execute();
+    } catch {
+      throw new BadRequestException('Un rôle avec ce nom existe déjà.');
+    }
+    return this.getRankPermissionsForRegion(regionId);
+  }
+
+  /** Supprime un rôle personnalisé — jamais un des 3 rangs fixes
+   * (retirer director/foreman/employee casserait des hypothèses
+   * ailleurs dans le code, mieux vaut simplement leur redonner les
+   * permissions par défaut plutôt que de les faire disparaître).
+   * Refuse si des employés portent encore ce rôle — évite de laisser
+   * quelqu'un avec un rang qui n'existe plus. */
+  async deleteMyRegionCustomRole(userId: string, roleName: string) {
+    const { regionId } = await this.getScopeOrThrow(userId);
+    if ((MunicipalPortalService.RANKS as readonly string[]).includes(roleName)) {
+      throw new BadRequestException('Les trois rangs fixes ne peuvent pas être supprimés.');
+    }
+    const holders = await this.db.selectFrom('users').select('id').where('region_id', '=', regionId).where('municipal_rank', '=', roleName).execute();
+    if (holders.length > 0) {
+      throw new BadRequestException(`${holders.length} employé(s) portent encore ce rôle — change leur rang avant de le supprimer.`);
+    }
+    await this.db.deleteFrom('municipal_rank_permissions').where('region_id', '=', regionId).where('rank', '=', roleName).execute();
+    return { deleted: true };
   }
 
   /** Génère un lien d'invitation — jeton aléatoire cryptographique

@@ -159,6 +159,20 @@ export class MunicipalPortalController {
     return this.service.updateMyRegionRankPermissions(user.userId, rank, permissions);
   }
 
+  @Post('my-region/custom-roles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  createMyRegionCustomRole(@CurrentUser() user: CurrentUserPayload, @Body() dto: any) {
+    return this.service.createMyRegionCustomRole(user.userId, dto);
+  }
+
+  @Post('my-region/custom-roles/:roleName/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_admin')
+  deleteMyRegionCustomRole(@Param('roleName') roleName: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionCustomRole(user.userId, roleName);
+  }
+
   @Post('my-region/invites')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('municipal_admin')

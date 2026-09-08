@@ -35,7 +35,7 @@ export interface UsersTable {
   avatar_url: string | null;
   locale: Generated<'fr' | 'en'>;
   region_id: string | null;
-  municipal_rank: 'director' | 'foreman' | 'employee' | null;
+  municipal_rank: string | null; // 'director' | 'foreman' | 'employee' OU le nom d'un rôle personnalisé
   role_id: string;
   status: Generated<'active' | 'suspended' | 'banned'>;
   email_verified: Generated<boolean>;
@@ -82,7 +82,9 @@ export interface ProblemTypesTable {
 export interface MunicipalRankPermissionsTable {
   id: Generated<string>;
   region_id: string;
-  rank: 'director' | 'foreman' | 'employee';
+  rank: string; // 'director' | 'foreman' | 'employee' OU le nom d'un rôle personnalisé
+  display_name: string | null; // seulement pour un rôle personnalisé — les 3 rangs fixes gardent leur libellé codé en dur côté frontend
+  icon: string | null;
   can_view_dashboard: Generated<boolean>;
   can_view_reports: Generated<boolean>;
   can_edit_reports: Generated<boolean>;
