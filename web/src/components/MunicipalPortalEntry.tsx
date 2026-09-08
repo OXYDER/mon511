@@ -915,6 +915,9 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
   const [permissions, setPermissions] = useState<any[]>([]);
   const [permSaving, setPermSaving] = useState<string | null>(null);
   const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleSaving, setNewRoleSaving] = useState(false);
+  const [newRoleError, setNewRoleError] = useState<string | null>(null);
   const fr = lang === 'fr';
 
   function load() {
@@ -994,7 +997,7 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
     setPermSaving(rank);
     try {
       const p = permissions.find((x) => x.rank === rank);
-      await api.patch(`/municipal-portal/my-region/rank-permissions/${rank}`, {
+      await api.patch(`/municipal-portal/my-region/rank-permissions/${encodeURIComponent(rank)}`, {
         can_view_dashboard: p.can_view_dashboard, can_view_reports: p.can_view_reports, can_edit_reports: p.can_edit_reports,
         can_view_stats: p.can_view_stats, can_view_comparatives: p.can_view_comparatives, can_manage_team: p.can_manage_team, can_manage_settings: p.can_manage_settings,
       });
@@ -1002,6 +1005,41 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
       setFeedback(err instanceof Error ? err.message : 'Erreur.');
     } finally {
       setPermSaving(null);
+    }
+  }
+
+  function allRoleOptions() {
+    const fixed = RANKS.map((r) => ({ value: r, label: fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en }));
+    const custom = permissions
+      .filter((p) => !(RANKS as readonly string[]).includes(p.rank))
+      .map((p) => ({ value: p.rank, label: `${p.icon ?? ''} ${p.display_name ?? p.rank}`.trim() }));
+    return [...fixed, ...custom];
+  }
+
+  async function createCustomRole() {
+    setNewRoleSaving(true);
+    setNewRoleError(null);
+    try {
+      const perms = await api.post<any[]>('/municipal-portal/my-region/custom-roles', {
+        name: newRoleName.trim(),
+        permissions: { can_view_dashboard: true, can_view_reports: true, can_edit_reports: false, can_view_stats: false, can_view_comparatives: false, can_manage_team: false, can_manage_settings: false },
+      });
+      setPermissions(perms);
+      setNewRoleName('');
+    } catch (err) {
+      setNewRoleError(err instanceof Error ? err.message : 'Erreur.');
+    } finally {
+      setNewRoleSaving(false);
+    }
+  }
+
+  async function deleteCustomRole(roleName: string) {
+    setFeedback(null);
+    try {
+      await api.post(`/municipal-portal/my-region/custom-roles/${encodeURIComponent(roleName)}/delete`, {});
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erreur.');
     }
   }
 
@@ -1045,7 +1083,7 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
               <CustomSelect
                 value={m.rank ?? 'employee'}
                 onChange={(v) => changeRank(m.id, v)}
-                options={RANKS.map((r) => ({ value: r, label: fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en }))}
+                options={allRoleOptions()}
                 style={{ width: 140 }}
               />
               <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => remove(m.id)}>{fr ? 'Retirer' : 'Remove'}</button>
@@ -1066,7 +1104,7 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
             <CustomSelect
               value={inviteRank}
               onChange={setInviteRank}
-              options={RANKS.map((r) => ({ value: r, label: fr ? RANK_LABELS[r].fr : RANK_LABELS[r].en }))}
+              options={allRoleOptions()}
               style={{ width: 160 }}
             />
             <input
@@ -1130,6 +1168,37 @@ function TeamView({ lang }: { lang: 'fr' | 'en' }) {
               </div>
             );
           })}
+
+          <div className="section-label">{fr ? 'Rôles personnalisés' : 'Custom roles'}</div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+            {fr ? "Au-delà des trois rangs fixes ci-dessus — ex. « Inspecteur », « Lecture seule »." : 'Beyond the three fixed ranks above — e.g. "Inspector", "Read-only".'}
+          </p>
+          {permissions.filter((p) => !(RANKS as readonly string[]).includes(p.rank)).map((p) => (
+            <div key={p.rank} style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ fontWeight: 600, fontSize: 12.5 }}>{p.icon} {p.display_name ?? p.rank}</div>
+                <button className="btn-ghost btn-danger" style={{ fontSize: 11 }} onClick={() => deleteCustomRole(p.rank)}>{fr ? 'Supprimer' : 'Delete'}</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 4, marginBottom: 8 }}>
+                {PERMISSION_LABELS.map((pl) => (
+                  <label key={pl.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={!!p[pl.key]} onChange={() => togglePermission(p.rank, pl.key)} />
+                    {fr ? pl.fr : pl.en}
+                  </label>
+                ))}
+              </div>
+              <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => savePermissions(p.rank)} disabled={permSaving === p.rank}>
+                {permSaving === p.rank ? (fr ? 'Enregistrement...' : 'Saving...') : (fr ? 'Enregistrer' : 'Save')}
+              </button>
+            </div>
+          ))}
+          {newRoleError && <div className="error-banner" style={{ marginBottom: 8 }}>{newRoleError}</div>}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="text-input" style={{ flex: '1 1 200px' }} value={newRoleName} onChange={(e) => setNewRoleName(e.target.value)} placeholder={fr ? 'Nom du nouveau rôle' : 'New role name'} />
+            <button className="btn-ghost" onClick={createCustomRole} disabled={newRoleSaving || !newRoleName.trim()}>
+              {newRoleSaving ? (fr ? 'Création...' : 'Creating...') : (fr ? 'Créer le rôle' : 'Create role')}
+            </button>
+          </div>
         </>
       )}
     </div>
