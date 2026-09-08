@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { api, getToken, API_URL } from '../api';
 import MapView, { MapPin } from './MapView';
 import CustomSelect from './CustomSelect';
+import Lightbox from './Lightbox';
 
 interface Props {
   lang: 'fr' | 'en';
@@ -1798,6 +1799,71 @@ const WO_PRIORITY_LABELS: Record<string, { fr: string; en: string; icon: string 
   urgent: { fr: 'Urgente', en: 'Urgent', icon: '🔴' },
 };
 
+const NEW_ASSIGNEE_SENTINEL = '__new_assignee__';
+
+/** Menu déroulant d'assignation réutilisable — combine les vrais
+ * membres d'équipe et les employés de voirie (simples noms, sans
+ * compte portail), avec une option "+ Ajouter un nouvel employé" qui
+ * ouvre un petit champ inline plutôt qu'une boîte de dialogue
+ * intrusive. Utilisé aux trois endroits où une assignation existe
+ * (création de bon de travail, fiche de bon de travail, fiche
+ * d'incident) pour ne pas dupliquer cette logique trois fois. */
+function AssigneeSelect({ value, options, onChange, onOptionsChanged, lang }: { value: string; options: string[]; onChange: (name: string) => void; onOptionsChanged: (names: string[]) => void; lang: 'fr' | 'en' }) {
+  const [addingNew, setAddingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const fr = lang === 'fr';
+
+  async function confirmNewAssignee() {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      await api.post('/municipal-portal/my-region/field-workers', { name: trimmed });
+      onOptionsChanged(Array.from(new Set([...options, trimmed])));
+      onChange(trimmed);
+      setAddingNew(false);
+      setNewName('');
+    } catch {
+      // silencieux — l'usager peut réessayer, le champ reste ouvert
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (addingNew) {
+    return (
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          className="text-input"
+          style={{ flex: 1 }}
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder={fr ? 'Nom du nouvel employé' : 'New employee name'}
+          autoFocus
+          onKeyDown={(e) => e.key === 'Enter' && confirmNewAssignee()}
+        />
+        <button className="btn-ghost" style={{ fontSize: 11 }} onClick={confirmNewAssignee} disabled={saving || !newName.trim()}>
+          {fr ? 'Ajouter' : 'Add'}
+        </button>
+        <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setAddingNew(false); setNewName(''); }}>✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <CustomSelect
+      value={value}
+      onChange={(v) => (v === NEW_ASSIGNEE_SENTINEL ? setAddingNew(true) : onChange(v))}
+      options={[
+        { value: '', label: fr ? 'Non assigné' : 'Unassigned' },
+        ...options.map((n) => ({ value: n, label: n })),
+        { value: NEW_ASSIGNEE_SENTINEL, label: fr ? '+ Ajouter un nouvel employé' : '+ Add new employee' },
+      ]}
+    />
+  );
+}
+
 /** Liste des bons de travail — le "plus complet possible" demandé :
  * peuvent partir d'un incident existant OU exister librement (ex.
  * entretien préventif sans signalement citoyen). */
@@ -1888,7 +1954,12 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
   const [estimatedCost, setEstimatedCost] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assigneeOptions, setAssigneeOptions] = useState<string[]>([]);
   const fr = lang === 'fr';
+
+  useEffect(() => {
+    api.get<{ names: string[] }>('/municipal-portal/my-region/assignee-options').then((r) => setAssigneeOptions(r.names)).catch(() => {});
+  }, []);
 
   async function submit() {
     if (!title.trim()) return;
@@ -1941,7 +2012,7 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
       </div>
       <div className="field-group">
         <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
-        <input className="text-input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder={fr ? 'Nom de la personne ou de l\'équipe' : 'Name of person or team'} />
+        <AssigneeSelect value={assignedTo} options={assigneeOptions} onChange={setAssignedTo} onOptionsChanged={setAssigneeOptions} lang={lang} />
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
         <div className="field-group" style={{ flex: 1 }}>
@@ -2083,6 +2154,7 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [contractors, setContractors] = useState<any[]>([]);
   const [showQr, setShowQr] = useState(false);
+  const [assigneeOptions, setAssigneeOptions] = useState<string[]>([]);
   const fr = lang === 'fr';
 
   function load() {
@@ -2091,6 +2163,7 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
   useEffect(load, [id]);
   useEffect(() => {
     api.get<any[]>('/municipal-portal/my-region/contractors').then(setContractors).catch(() => {});
+    api.get<{ names: string[] }>('/municipal-portal/my-region/assignee-options').then((r) => setAssigneeOptions(r.names)).catch(() => {});
   }, []);
 
   async function patch(changes: Record<string, any>) {
@@ -2215,7 +2288,13 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
 
       <div className="field-group">
         <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
-        <input className="text-input" defaultValue={detail.assigned_to ?? ''} onBlur={(e) => patch({ assignedTo: e.target.value })} />
+        <AssigneeSelect
+          value={detail.assigned_to ?? ''}
+          options={assigneeOptions}
+          onChange={(name) => patch({ assignedTo: name })}
+          onOptionsChanged={setAssigneeOptions}
+          lang={lang}
+        />
       </div>
       <div className="field-group">
         <label className="field-label">{fr ? 'Entrepreneur' : 'Contractor'}</label>
@@ -2342,10 +2421,13 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
   const [publicStatusSaving, setPublicStatusSaving] = useState(false);
   const [creatingWorkOrder, setCreatingWorkOrder] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [assigneeOptions, setAssigneeOptions] = useState<string[]>([]);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any[]>('/municipal-portal/my-region/communication-templates').then(setTemplates).catch(() => {});
+    api.get<{ names: string[] }>('/municipal-portal/my-region/assignee-options').then((r) => setAssigneeOptions(r.names)).catch(() => {});
   }, []);
 
   function load() {
@@ -2583,16 +2665,19 @@ function IncidentDetailScreen({ lang, groupKey, onBack }: { lang: 'fr' | 'en'; g
         <>
           <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Photos' : 'Photos'} ({detail.photos.length})</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-            {detail.photos.map((p: any) => (
-              <img key={p.id} src={p.url} alt="" style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8 }} />
+            {detail.photos.map((p: any, i: number) => (
+              <img key={p.id} src={p.url} alt="" onClick={() => setLightboxIndex(i)} style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: 8, cursor: 'zoom-in' }} />
             ))}
           </div>
+          {lightboxIndex !== null && (
+            <Lightbox photos={detail.photos.map((p: any) => p.url)} initialIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
+          )}
         </>
       )}
 
       <div className="field-group">
         <label className="field-label">{fr ? 'Assigné à' : 'Assigned to'}</label>
-        <input className="text-input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)} placeholder={fr ? 'Nom de la personne ou de l\'équipe' : 'Name of person or team'} />
+        <AssigneeSelect value={assignedTo} options={assigneeOptions} onChange={setAssignedTo} onOptionsChanged={setAssigneeOptions} lang={lang} />
       </div>
       <div className="field-group">
         <label className="field-label">{fr ? 'Notes internes' : 'Internal notes'}</label>
