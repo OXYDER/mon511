@@ -594,6 +594,34 @@ export class MunicipalPortalController {
     return this.service.deleteMyRegionBudgetLine(user.userId, lineId);
   }
 
+  @Get('my-region/sectors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionSectors(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionSectors(user.userId);
+  }
+
+  @Post('my-region/sectors')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  createMyRegionSector(@CurrentUser() user: CurrentUserPayload, @Body() dto: any) {
+    return this.service.createMyRegionSector(user.userId, dto);
+  }
+
+  @Post('my-region/sectors/:sectorId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteMyRegionSector(@Param('sectorId') sectorId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionSector(user.userId, sectorId);
+  }
+
+  @Get('my-region/sector-stats')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionSectorStats(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionSectorStats(user.userId);
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')

@@ -2569,4 +2569,77 @@ export class MunicipalPortalService {
     await this.db.deleteFrom('budget_lines').where('id', '=', lineId).execute();
     return { deleted: true };
   }
+
+  // ---------- Secteurs municipaux ----------
+
+  async findMyRegionSectors(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    return this.db.selectFrom('municipal_sectors').selectAll().where('region_id', '=', regionId).orderBy('name', 'asc').execute();
+  }
+
+  async createMyRegionSector(userId: string, dto: { name: string; color?: string; streetKeywords: string[] }) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    if (dto.streetKeywords.length === 0) {
+      throw new BadRequestException("Un secteur doit avoir au moins un mot-clé de rue pour pouvoir y associer des incidents automatiquement.");
+    }
+    const sector = await this.db
+      .insertInto('municipal_sectors')
+      .values({ region_id: regionId, name: dto.name, color: dto.color ?? '#FF5A1F', street_keywords: dto.streetKeywords })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return { id: sector.id };
+  }
+
+  async deleteMyRegionSector(userId: string, sectorId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_manage_settings');
+    const sector = await this.db.selectFrom('municipal_sectors').select('id').where('id', '=', sectorId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!sector) throw new NotFoundException('Secteur introuvable.');
+    await this.db.deleteFrom('municipal_sectors').where('id', '=', sectorId).execute();
+    return { deleted: true };
+  }
+
+  /** Associe automatiquement un incident à un secteur — appelée à la
+   * création d'un nouvel incident (même esprit que les automatisations
+   * Quand-Si-Alors), jamais rétroactive. Le PREMIER secteur dont un
+   * mot-clé correspond gagne — si plusieurs secteurs se chevauchent,
+   * l'ordre de création départage. */
+  async assignSectorToNewIncident(regionId: string, groupKey: string, addressText: string | null) {
+    if (!addressText) return;
+    const sectors = await this.db.selectFrom('municipal_sectors').selectAll().where('region_id', '=', regionId).orderBy('created_at', 'asc').execute();
+    const addressLower = addressText.toLowerCase();
+    const match = sectors.find((s) => s.street_keywords.some((kw) => addressLower.includes(kw.toLowerCase())));
+    if (match) {
+      await this.db.updateTable('incidents').set({ sector_id: match.id }).where('id', '=', groupKey).execute();
+    }
+  }
+
+  /** Compare volume et performance entre secteurs — permet de voir si
+   * un secteur reçoit disproportionnellement plus de signalements, ou
+   * si sa résolution prend plus de temps que les autres, sans porter
+   * de jugement automatique (juste les chiffres, à interpréter par la
+   * municipalité). */
+  async getMyRegionSectorStats(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_stats');
+    const sectors = await this.db.selectFrom('municipal_sectors').selectAll().where('region_id', '=', regionId).execute();
+
+    return Promise.all(
+      sectors.map(async (sector) => {
+        const stats = await sql<{ total: number; resolved: number; avgResolutionDays: number | null }>`
+          SELECT
+            count(DISTINCT i.id) AS total,
+            count(DISTINCT i.id) FILTER (WHERE EXISTS (SELECT 1 FROM reports r WHERE r.incident_id = i.id AND r.status = 'published_resolved')) AS resolved,
+            avg(extract(epoch FROM (r2.resolved_at - r2.created_at)) / 86400) FILTER (WHERE r2.status = 'published_resolved') AS "avgResolutionDays"
+          FROM incidents i
+          LEFT JOIN reports r2 ON r2.incident_id = i.id
+          WHERE i.sector_id = ${sector.id}
+        `.execute(this.db).then((r) => r.rows[0] ?? { total: 0, resolved: 0, avgResolutionDays: null });
+
+        return {
+          id: sector.id, name: sector.name, color: sector.color,
+          totalIncidents: Number(stats.total), resolvedIncidents: Number(stats.resolved),
+          avgResolutionDays: stats.avgResolutionDays !== null ? Math.round(Number(stats.avgResolutionDays) * 10) / 10 : null,
+        };
+      }),
+    );
+  }
 }

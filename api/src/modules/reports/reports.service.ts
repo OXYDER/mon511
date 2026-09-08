@@ -607,6 +607,11 @@ export class ReportsService {
       this.municipalPortal
         .applyAutomationRules(capturedRegionId, capturedIncidentId, report.id, dto.problemTypeId, dto.description ?? null)
         .catch(() => {});
+      // Association automatique au secteur municipal — même esprit
+      // (jamais bloquant, seulement pour un nouvel incident).
+      this.municipalPortal
+        .assignSectorToNewIncident(capturedRegionId, capturedIncidentId, dto.addressText ?? null)
+        .catch(() => {});
     }
 
     return report;

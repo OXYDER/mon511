@@ -187,6 +187,15 @@ export interface IncidentStatusHistoryTable {
   changed_at: Generated<Timestamp>;
 }
 
+export interface MunicipalSectorsTable {
+  id: Generated<string>;
+  region_id: string;
+  name: string;
+  color: Generated<string>;
+  street_keywords: string[];
+  created_at: Generated<Timestamp>;
+}
+
 export interface IncidentsTable {
   id: Generated<string>;
   region_id: string | null;
@@ -197,6 +206,7 @@ export interface IncidentsTable {
   priority_overridden: Generated<boolean>;
   priority_score: number | null;
   priority_factors: unknown | null; // jsonb
+  sector_id: string | null;
   first_reported_at: Generated<Timestamp>;
   last_reported_at: Generated<Timestamp>;
   created_at: Generated<Timestamp>;
@@ -672,6 +682,7 @@ export interface Database {
   contractors: ContractorsTable;
   work_order_documents: WorkOrderDocumentsTable;
   budget_lines: BudgetLinesTable;
+  municipal_sectors: MunicipalSectorsTable;
   sla_rules: SlaRulesTable;
   case_number_counters: CaseNumberCountersTable;
   audit_log: AuditLogTable;
