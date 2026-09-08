@@ -131,6 +131,7 @@ export default function MunicipalPortalEntry({ lang, onClose }: Props) {
             {tab === 'team' && <TeamView lang={lang} />}
             {tab === 'comparatives' && <ComparativesView lang={lang} />}
             {tab === 'interventions' && <WorkOrdersListView lang={lang} pendingNavTarget={tab === 'interventions' ? pendingNavTarget : null} onNavTargetConsumed={() => setPendingNavTarget(null)} />}
+            {tab === 'field' && <FieldModeView lang={lang} />}
           </div>
         </div>
       )}
@@ -246,6 +247,7 @@ const SIDEBAR_SECTIONS: { group: string; items: { key: string; icon: string; lab
     group: 'OPÉRATIONS',
     items: [
       { key: 'interventions', icon: '▣', label: { fr: 'Interventions', en: 'Interventions' }, ready: true, permissionKey: 'can_view_reports' },
+      { key: 'field', icon: '🚗', label: { fr: 'Mode terrain', en: 'Field mode' }, ready: true, permissionKey: 'can_view_reports' },
     ],
   },
   {
@@ -1891,6 +1893,108 @@ function WorkOrderCreateForm({ lang, groupKey, onCreated, onCancel }: { lang: 'f
 /** Fiche détaillée d'un bon de travail — le plus complet possible :
  * statut, priorité, assignation, dates, heures/coûts estimés et
  * réels, notes, liste de vérification, photos avant/pendant/après. */
+/** Mode terrain — vue simplifiée et tactile pensée pour le mobile,
+ * pas un vrai mode hors connexion (voir la note dans le backend,
+ * aucune infrastructure PWA/service worker dans ce projet). Tournée
+ * déjà ordonnée par le serveur (plus proche voisin), actions rapides
+ * directement sur la carte sans ouvrir la fiche complète. */
+function FieldModeView({ lang }: { lang: 'fr' | 'en' }) {
+  const [orders, setOrders] = useState<any[]>([]);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const fr = lang === 'fr';
+
+  function load() {
+    api.get<any[]>('/municipal-portal/my-region/field-mode').then(setOrders).catch(() => {});
+  }
+  useEffect(load, []);
+
+  async function quickUpdateStatus(id: string, status: string) {
+    setBusyId(id);
+    try {
+      await api.patch(`/municipal-portal/my-region/work-orders/${id}`, { status });
+      load();
+    } catch {
+      // silencieux — l'usager voit simplement que rien n'a changé, peut réessayer
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function quickPhoto(id: string, file: File) {
+    setBusyId(id);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('phase', 'during');
+    await api.post(`/municipal-portal/my-region/work-orders/${id}/photos`, form).catch(() => {});
+    setBusyId(null);
+  }
+
+  function openRoute() {
+    const withCoords = orders.filter((o) => o.lat !== null && o.lng !== null);
+    if (withCoords.length === 0) return;
+    const waypoints = withCoords.map((o) => `${o.lat},${o.lng}`).join('/');
+    window.open(`https://www.google.com/maps/dir/${waypoints}`, '_blank');
+  }
+
+  if (detailId) {
+    return <WorkOrderDetailScreen lang={lang} id={detailId} onBack={() => { setDetailId(null); load(); }} />;
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+        <div className="section-label" style={{ marginTop: 0 }}>{fr ? 'Mode terrain' : 'Field mode'} ({orders.length})</div>
+        <button className="btn-primary" onClick={openRoute} disabled={orders.filter((o) => o.lat !== null).length === 0}>
+          🗺️ {fr ? "Ouvrir l'itinéraire" : 'Open route'}
+        </button>
+      </div>
+      <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 16 }}>
+        {fr
+          ? "Bons planifiés ou en cours, dans un ordre de tournée raisonnable (plus proche voisin, pas un calcul routier précis)."
+          : 'Scheduled or in-progress orders, in a reasonable route order (nearest neighbor, not a precise road calculation).'}
+      </p>
+
+      {orders.length === 0 && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fr ? 'Aucun bon actif.' : 'No active orders.'}</div>}
+      {orders.map((o, i) => (
+        <div key={o.id} style={{ background: 'var(--panel-hover)', borderRadius: 12, padding: 14, marginBottom: 10 }}>
+          <div onClick={() => setDetailId(o.id)} style={{ cursor: 'pointer', marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{i + 1}. {o.title}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.addressText ?? (fr ? 'Adresse non géocodée' : 'Address not geocoded')}</div>
+            {priorityBadgeStandalone(o.priority, fr)}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn-ghost" style={{ flex: '1 1 100px', fontSize: 12.5 }} onClick={() => quickUpdateStatus(o.id, 'in_progress')} disabled={busyId === o.id || o.status === 'in_progress'}>
+              ▶️ {fr ? 'Démarrer' : 'Start'}
+            </button>
+            <label className="btn-ghost" style={{ flex: '1 1 100px', fontSize: 12.5, cursor: 'pointer', textAlign: 'center' }}>
+              📷 {fr ? 'Photo' : 'Photo'}
+              <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) quickPhoto(o.id, f); e.target.value = ''; }} />
+            </label>
+            <button className="btn-primary" style={{ flex: '1 1 100px', fontSize: 12.5 }} onClick={() => quickUpdateStatus(o.id, 'completed')} disabled={busyId === o.id}>
+              ✅ {fr ? 'Terminer' : 'Finish'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Badge de priorité autonome — même rendu que priorityBadge() de
+ * ReportsListView, mais FieldModeView est un composant séparé qui n'y
+ * a pas accès directement. */
+function priorityBadgeStandalone(priority: string, fr: boolean) {
+  const map: Record<string, { icon: string; color: string; fr: string; en: string }> = {
+    low: { icon: '🔵', color: 'var(--text-muted)', fr: 'Basse', en: 'Low' },
+    medium: { icon: '🟡', color: '#D4A017', fr: 'Moyenne', en: 'Medium' },
+    high: { icon: '🟠', color: '#E8730C', fr: 'Haute', en: 'High' },
+    urgent: { icon: '🔴', color: 'var(--accent-signal)', fr: 'Urgente', en: 'Urgent' },
+  };
+  const p = map[priority] ?? map.medium;
+  return <span style={{ color: p.color, fontSize: 11, fontWeight: 600 }}>{p.icon} {fr ? p.fr : p.en}</span>;
+}
+
 function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: string; onBack: () => void }) {
   const [detail, setDetail] = useState<any>(null);
   const [newTask, setNewTask] = useState('');
@@ -1898,6 +2002,7 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
   const [feedback, setFeedback] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [contractors, setContractors] = useState<any[]>([]);
+  const [showQr, setShowQr] = useState(false);
   const fr = lang === 'fr';
 
   function load() {
@@ -1978,8 +2083,26 @@ function WorkOrderDetailScreen({ lang, id, onBack }: { lang: 'fr' | 'en'; id: st
             {detail.incident ? `${detail.incident.icon ?? '📍'} ${detail.incident.typeName} — ${detail.incident.addressText ?? '—'}` : (detail.address_text ?? (fr ? 'Aucune adresse' : 'No address'))}
           </div>
         </div>
-        <button className="btn-ghost btn-danger" style={{ fontSize: 11.5 }} onClick={() => setConfirmingDelete(true)}>{fr ? 'Supprimer' : 'Delete'}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn-ghost" style={{ fontSize: 11.5 }} onClick={() => setShowQr((v) => !v)}>🔳 {showQr ? (fr ? 'Cacher le QR' : 'Hide QR') : (fr ? 'QR pour impression' : 'QR for printing')}</button>
+          <button className="btn-ghost btn-danger" style={{ fontSize: 11.5 }} onClick={() => setConfirmingDelete(true)}>{fr ? 'Supprimer' : 'Delete'}</button>
+        </div>
       </div>
+      {showQr && (
+        <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, marginBottom: 16, textAlign: 'center' }}>
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${window.location.origin}/?workOrderId=${id}`)}`}
+            alt="QR code"
+            width={180}
+            height={180}
+          />
+          <p style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 6 }}>
+            {fr
+              ? "Généré par un service externe (qrserver.com) — le contenu du code (l'identifiant du bon) n'est pas confidentiel, mais évite d'y encoder autre chose de sensible."
+              : 'Generated by an external service (qrserver.com) — the code content (order ID) is not confidential, but avoid encoding anything else sensitive in it.'}
+          </p>
+        </div>
+      )}
       {confirmingDelete && (
         <div style={{ background: 'var(--panel-hover)', borderRadius: 10, padding: 12, margin: '10px 0' }}>
           <div style={{ fontSize: 12.5, marginBottom: 8 }}>{fr ? 'Supprimer ce bon de travail définitivement ?' : 'Permanently delete this work order?'}</div>
