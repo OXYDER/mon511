@@ -657,6 +657,27 @@ export class MunicipalPortalController {
     return this.service.globalSearch(user.userId, q ?? '');
   }
 
+  @Get('my-region/assignee-options')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  getMyRegionAssigneeOptions(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.getMyRegionAssigneeOptions(user.userId);
+  }
+
+  @Post('my-region/field-workers')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  createMyRegionFieldWorker(@CurrentUser() user: CurrentUserPayload, @Body('name') name: string) {
+    return this.service.createMyRegionFieldWorker(user.userId, name);
+  }
+
+  @Post('my-region/field-workers/:fieldWorkerId/delete')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  deleteMyRegionFieldWorker(@Param('fieldWorkerId') fieldWorkerId: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.service.deleteMyRegionFieldWorker(user.userId, fieldWorkerId);
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')

@@ -2840,4 +2840,48 @@ export class MunicipalPortalService {
 
     return { incidents, workOrders, contractors, team, documents };
   }
+
+  // ---------- Employés de voirie assignables (sans compte portail) ----------
+
+  /** Liste combinée pour peupler les listes déroulantes d'assignation
+   * — membres d'équipe RÉELS (compte portail) ET employés de voirie
+   * (simples noms, sans compte) réunis en une seule liste de noms,
+   * dédupliquée. Accessible à quiconque peut modifier des
+   * signalements (pas seulement à qui gère l'équipe — un employé doit
+   * pouvoir assigner du travail à un collègue sans avoir le droit de
+   * gérer l'équipe elle-même). */
+  async getMyRegionAssigneeOptions(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const [team, fieldWorkers] = await Promise.all([
+      this.db
+        .selectFrom('users')
+        .innerJoin('roles', 'roles.id', 'users.role_id')
+        .select(['users.first_name as firstName', 'users.last_name as lastName', 'users.email'])
+        .where('users.region_id', '=', regionId)
+        .where('roles.name', 'in', ['municipal_staff', 'municipal_admin'])
+        .execute(),
+      this.db.selectFrom('municipal_field_workers').select(['id', 'name']).where('region_id', '=', regionId).orderBy('name', 'asc').execute(),
+    ]);
+
+    const teamNames = team.map((t) => (t.firstName || t.lastName ? `${t.firstName ?? ''} ${t.lastName ?? ''}`.trim() : t.email));
+    const fieldWorkerNames = fieldWorkers.map((f) => f.name);
+    const names = Array.from(new Set([...teamNames, ...fieldWorkerNames]));
+    return { names, fieldWorkers };
+  }
+
+  async createMyRegionFieldWorker(userId: string, name: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const trimmed = name.trim();
+    if (!trimmed) throw new BadRequestException('Nom requis.');
+    await this.db.insertInto('municipal_field_workers').values({ region_id: regionId, name: trimmed }).execute();
+    return { name: trimmed };
+  }
+
+  async deleteMyRegionFieldWorker(userId: string, fieldWorkerId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_edit_reports');
+    const fw = await this.db.selectFrom('municipal_field_workers').select('id').where('id', '=', fieldWorkerId).where('region_id', '=', regionId).executeTakeFirst();
+    if (!fw) throw new NotFoundException('Employé introuvable.');
+    await this.db.deleteFrom('municipal_field_workers').where('id', '=', fieldWorkerId).execute();
+    return { deleted: true };
+  }
 }

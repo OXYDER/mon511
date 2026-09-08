@@ -118,6 +118,13 @@ export interface WorkOrdersTable {
   updated_at: Generated<Timestamp>;
 }
 
+export interface MunicipalFieldWorkersTable {
+  id: Generated<string>;
+  region_id: string;
+  name: string;
+  created_at: Generated<Timestamp>;
+}
+
 export interface ContractorsTable {
   id: Generated<string>;
   region_id: string;
@@ -682,6 +689,7 @@ export interface Database {
   work_order_tasks: WorkOrderTasksTable;
   work_order_photos: WorkOrderPhotosTable;
   contractors: ContractorsTable;
+  municipal_field_workers: MunicipalFieldWorkersTable;
   work_order_documents: WorkOrderDocumentsTable;
   budget_lines: BudgetLinesTable;
   municipal_sectors: MunicipalSectorsTable;
