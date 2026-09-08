@@ -650,6 +650,13 @@ export class MunicipalPortalController {
     return this.service.findMyRegionFieldModeOrders(user.userId);
   }
 
+  @Get('my-region/search')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  globalSearch(@CurrentUser() user: CurrentUserPayload, @Query('q') q: string) {
+    return this.service.globalSearch(user.userId, q ?? '');
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')

@@ -2785,4 +2785,59 @@ export class MunicipalPortalService {
 
     return [...route, ...withoutCoords];
   }
+
+  // ---------- Recherche globale ----------
+
+  /** Recherche par adresse, numéro de dossier, titre de bon de
+   * travail, catégorie, personne, ou document — résultats groupés par
+   * type de ressource. Limite chaque catégorie séparément (pas une
+   * seule limite globale) pour qu'un type très nombreux n'écrase pas
+   * les autres. */
+  async globalSearch(userId: string, query: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_reports');
+    if (query.trim().length < 2) return { incidents: [], workOrders: [], contractors: [], team: [], documents: [] };
+    const pattern = `%${query.trim()}%`;
+
+    const [incidents, workOrders, contractors, team, documents] = await Promise.all([
+      sql<{ groupKey: string; caseNumber: string | null; addressText: string | null; typeName: string; icon: string | null }>`
+        SELECT DISTINCT ON (COALESCE(r.incident_id::text, r.id::text))
+          COALESCE(r.incident_id::text, r.id::text) AS "groupKey", i.case_number AS "caseNumber", r.address_text AS "addressText",
+          pt.name_fr AS "typeName", pt.icon
+        FROM reports r
+        INNER JOIN problem_types pt ON pt.id = r.problem_type_id
+        LEFT JOIN incidents i ON i.id = r.incident_id
+        WHERE r.region_id = ${regionId} AND (r.address_text ILIKE ${pattern} OR i.case_number ILIKE ${pattern} OR pt.name_fr ILIKE ${pattern})
+        LIMIT 8
+      `.execute(this.db).then((r) => r.rows),
+
+      this.db
+        .selectFrom('work_orders')
+        .select(['id', 'title', 'address_text as addressText', 'status'])
+        .where('region_id', '=', regionId)
+        .where((eb) => eb.or([eb('title', 'ilike', pattern), eb('address_text', 'ilike', pattern)]))
+        .limit(8)
+        .execute(),
+
+      this.db.selectFrom('contractors').select(['id', 'name', 'specialty']).where('region_id', '=', regionId).where('name', 'ilike', pattern).limit(8).execute(),
+
+      this.db
+        .selectFrom('users')
+        .select(['id', 'first_name as firstName', 'last_name as lastName', 'email'])
+        .where('region_id', '=', regionId)
+        .where((eb) => eb.or([eb('first_name', 'ilike', pattern), eb('last_name', 'ilike', pattern), eb('email', 'ilike', pattern)]))
+        .limit(8)
+        .execute(),
+
+      this.db
+        .selectFrom('work_order_documents')
+        .innerJoin('work_orders', 'work_orders.id', 'work_order_documents.work_order_id')
+        .select(['work_order_documents.id', 'work_order_documents.filename', 'work_order_documents.work_order_id as workOrderId', 'work_orders.title as workOrderTitle'])
+        .where('work_orders.region_id', '=', regionId)
+        .where('work_order_documents.filename', 'ilike', pattern)
+        .limit(8)
+        .execute(),
+    ]);
+
+    return { incidents, workOrders, contractors, team, documents };
+  }
 }
