@@ -622,6 +622,13 @@ export class MunicipalPortalController {
     return this.service.getMyRegionSectorStats(user.userId);
   }
 
+  @Get('my-region/recurring-locations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('municipal_staff', 'municipal_admin')
+  findMyRegionRecurringLocations(@CurrentUser() user: CurrentUserPayload) {
+    return this.service.findMyRegionRecurringLocations(user.userId);
+  }
+
   // ---------- Priorité automatique et SLA ----------
 
   @Post('my-region/incidents/:groupKey/priority/override')

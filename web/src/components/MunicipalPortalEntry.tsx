@@ -678,11 +678,16 @@ function ReportsListView({ lang, pendingNavTarget, onNavTargetConsumed }: { lang
 function StatsView({ lang }: { lang: 'fr' | 'en' }) {
   const [stats, setStats] = useState<any>(null);
   const [days, setDays] = useState(30);
+  const [recurringLocations, setRecurringLocations] = useState<any[]>([]);
   const fr = lang === 'fr';
 
   useEffect(() => {
     api.get<any>(`/municipal-portal/my-region/report/stats?days=${days}`).then(setStats).catch(() => {});
   }, [days]);
+
+  useEffect(() => {
+    api.get<any[]>('/municipal-portal/my-region/recurring-locations').then(setRecurringLocations).catch(() => {});
+  }, []);
 
   if (!stats) return <div className="center-msg">{fr ? 'Chargement...' : 'Loading...'}</div>;
 
@@ -780,6 +785,31 @@ function StatsView({ lang }: { lang: 'fr' | 'en' }) {
           ))}
         </div>
       </div>
+
+      {recurringLocations.length > 0 && (
+        <>
+          <div className="section-label">{fr ? 'Emplacements récurrents (2 ans)' : 'Recurring locations (2 years)'}</div>
+          <p style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+            {fr
+              ? "Même type de problème signalé plusieurs fois au même endroit — candidat possible à une réparation permanente plutôt que des interventions répétées, à évaluer."
+              : 'Same problem type reported multiple times at the same location — possible candidate for a permanent fix rather than repeated interventions, worth evaluating.'}
+          </p>
+          {recurringLocations.map((loc: any, i: number) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, padding: '6px 0', borderBottom: '1px solid var(--panel-border)' }}>
+              <div>
+                <span>{loc.icon ?? '📍'} {loc.problemTypeNameFr} — {loc.addressText}</span>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                  {new Date(loc.firstOccurrence).toLocaleDateString('fr-CA', { year: 'numeric', month: 'short' })} → {new Date(loc.lastOccurrence).toLocaleDateString('fr-CA', { year: 'numeric', month: 'short' })}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <strong>{loc.incidentCount}×</strong>
+                {loc.cumulativeCost > 0 && <div style={{ fontSize: 10.5, color: 'var(--accent-signal)' }}>{loc.cumulativeCost.toLocaleString('fr-CA', { style: 'currency', currency: 'CAD' })}</div>}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }

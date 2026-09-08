@@ -2642,4 +2642,44 @@ export class MunicipalPortalService {
       }),
     );
   }
+
+  // ---------- Détection de tendances / maintenance préventive ----------
+
+  /** Emplacements avec des incidents récurrents (adresse + type de
+   * problème identiques, 2 incidents DISTINCTS ou plus — pas juste
+   * plusieurs signalements du même incident déjà regroupés) sur les 2
+   * dernières années. Un signal — pas une décision automatique — que
+   * ce point mérite peut-être une réparation permanente plutôt que des
+   * rafistolages répétés, surtout quand le coût cumulé des
+   * interventions ponctuelles est visible. */
+  async findMyRegionRecurringLocations(userId: string) {
+    const { regionId } = await this.checkPermission(userId, 'can_view_stats');
+
+    const rows = await sql<{
+      addressText: string; problemTypeId: string; problemTypeNameFr: string; icon: string | null;
+      incidentCount: number; firstOccurrence: Date; lastOccurrence: Date; cumulativeCost: number;
+    }>`
+      WITH incident_addresses AS (
+        SELECT DISTINCT ON (i.id)
+          i.id AS incident_id, i.problem_type_id, r.address_text, i.first_reported_at
+        FROM incidents i
+        INNER JOIN reports r ON r.incident_id = i.id
+        WHERE i.region_id = ${regionId} AND r.address_text IS NOT NULL AND i.first_reported_at > now() - interval '2 years'
+        ORDER BY i.id, r.created_at ASC
+      )
+      SELECT
+        ia.address_text AS "addressText", ia.problem_type_id AS "problemTypeId", pt.name_fr AS "problemTypeNameFr", pt.icon,
+        count(*) AS "incidentCount", min(ia.first_reported_at) AS "firstOccurrence", max(ia.first_reported_at) AS "lastOccurrence",
+        COALESCE(sum(wo.actual_cost), 0) AS "cumulativeCost"
+      FROM incident_addresses ia
+      INNER JOIN problem_types pt ON pt.id = ia.problem_type_id
+      LEFT JOIN work_orders wo ON wo.group_key = ia.incident_id::text
+      GROUP BY ia.address_text, ia.problem_type_id, pt.name_fr, pt.icon
+      HAVING count(*) >= 2
+      ORDER BY count(*) DESC
+      LIMIT 20
+    `.execute(this.db).then((r) => r.rows);
+
+    return rows.map((r) => ({ ...r, cumulativeCost: Number(r.cumulativeCost) }));
+  }
 }
